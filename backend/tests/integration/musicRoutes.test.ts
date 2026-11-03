@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
+import { buildConfig } from "../../src/config/env.js";
 
 describe("Music Endpoints (Integration)", () => {
-  const app = createApp();
+  // Use isolated unconfigured app to test mock mode defaults
+  const mockConfig = buildConfig({});
+  const app = createApp({ config: mockConfig, spotifyAuth: null });
 
   describe("POST /api/music/interpret", () => {
     it("returns structured intent (defaults to mock mode if unconfigured)", async () => {
@@ -13,6 +16,7 @@ describe("Music Endpoints (Integration)", () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("mode");
+      expect(res.body.mode).toBe("mock");
       expect(res.body).toHaveProperty("intent");
       expect(res.body.intent.mood).toBe("calm");
     });
