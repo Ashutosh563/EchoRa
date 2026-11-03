@@ -1,0 +1,27 @@
+{
+  "name": "sonora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SONORA - AI-powered mood-based music discovery (Phase 1)",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c magenta,cyan \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
+    "setup": "npm run setup -w backend",
+    "test": "npm run test -w backend && npm run test -w frontend",
+    "test:frontend": "npm run test -w frontend",
+    "test:backend": "npm run test -w backend",
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
+    "build": "npm run build -w backend && npm run build -w frontend"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}
