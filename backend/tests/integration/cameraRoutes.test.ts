@@ -85,3 +85,4 @@ describe("POST /api/music/analyze-image (Integration)", () => {
     expect(res2.status).toBe(400);
   });
 });
+

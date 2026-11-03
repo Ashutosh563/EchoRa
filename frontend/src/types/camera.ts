@@ -26,3 +26,4 @@ export const MEDIUM_CONFIDENCE_MOOD_OPTIONS = [
   { label: "Energetic / Exciting", direction: "energetic and exciting dance workout music" },
   { label: "Neutral / Balanced", direction: "relaxed and balanced chill music" },
 ] as const;
+

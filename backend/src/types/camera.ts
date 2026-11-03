@@ -14,3 +14,4 @@ export interface CameraAnalysisResponse {
   visual_observations: string[];
   music_direction: string | null;
 }
+

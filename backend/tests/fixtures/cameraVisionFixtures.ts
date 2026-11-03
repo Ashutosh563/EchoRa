@@ -23,3 +23,4 @@ export const MOCK_VISION_LOW_CONFIDENCE: CameraAnalysisResponse = {
   visual_observations: ["underexposed frame", "facial features not clearly distinguishable"],
   music_direction: null,
 };
+
