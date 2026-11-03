@@ -16,7 +16,7 @@ export const FRONTEND_URL = `http://${HOST}:5173`;
 export const SPOTIFY_REDIRECT_URI = `${BACKEND_URL}/api/spotify/callback`;
 
 /** Default model alias; always points at the current Gemini Flash model. Override with GEMINI_MODEL. */
-export const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
 
 export interface AppConfig {
   geminiApiKey: string | null;

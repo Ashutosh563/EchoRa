@@ -55,3 +55,4 @@ describe("queryGenerator", () => {
     expect(primary.length).toBeGreaterThan(0);
   });
 });
+

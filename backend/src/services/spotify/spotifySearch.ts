@@ -43,8 +43,6 @@ export function createSpotifySearch({ auth, fetchFn = fetch, sleep = defaultSlee
       type: "track",
       limit: String(SEARCH_PAGE_LIMIT),
       offset: String(offset),
-      // Results playable in the authorized user's country.
-      market: "from_token",
     }).toString();
 
     let refreshed = false;

@@ -10,3 +10,4 @@ export function createStatusRouter(controller: ReturnType<typeof createStatusCon
 
   return router;
 }
+

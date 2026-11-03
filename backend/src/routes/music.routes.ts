@@ -16,3 +16,4 @@ export function createMusicRouter(controller: ReturnType<typeof createMusicContr
 
   return router;
 }
+

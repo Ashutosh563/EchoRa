@@ -40,3 +40,4 @@ export function createSpotifyController(config: AppConfig, spotifyAuth: SpotifyA
     },
   };
 }
+
