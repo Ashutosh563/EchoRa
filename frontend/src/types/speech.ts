@@ -10,3 +10,4 @@ export interface SpeechRecognitionHookResult {
   startListening: () => void;
   stopListening: () => void;
 }
+
