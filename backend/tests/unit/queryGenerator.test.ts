@@ -16,12 +16,11 @@ describe("queryGenerator", () => {
 
     const { primary, alternatives } = generateQueries(intent);
     expect(primary).toContain("calm");
-    expect(primary).toContain("ambient");
     expect(primary).toContain("study");
-    expect(primary.split(" ").length).toBeLessThanOrEqual(6);
+    expect(primary.split(" ").length).toBeLessThanOrEqual(5);
 
-    expect(alternatives.length).toBeGreaterThan(0);
-    expect(alternatives.length).toBeLessThanOrEqual(2);
+    // Recommendation improvement: strictly ONE query per request, alternatives must be empty
+    expect(alternatives).toEqual([]);
   });
 
   it("handles high energy workout intent", () => {
