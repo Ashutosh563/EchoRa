@@ -11,6 +11,8 @@ import { createIntentExtractor, type IntentExtractor } from "./services/gemini/i
 import { createMusicController } from "./controllers/music.controller.js";
 import { createSpotifyController } from "./controllers/spotify.controller.js";
 import { createStatusController } from "./controllers/status.controller.js";
+import { createCameraController } from "./controllers/camera.controller.js";
+import { createGeminiVisionService, type GeminiVisionService } from "./services/gemini/geminiVision.js";
 import { createMusicRouter } from "./routes/music.routes.js";
 import { createSpotifyRouter } from "./routes/spotify.routes.js";
 import { createStatusRouter } from "./routes/status.routes.js";
@@ -22,6 +24,7 @@ export interface AppDependencies {
   spotifyAuth?: SpotifyAuth | null;
   spotifySearch?: SpotifySearch | null;
   intentExtractor?: IntentExtractor | null;
+  visionService?: GeminiVisionService | null;
 }
 
 export function createApp(deps: AppDependencies = {}): Express {
@@ -57,13 +60,21 @@ export function createApp(deps: AppDependencies = {}): Express {
 
   // Initialize Gemini Intent Extractor if key exists
   let intentExtractor: IntentExtractor | null = deps.intentExtractor ?? null;
-  if (!intentExtractor && config.geminiApiKey) {
-    const geminiClient = createGeminiClient(config.geminiApiKey, config.geminiModel);
-    intentExtractor = createIntentExtractor(geminiClient, {
-      onKeyValidity: (valid) => {
-        credState.geminiValid = valid;
-      },
-    });
+  let visionService: GeminiVisionService | null = deps.visionService ?? null;
+
+  if (config.geminiApiKey) {
+    if (!intentExtractor) {
+      const geminiClient = createGeminiClient(config.geminiApiKey, config.geminiModel);
+      intentExtractor = createIntentExtractor(geminiClient, {
+        onKeyValidity: (valid) => {
+          credState.geminiValid = valid;
+        },
+      });
+    }
+
+    if (!visionService) {
+      visionService = createGeminiVisionService(config.geminiApiKey, config.geminiModel);
+    }
   }
 
   const musicController = createMusicController(config, credState, spotifyAuth, {
@@ -72,13 +83,15 @@ export function createApp(deps: AppDependencies = {}): Express {
   });
   const spotifyController = createSpotifyController(config, spotifyAuth);
   const statusController = createStatusController(config, credState, spotifyAuth);
+  const cameraController = createCameraController(config, visionService);
 
   const app = express();
   app.disable("x-powered-by");
-  app.use(express.json({ limit: "10kb" }));
+  // 5mb limit to support base64 image frames
+  app.use(express.json({ limit: "5mb" }));
 
   // Mount API endpoints
-  app.use("/api/music", createMusicRouter(musicController));
+  app.use("/api/music", createMusicRouter(musicController, cameraController));
   app.use("/api/spotify", createSpotifyRouter(spotifyController));
   app.use("/api", createStatusRouter(statusController));
 
