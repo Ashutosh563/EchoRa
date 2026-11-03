@@ -19,6 +19,7 @@ export default function App({ api }: AppProps) {
   const { state, search } = useMusicSearch(client);
   const [prompt, setPrompt] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
 
   useEffect(() => {
@@ -54,8 +55,20 @@ export default function App({ api }: AppProps) {
 
       <StatusBar status={status} />
 
-      <SearchBar value={prompt} onChange={handlePromptChange} onSubmit={handleSubmit} disabled={isLoading} />
+      <SearchBar
+        value={prompt}
+        onChange={handlePromptChange}
+        onSubmit={handleSubmit}
+        disabled={isLoading}
+        onVoiceError={setVoiceError}
+      />
       <ExamplePrompts onSelect={handlePromptChange} />
+
+      {voiceError && (
+        <p className="message message--error" role="alert">
+          {voiceError}
+        </p>
+      )}
 
       {validationError && (
         <p className="message message--error" role="alert">
