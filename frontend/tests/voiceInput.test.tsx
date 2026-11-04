@@ -79,7 +79,7 @@ describe("Voice Input Integration", () => {
       activeMockRecognition?.simulateSpeech("peaceful study music without lyrics", true);
     });
 
-    const input = screen.getByPlaceholderText("Something calm for a 3 AM study session...");
+    const input = screen.getByRole("textbox");
     // Check transcription populated input
     expect(input).toHaveValue("peaceful study music without lyrics");
 
@@ -98,7 +98,7 @@ describe("Voice Input Integration", () => {
       activeMockRecognition?.simulateSpeech("calm piano music", true);
     });
 
-    const input = screen.getByPlaceholderText("Something calm for a 3 AM study session...");
+    const input = screen.getByRole("textbox");
     expect(input).toHaveValue("calm piano music");
 
     // User edits the transcript by typing additional constraints
@@ -108,8 +108,8 @@ describe("Voice Input Integration", () => {
     // Still not submitted before explicit user action
     expect(fake.calls).toHaveLength(0);
 
-    // User explicitly clicks Search to submit
-    await user.click(screen.getByRole("button", { name: "Search" }));
+    // User explicitly clicks Search/Discover to submit
+    await user.click(screen.getByRole("button", { name: /discover/i }));
 
     // Request is dispatched through the existing search handler
     expect(fake.calls).toEqual(["calm piano music for studying"]);

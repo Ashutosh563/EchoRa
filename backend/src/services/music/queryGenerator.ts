@@ -1,5 +1,6 @@
 import type { MusicIntent, PriorityLevel } from "../../types/intent.js";
 import type { SearchQueries } from "../../types/api.js";
+import type { ProcessedDiscoveryResult } from "./discoveryProcessor.js";
 
 /**
  * Maximum terms in a Spotify search query.
@@ -59,13 +60,35 @@ const PRIORITY_WEIGHTS: Record<PriorityLevel, number> = {
  * 3. Keep query concise (3-4 high-impact terms max).
  * 4. Resolve conflicts cleanly (e.g. "relaxing but not too slow" -> prioritizes "relaxing", excludes "slow").
  */
-export function generateQueries(intent: MusicIntent): SearchQueries {
+export function generateQueries(
+  intent: MusicIntent,
+  discovery?: ProcessedDiscoveryResult,
+): SearchQueries {
+  const activeIntent = discovery?.adjustedIntent ?? intent;
   const terms: PrioritizedTerm[] = [];
-  const breakdown = intent.breakdown;
+  const breakdown = activeIntent.breakdown;
+
+  // Injected discovery terms
+  if (discovery?.injectedArtist) {
+    terms.push({
+      text: discovery.injectedArtist,
+      weight: PRIORITY_WEIGHTS.medium_high,
+      priority: "medium_high",
+      source: "discovery_artist",
+    });
+  }
+  if (discovery?.injectedGenre) {
+    terms.push({
+      text: discovery.injectedGenre,
+      weight: PRIORITY_WEIGHTS.medium_high - 2,
+      priority: "medium_high",
+      source: "discovery_genre",
+    });
+  }
 
   // 1. Mood
   const moodBreakdown = breakdown?.mood;
-  const moodVal = moodBreakdown?.value ?? (intent.mood !== "any" ? intent.mood : null);
+  const moodVal = moodBreakdown?.value ?? (activeIntent.mood !== "any" ? activeIntent.mood : null);
   if (moodVal && moodVal !== "any") {
     const isExplicit = moodBreakdown?.source === "explicit";
     terms.push({
@@ -78,7 +101,7 @@ export function generateQueries(intent: MusicIntent): SearchQueries {
 
   // 2. Activity / Setting
   const actBreakdown = breakdown?.activity;
-  const actVal = actBreakdown?.value ?? intent.activity;
+  const actVal = actBreakdown?.value ?? activeIntent.activity;
   if (actVal) {
     const isExplicit = actBreakdown?.source === "explicit";
     const mapped = ACTIVITY_KEYWORDS[actVal] ?? actVal;
@@ -92,7 +115,7 @@ export function generateQueries(intent: MusicIntent): SearchQueries {
 
   // 3. Vocals (e.g. "without lyrics", "instrumental")
   const vocalsBreakdown = breakdown?.vocals;
-  const vocalsVal = vocalsBreakdown?.value ?? intent.vocals;
+  const vocalsVal = vocalsBreakdown?.value ?? activeIntent.vocals;
   if (vocalsVal === "instrumental_preferred") {
     const isExplicit = vocalsBreakdown?.source === "explicit";
     terms.push({
@@ -105,7 +128,7 @@ export function generateQueries(intent: MusicIntent): SearchQueries {
 
   // 4. Genres (Explicit genres high priority; optional genres lower priority)
   const genreBreakdown = breakdown?.genre;
-  const genres = genreBreakdown?.value ?? intent.genre ?? [];
+  const genres = genreBreakdown?.value ?? activeIntent.genre ?? [];
   const isExplicitGenre = genreBreakdown?.source === "explicit";
 
   if (genres.length > 0) {
@@ -145,8 +168,8 @@ export function generateQueries(intent: MusicIntent): SearchQueries {
 
   // Fallback for completely ambiguous/vague prompts (e.g. "Something good to listen to")
   if (terms.length === 0) {
-    if (intent.mood && intent.mood !== "any") {
-      terms.push({ text: intent.mood, weight: 50, priority: "medium", source: "mood" });
+    if (activeIntent.mood && activeIntent.mood !== "any") {
+      terms.push({ text: activeIntent.mood, weight: 50, priority: "medium", source: "mood" });
     } else {
       terms.push({ text: "good music", weight: 10, priority: "low", source: "fallback" });
     }
@@ -155,7 +178,7 @@ export function generateQueries(intent: MusicIntent): SearchQueries {
   // Sort terms by weight descending
   terms.sort((a, b) => b.weight - a.weight);
 
-  // Build the clean single query with deduplication and word limit
+  // Build the clean single query with deduplication, excluded terms check, and word limit
   const seenWords = new Set<string>();
   const finalWords: string[] = [];
 
@@ -163,6 +186,9 @@ export function generateQueries(intent: MusicIntent): SearchQueries {
     const words = term.text.split(/\s+/).filter(Boolean);
     for (const w of words) {
       const lower = w.toLowerCase();
+      if (discovery?.excludedTerms.has(lower)) {
+        continue;
+      }
       if (!seenWords.has(lower) && finalWords.length < MAX_QUERY_TERMS) {
         seenWords.add(lower);
         finalWords.push(lower);

@@ -1,5 +1,6 @@
 import type { SearchResponse, StatusResponse } from '../types';
 import type { CameraAnalysisResponse } from '../types/camera';
+import type { SearchOptions } from './musicApi';
 
 export const SPOTIFY_AUTH_URL = 'http://127.0.0.1:4000/api/spotify/auth';
 
@@ -53,14 +54,23 @@ export async function getStatus(signal?: AbortSignal): Promise<StatusResponse> {
   }
 }
 
-export async function searchMusic(prompt: string, signal?: AbortSignal): Promise<SearchResponse> {
+export async function searchMusic(
+  prompt: string,
+  options?: SearchOptions,
+  signal?: AbortSignal,
+): Promise<SearchResponse> {
   try {
     const res = await fetch('/api/music/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({
+        prompt,
+        discoveryMode: options?.discoveryMode,
+        preferences: options?.preferences,
+        historySignals: options?.historySignals,
+      }),
       signal,
     });
     return await handleResponse<SearchResponse>(res);

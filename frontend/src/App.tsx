@@ -10,22 +10,44 @@ import { ErrorCard } from './components/ErrorCard';
 import { RecentChips } from './components/RecentChips';
 import { Toasts } from './components/Toasts';
 import { CameraModal } from './components/CameraModal';
+import { PreferencesModal } from './components/PreferencesModal';
 import { useStatus } from './hooks/useStatus';
 import { useSearch } from './hooks/useSearch';
 import { useMoodTheme } from './hooks/useMoodTheme';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+import {
+  getStoredProfile,
+  setDiscoveryMode,
+  subscribeToProfile,
+} from './services/preferenceStorage';
 import type { ToastInfo } from './types';
 import type { CameraAnalysisResponse } from './types/camera';
+import type { DiscoveryMode, StoredProfile } from './types/discovery';
 
-export default function App() {
+interface AppProps {
+  api?: {
+    search: (prompt: string, signal?: AbortSignal) => Promise<any>;
+  };
+}
+
+export default function App({ api }: AppProps = {}) {
   const { status } = useStatus();
-  const { status: searchStatus, data, error, lastPrompt, search } = useSearch();
+  const { status: searchStatus, data, error, lastPrompt, search } = useSearch(
+    api ? { searchFn: (p, s) => api.search(p, s) } : undefined
+  );
+  const [profile, setProfile] = useState<StoredProfile>(getStoredProfile);
   const [prompt, setPrompt] = useState('');
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
 
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Subscribe to storage changes
+  useEffect(() => {
+    return subscribeToProfile((updated) => setProfile(updated));
+  }, []);
 
   // Aurora mood theme retints smoothly based on intent
   const theme = useMoodTheme(data?.intent);
@@ -51,12 +73,6 @@ export default function App() {
     },
     onFinal: (finalText) => {
       setPrompt(finalText);
-      // Auto-submit after 600ms on final speech result
-      setTimeout(() => {
-        if (finalText.trim()) {
-          void handleSearchSubmit(finalText.trim());
-        }
-      }, 600);
     },
     onError: (errorMessage) => {
       addToast(errorMessage, 'error');
@@ -76,6 +92,13 @@ export default function App() {
     await search(trimmed);
   };
 
+  const handleModeChange = (newMode: DiscoveryMode) => {
+    const updated = setDiscoveryMode(newMode);
+    setProfile(updated);
+    const modeName = newMode.charAt(0) + newMode.slice(1).toLowerCase();
+    addToast(`Discovery mode set to ${modeName}.`, 'info');
+  };
+
   // Smooth scroll into results when search finishes
   useEffect(() => {
     if (searchStatus === 'success' && resultsRef.current) {
@@ -93,7 +116,7 @@ export default function App() {
       <AuroraBackground theme={theme} />
 
       {/* Sticky Glass Top Bar */}
-      <TopBar status={status} />
+      <TopBar status={status} onOpenPreferences={() => setIsPreferencesOpen(true)} />
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 flex flex-col pb-16">
@@ -108,6 +131,8 @@ export default function App() {
           isMicSupported={speech.isSupported}
           onToggleMic={speech.toggleListening}
           onOpenCamera={() => setIsCameraOpen(true)}
+          discoveryMode={profile.discoveryMode}
+          onDiscoveryModeChange={handleModeChange}
         />
 
         {/* Results / Feedback Region */}
@@ -167,6 +192,14 @@ export default function App() {
           }
           void handleSearchSubmit(direction);
         }}
+      />
+
+      {/* Preferences Management Modal */}
+      <PreferencesModal
+        isOpen={isPreferencesOpen}
+        onClose={() => setIsPreferencesOpen(false)}
+        onProfileUpdated={(updated) => setProfile(updated)}
+        onNotify={(msg, type) => addToast(msg, type)}
       />
 
       {/* Floating Toast Stack */}

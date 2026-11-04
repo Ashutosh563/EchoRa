@@ -89,6 +89,7 @@ describe('SONORA App UI', () => {
 
     expect(searchSpy).toHaveBeenCalledWith(
       'Mellow acoustic songs and calm beats for a rainy focus session',
+      expect.objectContaining({ discoveryMode: 'FAMILIAR' }),
       expect.any(AbortSignal)
     );
 

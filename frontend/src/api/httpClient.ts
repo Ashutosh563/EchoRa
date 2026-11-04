@@ -1,5 +1,5 @@
 import type { SearchResponse, StatusResponse } from "../types/api";
-import { MusicApiError, type MusicApi } from "./musicApi";
+import { MusicApiError, type MusicApi, type SearchOptions } from "./musicApi";
 
 export interface FullMusicApi extends MusicApi {
   getStatus(signal?: AbortSignal): Promise<StatusResponse>;
@@ -7,14 +7,32 @@ export interface FullMusicApi extends MusicApi {
 
 export function createHttpMusicClient(): FullMusicApi {
   return {
-    async search(prompt: string, signal?: AbortSignal): Promise<SearchResponse> {
+    async search(
+      prompt: string,
+      optionsOrSignal?: SearchOptions | AbortSignal,
+      signal?: AbortSignal,
+    ): Promise<SearchResponse> {
+      const activeSignal =
+        optionsOrSignal instanceof AbortSignal || (optionsOrSignal && typeof (optionsOrSignal as any).aborted === "boolean")
+          ? (optionsOrSignal as AbortSignal)
+          : signal;
+      const options =
+        optionsOrSignal instanceof AbortSignal || (optionsOrSignal && typeof (optionsOrSignal as any).aborted === "boolean")
+          ? undefined
+          : (optionsOrSignal as SearchOptions | undefined);
+
       let res: Response;
       try {
         res = await fetch("/api/music/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
-          signal,
+          body: JSON.stringify({
+            prompt,
+            discoveryMode: options?.discoveryMode,
+            preferences: options?.preferences,
+            historySignals: options?.historySignals,
+          }),
+          signal: activeSignal,
         });
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {

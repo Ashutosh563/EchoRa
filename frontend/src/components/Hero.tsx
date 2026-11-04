@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
 import { Composer } from './Composer';
 import { ExampleChips } from './ExampleChips';
+import { ModeSelector } from './ModeSelector';
+import type { DiscoveryMode } from '../types/discovery';
 
 interface HeroProps {
   hasSearched: boolean;
@@ -12,6 +14,8 @@ interface HeroProps {
   isMicSupported: boolean;
   onToggleMic: () => void;
   onOpenCamera?: () => void;
+  discoveryMode?: DiscoveryMode;
+  onDiscoveryModeChange?: (mode: DiscoveryMode) => void;
 }
 
 export function Hero({
@@ -24,6 +28,8 @@ export function Hero({
   isMicSupported,
   onToggleMic,
   onOpenCamera,
+  discoveryMode = 'FAMILIAR',
+  onDiscoveryModeChange,
 }: HeroProps) {
   return (
     <motion.section
@@ -65,6 +71,17 @@ export function Hero({
         />
       </motion.div>
 
+      {/* Discovery Mode Selector */}
+      {onDiscoveryModeChange && (
+        <motion.div layout className="mt-4 flex justify-center">
+          <ModeSelector
+            currentMode={discoveryMode}
+            onChange={onDiscoveryModeChange}
+            disabled={isLoading}
+          />
+        </motion.div>
+      )}
+
       {/* Example Prompt Chips (Empty state only) */}
       {!hasSearched && (
         <motion.div
@@ -79,4 +96,3 @@ export function Hero({
     </motion.section>
   );
 }
-

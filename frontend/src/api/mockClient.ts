@@ -1,5 +1,5 @@
 import type { MusicIntent, SearchResponse } from "../types/api";
-import { MusicApiError, type MusicApi } from "./musicApi";
+import { MusicApiError, type MusicApi, type SearchOptions } from "./musicApi";
 import {
   DEFAULT_MOCK_INTENT,
   MOCK_INTENT_RULES,
@@ -45,8 +45,22 @@ function wait(ms: number, signal?: AbortSignal): Promise<void> {
  */
 export function createMockClient(delayMs = SIMULATED_DELAY_MS): MusicApi {
   return {
-    async search(prompt: string, signal?: AbortSignal): Promise<SearchResponse> {
-      await wait(delayMs, signal);
+    async search(
+      prompt: string,
+      optionsOrSignal?: SearchOptions | AbortSignal,
+      signal?: AbortSignal,
+    ): Promise<SearchResponse> {
+      const activeSignal =
+        optionsOrSignal instanceof AbortSignal || (optionsOrSignal && typeof (optionsOrSignal as any).aborted === "boolean")
+          ? (optionsOrSignal as AbortSignal)
+          : signal;
+      const _options =
+        optionsOrSignal instanceof AbortSignal || (optionsOrSignal && typeof (optionsOrSignal as any).aborted === "boolean")
+          ? undefined
+          : (optionsOrSignal as SearchOptions | undefined);
+      void _options;
+
+      await wait(delayMs, activeSignal);
       const text = prompt.toLowerCase();
 
       if (text.includes("simulate error")) {
