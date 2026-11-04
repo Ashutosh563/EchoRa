@@ -11,6 +11,7 @@ import { RecentChips } from './components/RecentChips';
 import { Toasts } from './components/Toasts';
 import { CameraModal } from './components/CameraModal';
 import { PreferencesModal } from './components/PreferencesModal';
+import { MoodTransitionPage } from './components/transition/MoodTransitionPage';
 import { useStatus } from './hooks/useStatus';
 import { useSearch } from './hooks/useSearch';
 import { useMoodTheme } from './hooks/useMoodTheme';
@@ -41,6 +42,7 @@ export default function App({ api }: AppProps = {}) {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'discover' | 'transition'>('discover');
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -116,69 +118,80 @@ export default function App({ api }: AppProps = {}) {
       <AuroraBackground theme={theme} />
 
       {/* Sticky Glass Top Bar */}
-      <TopBar status={status} onOpenPreferences={() => setIsPreferencesOpen(true)} />
+      <TopBar
+        status={status}
+        onOpenPreferences={() => setIsPreferencesOpen(true)}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 flex flex-col pb-16">
-        {/* Hero Section & Composer */}
-        <Hero
-          hasSearched={hasSearched}
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          onSubmit={handleSearchSubmit}
-          isLoading={searchStatus === 'loading'}
-          isListening={speech.isListening}
-          isMicSupported={speech.isSupported}
-          onToggleMic={speech.toggleListening}
-          onOpenCamera={() => setIsCameraOpen(true)}
-          discoveryMode={profile.discoveryMode}
-          onDiscoveryModeChange={handleModeChange}
-        />
-
-        {/* Results / Feedback Region */}
-        <div ref={resultsRef} aria-live="polite" className="w-full">
-          {/* 1. Loading State */}
-          {searchStatus === 'loading' && <ThinkingState />}
-
-          {/* 2. Error State */}
-          {searchStatus === 'error' && error && (
-            <ErrorCard
-              error={error}
-              onRetry={() => {
-                if (lastPrompt) {
-                  void handleSearchSubmit(lastPrompt);
-                }
-              }}
+        {activeTab === 'transition' ? (
+          <MoodTransitionPage />
+        ) : (
+          <>
+            {/* Hero Section & Composer */}
+            <Hero
+              hasSearched={hasSearched}
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              onSubmit={handleSearchSubmit}
+              isLoading={searchStatus === 'loading'}
+              isListening={speech.isListening}
+              isMicSupported={speech.isSupported}
+              onToggleMic={speech.toggleListening}
+              onOpenCamera={() => setIsCameraOpen(true)}
+              discoveryMode={profile.discoveryMode}
+              onDiscoveryModeChange={handleModeChange}
             />
-          )}
 
-          {/* 3. Successful Search Results */}
-          {searchStatus === 'success' && data && (
-            <>
-              {/* Notice Banner (if any) */}
-              <NoticeBanner notice={data.notice} />
+            {/* Results / Feedback Region */}
+            <div ref={resultsRef} aria-live="polite" className="w-full">
+              {/* 1. Loading State */}
+              {searchStatus === 'loading' && <ThinkingState />}
 
-              {/* Intent Breakdown Panel */}
-              <IntentPanel
-                data={data}
-                userPrompt={lastPrompt}
-                onCopyNotice={() => addToast('Search query copied to clipboard!', 'success')}
-              />
+              {/* 2. Error State */}
+              {searchStatus === 'error' && error && (
+                <ErrorCard
+                  error={error}
+                  onRetry={() => {
+                    if (lastPrompt) {
+                      void handleSearchSubmit(lastPrompt);
+                    }
+                  }}
+                />
+              )}
 
-              {/* Tracks Grid */}
-              <TrackGrid tracks={data.tracks} />
+              {/* 3. Successful Search Results */}
+              {searchStatus === 'success' && data && (
+                <>
+                  {/* Notice Banner (if any) */}
+                  <NoticeBanner notice={data.notice} />
 
-              {/* Search History Chips */}
-              <RecentChips
-                history={recentSearches}
-                onSelect={(selectedPrompt) => {
-                  setPrompt(selectedPrompt);
-                  void handleSearchSubmit(selectedPrompt);
-                }}
-              />
-            </>
-          )}
-        </div>
+                  {/* Intent Breakdown Panel */}
+                  <IntentPanel
+                    data={data}
+                    userPrompt={lastPrompt}
+                    onCopyNotice={() => addToast('Search query copied to clipboard!', 'success')}
+                  />
+
+                  {/* Tracks Grid */}
+                  <TrackGrid tracks={data.tracks} />
+
+                  {/* Search History Chips */}
+                  <RecentChips
+                    history={recentSearches}
+                    onSelect={(selectedPrompt) => {
+                      setPrompt(selectedPrompt);
+                      void handleSearchSubmit(selectedPrompt);
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          </>
+        )}
       </main>
 
       {/* Camera Modal */}

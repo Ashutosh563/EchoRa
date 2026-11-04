@@ -13,6 +13,11 @@ import { createSpotifyController } from "./controllers/spotify.controller.js";
 import { createStatusController } from "./controllers/status.controller.js";
 import { createCameraController } from "./controllers/camera.controller.js";
 import { createGeminiVisionService, type GeminiVisionService } from "./services/gemini/geminiVision.js";
+import { createTransitionPlanner } from "./services/transition/transitionPlanner.js";
+import { createStageIntentGenerator } from "./services/transition/stageIntentGenerator.js";
+import { createPlaylistAssembler } from "./services/transition/playlistAssembler.js";
+import { createTransitionController } from "./controllers/transition.controller.js";
+import { createTransitionRouter } from "./routes/transition.routes.js";
 import { createMusicRouter } from "./routes/music.routes.js";
 import { createSpotifyRouter } from "./routes/spotify.routes.js";
 import { createStatusRouter } from "./routes/status.routes.js";
@@ -61,10 +66,11 @@ export function createApp(deps: AppDependencies = {}): Express {
   // Initialize Gemini Intent Extractor if key exists
   let intentExtractor: IntentExtractor | null = deps.intentExtractor ?? null;
   let visionService: GeminiVisionService | null = deps.visionService ?? null;
+  let geminiClient: ReturnType<typeof createGeminiClient> | null = null;
 
   if (config.geminiApiKey) {
+    geminiClient = createGeminiClient(config.geminiApiKey, config.geminiModel);
     if (!intentExtractor) {
-      const geminiClient = createGeminiClient(config.geminiApiKey, config.geminiModel);
       intentExtractor = createIntentExtractor(geminiClient, {
         onKeyValidity: (valid) => {
           credState.geminiValid = valid;
@@ -76,6 +82,15 @@ export function createApp(deps: AppDependencies = {}): Express {
       visionService = createGeminiVisionService(config.geminiApiKey, config.geminiModel);
     }
   }
+
+  const transitionPlanner = createTransitionPlanner(geminiClient);
+  const stageIntentGenerator = createStageIntentGenerator(geminiClient);
+  const playlistAssembler = createPlaylistAssembler(spotifySearch);
+  const transitionController = createTransitionController(
+    transitionPlanner,
+    stageIntentGenerator,
+    playlistAssembler,
+  );
 
   const musicController = createMusicController(config, credState, spotifyAuth, {
     intentExtractor,
@@ -92,6 +107,7 @@ export function createApp(deps: AppDependencies = {}): Express {
 
   // Mount API endpoints
   app.use("/api/music", createMusicRouter(musicController, cameraController));
+  app.use("/api/transition", createTransitionRouter(transitionController));
   app.use("/api/spotify", createSpotifyRouter(spotifyController));
   app.use("/api", createStatusRouter(statusController));
 
