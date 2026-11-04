@@ -61,7 +61,7 @@ describe('SONORA App UI', () => {
     render(<App />);
 
     // Brand logo
-    expect(screen.getByLabelText('SONORA logo')).toBeInTheDocument();
+    expect(screen.getByLabelText('ECHORA logo')).toBeInTheDocument();
 
     // Headline
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Tell me how you feel/i);

@@ -53,7 +53,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-10 py-6 pb-16">
+    <div className="w-full max-w-5xl mx-auto space-y-10 py-6 pb-16">
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div>
@@ -124,86 +124,78 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                 </div>
               </div>
 
-              {/* Stage Track Cards */}
-              <div className="pt-4 divide-y divide-white/5">
-                {stage.tracks.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-text-faint italic">
-                    No tracks found for this stage.
-                  </div>
-                ) : (
-                  stage.tracks.map((track) => {
-                    return (
-                      <div
-                        key={track.id}
-                        className="py-3 px-2 sm:px-3 rounded-xl flex items-center justify-between gap-3 transition-colors hover:bg-white/[0.04] group"
-                      >
-                        {/* Left: Play button (redirects to Spotify) & Track Metadata */}
-                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                          <a
-                            href={track.spotifyUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`Play ${track.name} on Spotify`}
-                            title="Play on Spotify"
-                            className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 group-hover:bg-emerald-500/20 text-text-dim group-hover:text-emerald-400 border border-white/10 group-hover:border-emerald-500/30 transition-all cursor-pointer shrink-0"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-current ml-0.5 transition-transform group-hover:scale-110" />
-                          </a>
-
-                          {/* Album Art */}
-                          {track.albumArtUrl ? (
-                            <img
-                              src={track.albumArtUrl}
-                              alt={track.album}
-                              className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0 hidden sm:block"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 hidden sm:block text-text-faint">
-                              <Music className="w-4 h-4" />
-                            </div>
-                          )}
-
-                          {/* Title and Artist */}
-                          <div className="min-w-0">
-                            <a
-                              href={track.spotifyUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs sm:text-sm font-semibold truncate block text-text hover:text-emerald-400 transition-colors"
-                            >
-                              {track.name}
-                            </a>
-                            <p className="text-[11px] sm:text-xs text-text-dim truncate">
-                              {track.artists?.join(", ") || "Unknown Artist"} • {track.album}
-                            </p>
+              {/* Stage Track Cards - Arranged Side by Side (Horizontal Grid) */}
+              {stage.tracks.length === 0 ? (
+                <div className="py-6 text-center text-xs text-text-faint italic">
+                  No tracks found for this stage.
+                </div>
+              ) : (
+                <div className="pt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {stage.tracks.map((track) => (
+                    <div
+                      key={track.id}
+                      className="p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
+                    >
+                      {/* Top: Album Art + Track Info */}
+                      <div className="flex items-start gap-3 min-w-0">
+                        {track.albumArtUrl ? (
+                          <img
+                            src={track.albumArtUrl}
+                            alt={track.album}
+                            className="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0 shadow-md group-hover/track:scale-105 transition-transform duration-200"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 text-text-faint">
+                            <Music className="w-5 h-5" />
                           </div>
-                        </div>
+                        )}
 
-                        {/* Right: Duration & Spotify External Link */}
-                        <div className="flex items-center gap-3 shrink-0">
-                          {track.durationMs && (
-                            <span className="text-xs font-mono text-text-faint hidden sm:inline">
-                              {formatDuration(track.durationMs)}
-                            </span>
-                          )}
-
+                        <div className="min-w-0 flex-1">
                           <a
                             href={track.spotifyUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={`Open ${track.name} on Spotify`}
-                            title="Open in Spotify"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-text-faint hover:text-emerald-400 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/20 transition-all cursor-pointer"
+                            className="text-xs sm:text-sm font-semibold truncate block text-text hover:text-emerald-400 transition-colors"
+                            title={track.name}
                           >
-                            <span className="hidden md:inline text-[11px] font-medium">Spotify</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            {track.name}
                           </a>
+                          <p className="text-[11px] sm:text-xs text-text-dim truncate mt-0.5" title={track.artists?.join(", ")}>
+                            {track.artists?.join(", ") || "Unknown Artist"}
+                          </p>
+                          <p className="text-[10px] sm:text-[11px] text-text-faint truncate mt-0.5" title={track.album}>
+                            {track.album}
+                          </p>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
+
+                      {/* Bottom Row: Duration & Play on Spotify Button */}
+                      <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-auto">
+                        {track.durationMs ? (
+                          <span className="text-[11px] font-mono text-text-faint">
+                            {formatDuration(track.durationMs)}
+                          </span>
+                        ) : (
+                          <span />
+                        )}
+
+                        <a
+                          href={track.spotifyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Play ${track.name} on Spotify`}
+                          title="Play on Spotify"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer group-hover/track:scale-105"
+                        >
+                          <Play className="w-3 h-3 fill-current ml-0.5" />
+                          <span>Spotify</span>
+                          <ExternalLink className="w-3 h-3 opacity-70" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.section>
           );
         })}

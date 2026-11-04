@@ -103,7 +103,7 @@ export function Composer({
           </div>
 
           {/* Right: Camera Button + Mic Button + Discover Button */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {onOpenCamera && (
               <button
                 type="button"
@@ -111,7 +111,7 @@ export function Composer({
                 disabled={isLoading}
                 title="Analyze mood with camera"
                 aria-label="Analyze mood with camera"
-                className="w-10 h-10 rounded-full flex items-center justify-center glass-pill text-text-dim hover:text-cyan hover:bg-white/[0.09] active:scale-95 transition-all border border-white/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-10 h-10 rounded-full flex items-center justify-center glass-pill text-text-dim hover:text-cyan hover:border-cyan/40 hover:shadow-[0_0_14px_rgba(6,182,212,0.35)] active:scale-95 transition-all border border-white/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Camera className="w-4 h-4" />
               </button>
@@ -124,21 +124,57 @@ export function Composer({
               disabled={isLoading}
             />
 
-            <motion.button
-              type="button"
-              onClick={() => onSubmit(value)}
-              disabled={!canSubmit}
-              whileTap={canSubmit ? { scale: 0.97 } : undefined}
-              className={`px-5 py-2.5 rounded-full font-display font-semibold text-sm flex items-center gap-2 transition-all cursor-pointer shadow-lg ${
-                canSubmit
-                  ? 'bg-gradient-to-r from-violet via-[#C084FC] to-magenta text-white shadow-violet/30 hover:shadow-violet/50 hover:brightness-110'
-                  : 'bg-white/5 text-text-faint border border-white/5 cursor-not-allowed opacity-50'
-              }`}
-              aria-label="Discover music"
-            >
-              <Sparkles className="w-4 h-4 text-white" />
-              <span>Discover</span>
-            </motion.button>
+            {/* Discover Button with Deeply Saturated Neon Gradient & Kinetic Pop-Out */}
+            <div className="relative group/btn">
+              {/* 1. Ultra-saturated wide ambient neon aura */}
+              <div
+                className={`absolute -inset-3 rounded-full bg-gradient-to-r from-[#7928CA] via-[#FF0080] to-[#00DFD8] blur-xl transition-all duration-300 pointer-events-none saturate-[2.2] ${
+                  canSubmit
+                    ? 'opacity-75 group-hover/btn:opacity-100 group-hover/btn:scale-130 group-hover/btn:blur-2xl'
+                    : 'opacity-30 group-hover/btn:opacity-60 group-hover/btn:scale-110'
+                }`}
+              />
+
+              {/* 2. Concentrated high-chroma core halo */}
+              <div
+                className={`absolute -inset-1 rounded-full bg-gradient-to-r from-[#8A00E6] via-[#FF007F] to-[#00F0FF] blur-md transition-all duration-200 pointer-events-none saturate-[2] ${
+                  canSubmit
+                    ? 'opacity-90 group-hover/btn:opacity-100 group-hover/btn:blur-lg'
+                    : 'opacity-25 group-hover/btn:opacity-55'
+                }`}
+              />
+
+              <motion.button
+                type="button"
+                onClick={() => onSubmit(value)}
+                disabled={!canSubmit}
+                whileTap={canSubmit ? { scale: 0.92, y: 1 } : undefined}
+                whileHover={
+                  canSubmit
+                    ? {
+                        scale: 1.12,
+                        y: -4,
+                        transition: { type: 'spring', stiffness: 500, damping: 14 },
+                      }
+                    : { scale: 1.04, y: -1 }
+                }
+                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-extrabold text-sm tracking-wide flex items-center gap-2 cursor-pointer transition-all duration-200 select-none saturate-[1.8] contrast-[1.1] ${
+                  canSubmit
+                    ? 'bg-gradient-to-r from-[#6D28D9] via-[#EC4899] to-[#0284C7] hover:from-[#7C3AED] hover:via-[#FF007F] hover:to-[#00F0FF] text-white border-2 border-fuchsia-300/80 hover:border-cyan-300 shadow-[0_0_24px_rgba(255,0,128,0.7),0_0_14px_rgba(109,40,217,0.7)] hover:shadow-[0_0_42px_#FF007F,0_0_28px_#7C3AED,0_0_22px_#00F0FF] hover:brightness-110'
+                    : 'bg-gradient-to-r from-violet-900/40 via-fuchsia-900/35 to-cyan-900/40 text-white/75 border border-fuchsia-500/30 hover:border-fuchsia-400/60 hover:shadow-[0_0_18px_rgba(236,72,153,0.5)] cursor-not-allowed opacity-75'
+                }`}
+                aria-label="Discover music"
+              >
+                <motion.div
+                  className="flex items-center justify-center"
+                  whileHover={canSubmit ? { rotate: 25, scale: 1.3 } : undefined}
+                  transition={{ type: 'spring', stiffness: 500, damping: 12 }}
+                >
+                  <Sparkles className="w-4 h-4 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]" />
+                </motion.div>
+                <span className="drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]">Discover</span>
+              </motion.button>
+            </div>
           </div>
         </div>
       </div>

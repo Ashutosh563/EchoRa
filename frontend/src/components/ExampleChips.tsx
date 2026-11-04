@@ -5,7 +5,7 @@ export interface ExamplePromptOption {
   prompt: string;
 }
 
-export const EXAMPLE_CHIPS: ExamplePromptOption[] = [
+const EXAMPLE_CHIPS: ExamplePromptOption[] = [
   {
     label: '🌧 Rainy day focus',
     prompt: 'Mellow acoustic songs and calm beats for a rainy focus session',
@@ -45,7 +45,9 @@ export function ExampleChips({ onSelect, disabled = false }: ExampleChipsProps) 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: index * 0.08, ease: 'easeOut' }}
-          className="glass-pill px-3.5 py-1.5 text-xs text-text-dim hover:text-text hover:bg-white/[0.08] hover:border-white/20 active:scale-95 transition-all cursor-pointer border border-white/5"
+          whileHover={{ scale: 1.04, y: -1 }}
+          whileTap={{ scale: 0.96 }}
+          className="glass-pill px-3.5 py-1.5 text-xs text-text-dim hover:text-white hover:bg-gradient-to-r hover:from-violet-500/15 hover:via-magenta/10 hover:to-cyan-500/15 hover:border-violet-400/40 hover:shadow-[0_0_16px_rgba(139,92,246,0.35)] transition-all cursor-pointer border border-white/5"
           aria-label={`Prompt example: ${chip.label}`}
         >
           {chip.label}
@@ -54,4 +56,3 @@ export function ExampleChips({ onSelect, disabled = false }: ExampleChipsProps) 
     </div>
   );
 }
-
