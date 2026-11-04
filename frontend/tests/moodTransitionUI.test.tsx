@@ -63,14 +63,24 @@ describe("Mood Transition UI Integration", () => {
     totalTracks: 4,
   };
 
-  it("switches between Discover and Mood Transition tabs via TopBar", async () => {
+  it("switches between Discover and Mood Transition tabs via TopBar and hides Preferences button on Transition tab", async () => {
     const user = userEvent.setup();
     render(<App />);
+
+    // On Discover tab, Preferences button is visible
+    expect(
+      screen.getByRole("button", { name: /open taste preferences/i }),
+    ).toBeInTheDocument();
 
     const transitionTab = screen.getByRole("tab", { name: /mood transition/i });
     expect(transitionTab).toBeInTheDocument();
 
     await user.click(transitionTab);
+
+    // On Mood Transition tab, Preferences button is NOT rendered
+    expect(
+      screen.queryByRole("button", { name: /open taste preferences/i }),
+    ).not.toBeInTheDocument();
 
     // Verify Mood Transition header is visible
     expect(
@@ -83,6 +93,9 @@ describe("Mood Transition UI Integration", () => {
     const discoverTab = screen.getByRole("tab", { name: /discover/i });
     await user.click(discoverTab);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/tell me how you feel/i);
+    expect(
+      screen.getByRole("button", { name: /open taste preferences/i }),
+    ).toBeInTheDocument();
   });
 
   it("requires both moods and rejects identical mood selection", async () => {

@@ -120,7 +120,7 @@ export default function App({ api }: AppProps = {}) {
       {/* Sticky Glass Top Bar */}
       <TopBar
         status={status}
-        onOpenPreferences={() => setIsPreferencesOpen(true)}
+        onOpenPreferences={activeTab === 'discover' ? () => setIsPreferencesOpen(true) : undefined}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />

@@ -57,9 +57,9 @@ export function TopBar({
           </nav>
         )}
 
-        {/* Right: Preferences */}
+        {/* Right: Preferences (Discover mode only) */}
         <div className="flex items-center gap-2.5 sm:gap-3">
-          {onOpenPreferences && (
+          {activeTab === 'discover' && onOpenPreferences && (
             <button
               type="button"
               onClick={onOpenPreferences}
