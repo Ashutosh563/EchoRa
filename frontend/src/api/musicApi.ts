@@ -1,4 +1,11 @@
 import type { SearchResponse } from "../types/api";
+import type { DiscoveryMode, HistorySignal, UserPreferences } from "../types/discovery";
+
+export interface SearchOptions {
+  discoveryMode?: DiscoveryMode;
+  preferences?: UserPreferences;
+  historySignals?: HistorySignal[];
+}
 
 /**
  * Abstraction over the data source used by the UI.
@@ -6,7 +13,11 @@ import type { SearchResponse } from "../types/api";
  * replaced by the HTTP client without changing any components.
  */
 export interface MusicApi {
-  search(prompt: string, signal?: AbortSignal): Promise<SearchResponse>;
+  search(
+    prompt: string,
+    optionsOrSignal?: SearchOptions | AbortSignal,
+    signal?: AbortSignal,
+  ): Promise<SearchResponse>;
 }
 
 /** Error carrying a user-friendly message that is safe to display. */
@@ -19,4 +30,3 @@ export class MusicApiError extends Error {
     this.code = code;
   }
 }
-

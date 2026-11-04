@@ -5,6 +5,7 @@ import { createSearchPipeline } from "../services/music/searchPipeline.js";
 import type { AppConfig } from "../config/env.js";
 import type { CredentialState } from "../services/credentialState.js";
 import type { SpotifyAuth } from "../services/spotify/spotifyAuth.js";
+import type { DiscoveryContext } from "../types/discovery.js";
 import { resolveAppMode } from "../services/music/modeResolver.js";
 
 export function createMusicController(
@@ -18,9 +19,15 @@ export function createMusicController(
   return {
     async interpret(req: Request<unknown, unknown, MusicPromptBody>, res: Response, next: NextFunction) {
       try {
-        const { prompt } = req.body;
+        const { prompt, discoveryMode, preferences, historySignals } = req.body;
         const resolution = resolveAppMode(config, credState, spotifyAuth);
-        const result = await pipeline.interpret(prompt, resolution.interpretMode);
+        const discoveryContext: DiscoveryContext = {
+          discoveryMode,
+          preferences,
+          historySignals,
+          rawPrompt: prompt,
+        };
+        const result = await pipeline.interpret(prompt, resolution.interpretMode, discoveryContext);
         res.json(result);
       } catch (err) {
         next(err);
@@ -29,9 +36,20 @@ export function createMusicController(
 
     async search(req: Request<unknown, unknown, MusicPromptBody>, res: Response, next: NextFunction) {
       try {
-        const { prompt } = req.body;
+        const { prompt, discoveryMode, preferences, historySignals } = req.body;
         const resolution = resolveAppMode(config, credState, spotifyAuth);
-        const result = await pipeline.search(prompt, resolution.searchMode, resolution.status.missing);
+        const discoveryContext: DiscoveryContext = {
+          discoveryMode,
+          preferences,
+          historySignals,
+          rawPrompt: prompt,
+        };
+        const result = await pipeline.search(
+          prompt,
+          resolution.searchMode,
+          resolution.status.missing,
+          discoveryContext,
+        );
         res.json(result);
       } catch (err) {
         next(err);
@@ -39,4 +57,3 @@ export function createMusicController(
     },
   };
 }
-

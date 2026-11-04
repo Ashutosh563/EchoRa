@@ -4,6 +4,8 @@
  * swapped for the real HTTP client without touching UI components.
  */
 
+import type { DiscoveryMode } from "./discovery";
+
 export type Energy = "low" | "medium" | "high";
 export type Tempo = "slow" | "medium" | "fast" | "any";
 export type VocalPreference = "instrumental_preferred" | "vocals_preferred" | "any";
@@ -39,6 +41,7 @@ export interface SearchQueries {
 
 export interface SearchResponse {
   mode: AppMode;
+  discoveryMode?: DiscoveryMode;
   intent: MusicIntent;
   queries: SearchQueries;
   tracks: Track[];

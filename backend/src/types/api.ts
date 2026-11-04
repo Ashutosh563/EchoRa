@@ -1,5 +1,6 @@
 import type { MusicIntent } from "./intent.js";
 import type { Track } from "./track.js";
+import type { DiscoveryMode } from "./discovery.js";
 
 export type AppMode = "mock" | "live";
 
@@ -16,6 +17,7 @@ export interface InterpretResponse {
 
 export interface SearchResponse {
   mode: AppMode;
+  discoveryMode?: DiscoveryMode;
   intent: MusicIntent;
   queries: SearchQueries;
   tracks: Track[];
