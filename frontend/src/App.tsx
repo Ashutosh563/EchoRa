@@ -1,115 +1,176 @@
-import { useEffect, useMemo, useState } from "react";
-import type { MusicApi } from "./api/musicApi";
-import { createHttpMusicClient, type FullMusicApi } from "./api/httpClient";
-import { useMusicSearch } from "./hooks/useMusicSearch";
-import { SearchBar } from "./components/SearchBar";
-import { ExamplePrompts } from "./components/ExamplePrompts";
-import { IntentDisplay } from "./components/IntentDisplay";
-import { TrackList } from "./components/TrackList";
-import { StatusBar } from "./components/StatusBar";
-import { CameraModal } from "./components/CameraModal";
-import type { StatusResponse } from "./types/api";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AuroraBackground } from './components/AuroraBackground';
+import { TopBar } from './components/TopBar';
+import { Hero } from './components/Hero';
+import { ThinkingState } from './components/ThinkingState';
+import { IntentPanel } from './components/IntentPanel';
+import { NoticeBanner } from './components/NoticeBanner';
+import { TrackGrid } from './components/TrackGrid';
+import { ErrorCard } from './components/ErrorCard';
+import { RecentChips } from './components/RecentChips';
+import { Toasts } from './components/Toasts';
+import { CameraModal } from './components/CameraModal';
+import { useStatus } from './hooks/useStatus';
+import { useSearch } from './hooks/useSearch';
+import { useMoodTheme } from './hooks/useMoodTheme';
+import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+import type { ToastInfo } from './types';
+import type { CameraAnalysisResponse } from './types/camera';
 
-interface AppProps {
-  /** Injected data source; defaults to backend HTTP client. */
-  api?: MusicApi;
-}
-
-export default function App({ api }: AppProps) {
-  const client = useMemo(() => api ?? createHttpMusicClient(), [api]);
-  const { state, search } = useMusicSearch(client);
-  const [prompt, setPrompt] = useState("");
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [status, setStatus] = useState<StatusResponse | null>(null);
+export default function App() {
+  const { status } = useStatus();
+  const { status: searchStatus, data, error, lastPrompt, search } = useSearch();
+  const [prompt, setPrompt] = useState('');
+  const [toasts, setToasts] = useState<ToastInfo[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
 
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Aurora mood theme retints smoothly based on intent
+  const theme = useMoodTheme(data?.intent);
+
+  // Toast management with 4-second auto-dismiss
+  const addToast = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const id = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    setToasts((prev) => [...prev, { id, message, type }]);
+
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Voice speech-to-text integration
+  const speech = useSpeechRecognition({
+    onInterim: (interimText) => {
+      setPrompt(interimText);
+    },
+    onFinal: (finalText) => {
+      setPrompt(finalText);
+      // Auto-submit after 600ms on final speech result
+      setTimeout(() => {
+        if (finalText.trim()) {
+          void handleSearchSubmit(finalText.trim());
+        }
+      }, 600);
+    },
+    onError: (errorMessage) => {
+      addToast(errorMessage, 'error');
+    },
+  });
+
+  const handleSearchSubmit = async (searchPrompt: string) => {
+    const trimmed = searchPrompt.trim();
+    if (!trimmed) return;
+
+    // Add to search history (keep last 6)
+    setRecentSearches((prev) => {
+      const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
+      return [trimmed, ...filtered].slice(0, 6);
+    });
+
+    await search(trimmed);
+  };
+
+  // Smooth scroll into results when search finishes
   useEffect(() => {
-    // If client supports getStatus, load initial backend mode
-    if ("getStatus" in client && typeof (client as FullMusicApi).getStatus === "function") {
-      (client as FullMusicApi).getStatus().then(setStatus).catch(() => {});
+    if (searchStatus === 'success' && resultsRef.current) {
+      if (typeof resultsRef.current.scrollIntoView === 'function') {
+        resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
-  }, [client]);
+  }, [searchStatus]);
 
-  const handleSubmit = () => {
-    const trimmed = prompt.trim();
-    if (!trimmed) {
-      setValidationError("Please describe what you'd like to listen to.");
-      return;
-    }
-    setValidationError(null);
-    void search(trimmed);
-  };
-
-  const handlePromptChange = (value: string) => {
-    setPrompt(value);
-    if (validationError) setValidationError(null);
-  };
-
-  const handleCameraDirection = (direction: string) => {
-    setPrompt(direction);
-    if (validationError) setValidationError(null);
-    void search(direction);
-  };
-
-  const isLoading = state.status === "loading";
+  const hasSearched = searchStatus === 'success' || searchStatus === 'loading' || Boolean(data);
 
   return (
-    <main className="app">
-      <header className="header">
-        <h1>SONORA</h1>
-        <p className="tagline">AI-powered mood-based music discovery.</p>
-      </header>
+    <div className="relative min-h-screen flex flex-col font-sans selection:bg-magenta/30 selection:text-text">
+      {/* Background Aurora */}
+      <AuroraBackground theme={theme} />
 
-      <StatusBar status={status} />
+      {/* Sticky Glass Top Bar */}
+      <TopBar status={status} />
 
-      <SearchBar
-        value={prompt}
-        onChange={handlePromptChange}
-        onSubmit={handleSubmit}
-        disabled={isLoading}
-        onVoiceError={setVoiceError}
-        onOpenCamera={() => setIsCameraOpen(true)}
-      />
-      <ExamplePrompts onSelect={handlePromptChange} />
+      {/* Main Content Area */}
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 flex flex-col pb-16">
+        {/* Hero Section & Composer */}
+        <Hero
+          hasSearched={hasSearched}
+          prompt={prompt}
+          onPromptChange={setPrompt}
+          onSubmit={handleSearchSubmit}
+          isLoading={searchStatus === 'loading'}
+          isListening={speech.isListening}
+          isMicSupported={speech.isSupported}
+          onToggleMic={speech.toggleListening}
+          onOpenCamera={() => setIsCameraOpen(true)}
+        />
 
+        {/* Results / Feedback Region */}
+        <div ref={resultsRef} aria-live="polite" className="w-full">
+          {/* 1. Loading State */}
+          {searchStatus === 'loading' && <ThinkingState />}
+
+          {/* 2. Error State */}
+          {searchStatus === 'error' && error && (
+            <ErrorCard
+              error={error}
+              onRetry={() => {
+                if (lastPrompt) {
+                  void handleSearchSubmit(lastPrompt);
+                }
+              }}
+            />
+          )}
+
+          {/* 3. Successful Search Results */}
+          {searchStatus === 'success' && data && (
+            <>
+              {/* Notice Banner (if any) */}
+              <NoticeBanner notice={data.notice} />
+
+              {/* Intent Breakdown Panel */}
+              <IntentPanel
+                data={data}
+                userPrompt={lastPrompt}
+                onCopyNotice={() => addToast('Search query copied to clipboard!', 'success')}
+              />
+
+              {/* Tracks Grid */}
+              <TrackGrid tracks={data.tracks} />
+
+              {/* Search History Chips */}
+              <RecentChips
+                history={recentSearches}
+                onSelect={(selectedPrompt) => {
+                  setPrompt(selectedPrompt);
+                  void handleSearchSubmit(selectedPrompt);
+                }}
+              />
+            </>
+          )}
+        </div>
+      </main>
+
+      {/* Camera Modal */}
       <CameraModal
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
-        onSelectMusicDirection={handleCameraDirection}
+        onSelectMusicDirection={(direction, result?: CameraAnalysisResponse) => {
+          setPrompt(direction);
+          if (result?.expression) {
+            addToast(`Expression detected: ${result.expression}`, 'success');
+          }
+          void handleSearchSubmit(direction);
+        }}
       />
 
-      {voiceError && (
-        <p className="message message--error" role="alert">
-          {voiceError}
-        </p>
-      )}
-
-      {validationError && (
-        <p className="message message--error" role="alert">
-          {validationError}
-        </p>
-      )}
-
-      {isLoading && (
-        <p className="message message--loading" role="status">
-          <span className="spinner" aria-hidden="true" /> Interpreting your request and finding music…
-        </p>
-      )}
-
-      {state.status === "error" && (
-        <p className="message message--error" role="alert">
-          {state.message}
-        </p>
-      )}
-
-      {state.status === "success" && (
-        <>
-          {state.data.notice && <p className="message message--notice">{state.data.notice}</p>}
-          <IntentDisplay intent={state.data.intent} />
-          <TrackList tracks={state.data.tracks} mode={state.data.mode} />
-        </>
-      )}
-    </main>
+      {/* Floating Toast Stack */}
+      <Toasts toasts={toasts} onDismiss={dismissToast} />
+    </div>
   );
 }

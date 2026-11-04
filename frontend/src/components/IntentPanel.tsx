@@ -1,0 +1,256 @@
+import {
+  AudioWaveform,
+  Zap,
+  Activity,
+  Gauge,
+  Tags,
+  Mic2,
+  Clock,
+  Sun,
+  Sunset,
+  Moon,
+  Sparkles,
+} from 'lucide-react';
+import type { SearchResponse } from '../types';
+import { IntentTile } from './IntentTile';
+import { QueryLine } from './QueryLine';
+
+interface IntentPanelProps {
+  data: SearchResponse;
+  userPrompt: string;
+  onCopyNotice?: () => void;
+}
+
+export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps) {
+  const { intent, queries, mode } = data;
+  const breakdown = intent.breakdown;
+
+  // Time context icon mapping
+  const renderTimeContent = () => {
+    const time = intent.time_context;
+    if (!time || time === 'any') {
+      return <span className="text-text-faint text-xs">Open</span>;
+    }
+
+    let icon = <Clock className="w-3.5 h-3.5 text-cyan" />;
+    let label = 'Anytime';
+
+    if (time === 'morning') {
+      icon = <Sun className="w-3.5 h-3.5 text-amber" />;
+      label = 'Morning';
+    } else if (time === 'afternoon') {
+      icon = <Sun className="w-3.5 h-3.5 text-amber" />;
+      label = 'Afternoon';
+    } else if (time === 'evening') {
+      icon = <Sunset className="w-3.5 h-3.5 text-magenta" />;
+      label = 'Evening';
+    } else if (time === 'late_night') {
+      icon = <Moon className="w-3.5 h-3.5 text-violet" />;
+      label = 'Late Night';
+    }
+
+    return (
+      <span className="flex items-center gap-1.5 text-sm font-medium text-text">
+        {icon} {label}
+      </span>
+    );
+  };
+
+  // Vocals content mapping
+  const renderVocalsContent = () => {
+    const vocals = intent.vocals;
+    if (!vocals || vocals === 'any') {
+      return <span className="text-text-faint text-xs">Open</span>;
+    }
+    const isInstrumental = vocals === 'instrumental_preferred';
+    return (
+      <span className="text-sm font-medium text-text flex items-center gap-1.5">
+        <Mic2 className={`w-3.5 h-3.5 ${isInstrumental ? 'text-violet' : 'text-magenta'}`} />
+        {isInstrumental ? 'Instrumental' : 'Vocals'}
+      </span>
+    );
+  };
+
+  // Tempo pulse period: slow=1.6s, medium=0.9s, fast=0.5s, any=static
+  const getTempoPulseDuration = () => {
+    if (intent.tempo === 'slow') return '1.6s';
+    if (intent.tempo === 'medium') return '0.9s';
+    if (intent.tempo === 'fast') return '0.5s';
+    return '0s';
+  };
+
+  // Energy segments: low=1, medium=2, high=3 filled
+  const getEnergySegments = () => {
+    if (intent.energy === 'low') return 1;
+    if (intent.energy === 'high') return 3;
+    return 2;
+  };
+
+  const energyLevel = getEnergySegments();
+
+  return (
+    <div className="glass-panel p-5 sm:p-6 mb-8 rounded-card border border-white/10 shadow-glass">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/[0.08] mb-4">
+        <div className="flex items-center gap-2">
+          <AudioWaveform className="w-4 h-4 text-violet" />
+          <h2 className="font-display font-semibold text-sm sm:text-base text-text">
+            How I heard you
+          </h2>
+        </div>
+
+        {/* Mode badge */}
+        <span
+          className={`text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 ${
+            mode === 'live'
+              ? 'bg-live-status/15 text-live-status border border-live-status/30'
+              : 'bg-mock-status/15 text-mock-status border border-mock-status/30'
+          }`}
+        >
+          <Sparkles className="w-3 h-3" />
+          {mode === 'live' ? 'Live AI' : 'Mock Mode'}
+        </span>
+      </div>
+
+      {/* User's Original Prompt as Quote */}
+      {userPrompt && (
+        <blockquote className="text-sm sm:text-base text-text-dim italic mb-5 pl-3 border-l-2 border-violet/50 leading-relaxed font-normal">
+          &ldquo;{userPrompt}&rdquo;
+        </blockquote>
+      )}
+
+      {/* Grid of 7 Intent Tiles (2 cols on mobile, 4 on desktop) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+        {/* 1. Mood */}
+        <IntentTile
+          index={0}
+          icon={<Sparkles className="w-3.5 h-3.5" />}
+          label="Mood"
+          source={breakdown?.mood?.source}
+          priority={breakdown?.mood?.priority}
+        >
+          <span className="text-sm font-semibold capitalize text-text">
+            {intent.mood || 'Open'}
+          </span>
+        </IntentTile>
+
+        {/* 2. Activity */}
+        <IntentTile
+          index={1}
+          icon={<Activity className="w-3.5 h-3.5" />}
+          label="Activity"
+          source={breakdown?.activity?.source}
+          priority={breakdown?.activity?.priority}
+        >
+          <span className="text-sm font-medium capitalize text-text">
+            {intent.activity || <span className="text-text-faint text-xs">Open</span>}
+          </span>
+        </IntentTile>
+
+        {/* 3. Energy */}
+        <IntentTile
+          index={2}
+          icon={<Zap className="w-3.5 h-3.5" />}
+          label="Energy"
+          source={breakdown?.energy?.source}
+          priority={breakdown?.energy?.priority}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold capitalize text-text min-w-[50px]">
+              {intent.energy}
+            </span>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3].map((seg) => (
+                <div
+                  key={seg}
+                  className={`w-4 h-2 rounded-sm transition-all ${
+                    seg <= energyLevel
+                      ? 'bg-gradient-to-r from-cyan to-magenta shadow-sm'
+                      : 'bg-white/10'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        </IntentTile>
+
+        {/* 4. Tempo */}
+        <IntentTile
+          index={3}
+          icon={<Gauge className="w-3.5 h-3.5" />}
+          label="Tempo"
+          source={breakdown?.tempo?.source}
+          priority={breakdown?.tempo?.priority}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className="w-2.5 h-2.5 rounded-full bg-cyan inline-block"
+              style={{
+                animation:
+                  intent.tempo !== 'any'
+                    ? `pulse ${getTempoPulseDuration()} ease-in-out infinite`
+                    : 'none',
+              }}
+            />
+            <span className="text-sm font-medium capitalize text-text">
+              {intent.tempo || 'Open'}
+            </span>
+          </div>
+        </IntentTile>
+
+        {/* 5. Genres */}
+        <IntentTile
+          index={4}
+          icon={<Tags className="w-3.5 h-3.5" />}
+          label="Genres"
+          source={breakdown?.genre?.source}
+          priority={breakdown?.genre?.priority}
+        >
+          <div className="flex flex-wrap items-center gap-1">
+            {intent.genre && intent.genre.length > 0 ? (
+              intent.genre.map((g, i) => (
+                <span
+                  key={i}
+                  className="px-2 py-0.5 rounded-md bg-white/[0.06] text-text text-xs font-medium border border-white/5"
+                >
+                  {g}
+                </span>
+              ))
+            ) : (
+              <span className="text-text-faint text-xs">Open</span>
+            )}
+          </div>
+        </IntentTile>
+
+        {/* 6. Vocals */}
+        <IntentTile
+          index={5}
+          icon={<Mic2 className="w-3.5 h-3.5" />}
+          label="Vocals"
+          source={breakdown?.vocals?.source}
+          priority={breakdown?.vocals?.priority}
+        >
+          {renderVocalsContent()}
+        </IntentTile>
+
+        {/* 7. Time Context */}
+        <IntentTile
+          index={6}
+          icon={<Clock className="w-3.5 h-3.5" />}
+          label="Time Context"
+          source={breakdown?.time_context?.source}
+          priority={breakdown?.time_context?.priority}
+        >
+          {renderTimeContent()}
+        </IntentTile>
+      </div>
+
+      {/* Query Line at bottom */}
+      <QueryLine
+        primary={queries.primary}
+        alternatives={queries.alternatives}
+        onCopyNotice={onCopyNotice}
+      />
+    </div>
+  );
+}
