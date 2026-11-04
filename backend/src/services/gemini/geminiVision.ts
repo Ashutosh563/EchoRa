@@ -1,5 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
-import { mapGeminiError } from "./geminiClient.js";
+import {
+  getCandidateModels,
+  isNonRecoverableGeminiError,
+  mapGeminiError,
+} from "./geminiClient.js";
+import { logger } from "../../utils/logger.js";
 import type { CameraAnalysisResponse, VisionConfidence, VisionImageQuality } from "../../types/camera.js";
 
 export const VISION_SYSTEM_INSTRUCTION = `You are the vision analysis component of SONORA, an AI music discovery application.
@@ -48,57 +53,85 @@ export function cleanBase64(input: string): string {
   return match ? match[1]! : input;
 }
 
+export const GEMINI_VISION_FALLBACK_MODELS = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.8-flash",
+] as const;
+
 export function createGeminiVisionService(apiKey: string, model: string): GeminiVisionService {
   const ai = new GoogleGenAI({ apiKey });
 
   return {
     async analyzeExpression(imageInput: string, mimeType = "image/jpeg", signal?: AbortSignal): Promise<CameraAnalysisResponse> {
       const data = cleanBase64(imageInput);
+      const candidateModels = getCandidateModels(model, GEMINI_VISION_FALLBACK_MODELS);
       const timeout = AbortSignal.timeout(20_000);
       const abortSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
 
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: [
-            {
-              inlineData: {
-                data,
-                mimeType,
+      let lastError: unknown;
+
+      for (let i = 0; i < candidateModels.length; i++) {
+        const currentModel = candidateModels[i]!;
+        try {
+          const response = await ai.models.generateContent({
+            model: currentModel,
+            contents: [
+              {
+                inlineData: {
+                  data,
+                  mimeType,
+                },
               },
+              "Analyze the visible facial expression in this camera frame according to the system instructions.",
+            ],
+            config: {
+              systemInstruction: VISION_SYSTEM_INSTRUCTION,
+              responseMimeType: "application/json",
+              responseJsonSchema: VISION_ANALYSIS_SCHEMA,
+              temperature: 0.2,
+              abortSignal,
             },
-            "Analyze the visible facial expression in this camera frame according to the system instructions.",
-          ],
-          config: {
-            systemInstruction: VISION_SYSTEM_INSTRUCTION,
-            responseMimeType: "application/json",
-            responseJsonSchema: VISION_ANALYSIS_SCHEMA,
-            temperature: 0.2,
-            abortSignal,
-          },
-        });
+          });
 
-        const rawText = response.text || "";
-        const parsed = JSON.parse(rawText.replace(/^```json\s*|\s*```$/gi, "").trim()) as CameraAnalysisResponse;
+          const rawText = response.text || "";
+          const parsed = JSON.parse(rawText.replace(/^```json\s*|\s*```$/gi, "").trim()) as CameraAnalysisResponse;
 
-        // Normalise fields defensively
-        const confidence: VisionConfidence = ["HIGH", "MEDIUM", "LOW"].includes(parsed.confidence)
-          ? parsed.confidence
-          : "LOW";
-        const quality: VisionImageQuality = ["GOOD", "FAIR", "POOR"].includes(parsed.image_quality)
-          ? parsed.image_quality
-          : "FAIR";
+          // Normalise fields defensively
+          const confidence: VisionConfidence = ["HIGH", "MEDIUM", "LOW"].includes(parsed.confidence)
+            ? parsed.confidence
+            : "LOW";
+          const quality: VisionImageQuality = ["GOOD", "FAIR", "POOR"].includes(parsed.image_quality)
+            ? parsed.image_quality
+            : "FAIR";
 
-        return {
-          expression: parsed.expression || "uncertain",
-          confidence,
-          image_quality: quality,
-          visual_observations: Array.isArray(parsed.visual_observations) ? parsed.visual_observations : [],
-          music_direction: confidence === "LOW" ? null : parsed.music_direction,
-        };
-      } catch (err) {
-        throw mapGeminiError(err);
+          return {
+            expression: parsed.expression || "uncertain",
+            confidence,
+            image_quality: quality,
+            visual_observations: Array.isArray(parsed.visual_observations) ? parsed.visual_observations : [],
+            music_direction: confidence === "LOW" ? null : parsed.music_direction,
+          };
+        } catch (err) {
+          lastError = err;
+
+          if (isNonRecoverableGeminiError(err, signal)) {
+            throw mapGeminiError(err);
+          }
+
+          if (i < candidateModels.length - 1) {
+            const nextModel = candidateModels[i + 1]!;
+            const reason = err instanceof Error ? err.message : String(err);
+            logger.warn(
+              `Gemini vision model "${currentModel}" failed (${reason}). Falling back to lower engine "${nextModel}".`,
+            );
+            continue;
+          }
+        }
       }
+
+      throw mapGeminiError(lastError);
     },
   };
 }

@@ -54,14 +54,14 @@ export default function App({ api }: AppProps = {}) {
   // Aurora mood theme retints smoothly based on intent
   const theme = useMoodTheme(data?.intent);
 
-  // Toast management with 4-second auto-dismiss
-  const addToast = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info') => {
+  // Toast management with auto-dismiss duration
+  const addToast = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info', durationMs = 3000) => {
     const id = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
 
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, durationMs);
   }, []);
 
   const dismissToast = useCallback((id: string) => {
@@ -98,7 +98,9 @@ export default function App({ api }: AppProps = {}) {
     const updated = setDiscoveryMode(newMode);
     setProfile(updated);
     const modeName = newMode.charAt(0) + newMode.slice(1).toLowerCase();
-    addToast(`Discovery mode set to ${modeName}.`, 'info');
+    // Clear any previous mode switch toasts and dismiss quickly (1.5s)
+    setToasts((prev) => prev.filter((t) => !t.message.startsWith('Discovery mode set to')));
+    addToast(`Discovery mode set to ${modeName}.`, 'info', 1500);
   };
 
   // Smooth scroll into results when search finishes
