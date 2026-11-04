@@ -1,5 +1,6 @@
 import { Wordmark } from './Wordmark';
 import { SlidersHorizontal } from 'lucide-react';
+import { motion } from 'framer-motion';
 import type { StatusResponse } from '../types';
 
 interface TopBarProps {
@@ -21,44 +22,54 @@ export function TopBar({
         {/* Left: Brand */}
         <Wordmark />
 
-        {/* Center: Navigation Tabs */}
+        {/* Center: Navigation Tabs with Fluid Pill Animation */}
         {onTabChange && (
           <nav
             role="tablist"
             aria-label="Navigation"
-            className="flex items-center gap-1 p-1 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md"
+            className="flex items-center gap-1 p-1 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md relative"
           >
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === 'discover'}
               onClick={() => onTabChange('discover')}
-              className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'discover'
-                  ? 'bg-gradient-to-r from-violet/90 to-magenta/80 text-white shadow-sm'
-                  : 'text-text-dim hover:text-text hover:bg-white/5'
+              className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
+                activeTab === 'discover' ? 'text-white' : 'text-text-dim hover:text-text'
               }`}
             >
-              Discover
+              {activeTab === 'discover' && (
+                <motion.span
+                  layoutId="activeTabBadge"
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-violet/90 to-magenta/80 shadow-md shadow-violet/20"
+                  transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
+                />
+              )}
+              <span className="relative z-10">Discover</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === 'transition'}
               onClick={() => onTabChange('transition')}
-              className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'transition'
-                  ? 'bg-gradient-to-r from-violet/90 to-cyan/80 text-white shadow-sm'
-                  : 'text-text-dim hover:text-text hover:bg-white/5'
+              className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
+                activeTab === 'transition' ? 'text-white' : 'text-text-dim hover:text-text'
               }`}
             >
-              Mood Transition
+              {activeTab === 'transition' && (
+                <motion.span
+                  layoutId="activeTabBadge"
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-violet/90 to-cyan/80 shadow-md shadow-cyan/20"
+                  transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
+                />
+              )}
+              <span className="relative z-10">Mood Transition</span>
             </button>
           </nav>
         )}
 
         {/* Right: Preferences (Discover mode only) */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-[32px] sm:min-w-[110px] justify-end">
           {activeTab === 'discover' && onOpenPreferences && (
             <button
               type="button"
