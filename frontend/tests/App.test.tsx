@@ -57,7 +57,7 @@ describe('SONORA App UI', () => {
     vi.spyOn(client, 'getStatus').mockResolvedValue(MOCK_STATUS);
   });
 
-  it('renders top bar brand, mode pill, and hero section', async () => {
+  it('renders top bar brand and hero section', async () => {
     render(<App />);
 
     // Brand logo
@@ -67,13 +67,8 @@ describe('SONORA App UI', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Tell me how you feel/i);
     expect(screen.getByText(/Describe your mood, moment, or setting/i)).toBeInTheDocument();
 
-    // Mode pill
-    await waitFor(() => {
-      expect(screen.getByText('Live')).toBeInTheDocument();
-    });
-
     // Discover button is disabled initially
-    const discoverBtn = screen.getByRole('button', { name: /Discover/i });
+    const discoverBtn = screen.getByRole('button', { name: 'Discover music' });
     expect(discoverBtn).toBeDisabled();
   });
 
@@ -115,7 +110,7 @@ describe('SONORA App UI', () => {
     const textarea = screen.getByRole('textbox', { name: /Describe what you want to listen to/i });
     await user.type(textarea, 'energetic beats');
 
-    const discoverBtn = screen.getByRole('button', { name: /Discover/i });
+    const discoverBtn = screen.getByRole('button', { name: 'Discover music' });
     await user.click(discoverBtn);
 
     await waitFor(() => {
@@ -125,19 +120,20 @@ describe('SONORA App UI', () => {
     });
   });
 
-  it('renders Connect Spotify button when unauthorized', async () => {
-    vi.spyOn(client, 'getStatus').mockResolvedValue({
-      ...MOCK_STATUS,
+  it('renders Connect Spotify button in notice banner when notice requests it', async () => {
+    vi.spyOn(client, 'searchMusic').mockResolvedValue({
+      ...MOCK_SEARCH_RESPONSE,
       mode: 'mock',
-      spotify: { configured: true, valid: true, authorized: false },
-      missing: ["Spotify authorization required. Click 'Connect Spotify'."],
+      notice: 'Operating in Mock Mode: Spotify authorization required. Click Connect Spotify.',
     });
-
+    const user = userEvent.setup();
     render(<App />);
 
+    const chip = screen.getByRole('button', { name: /🌧 Rainy day focus/i });
+    await user.click(chip);
+
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Connect your Spotify account/i })).toBeInTheDocument();
-      expect(screen.getByText('Mock')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Connect Spotify/i })).toBeInTheDocument();
     });
   });
 });

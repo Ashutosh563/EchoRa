@@ -1,24 +1,22 @@
 import { Wordmark } from './Wordmark';
-import { ModePill } from './ModePill';
-import { ConnectSpotifyButton } from './ConnectSpotifyButton';
 import { SlidersHorizontal } from 'lucide-react';
 import type { StatusResponse } from '../types';
 
 interface TopBarProps {
-  status: StatusResponse | null;
+  status?: StatusResponse | null;
   onOpenPreferences?: () => void;
 }
 
-export function TopBar({ status, onOpenPreferences }: TopBarProps) {
+export function TopBar({ status: _status, onOpenPreferences }: TopBarProps) {
   return (
     <header className="sticky top-0 z-40 w-full h-16 border-b border-white/[0.08] bg-ink/70 backdrop-blur-xl transition-colors">
       <div className="max-w-6xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between">
         {/* Left: Brand */}
         <Wordmark />
 
-        {/* Right: Preferences, Status Pill & Connect Action */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          {onOpenPreferences && (
+        {/* Right: Preferences */}
+        {onOpenPreferences && (
+          <div className="flex items-center gap-2.5 sm:gap-3">
             <button
               type="button"
               onClick={onOpenPreferences}
@@ -29,10 +27,8 @@ export function TopBar({ status, onOpenPreferences }: TopBarProps) {
               <SlidersHorizontal className="w-3.5 h-3.5 text-violet" />
               <span className="hidden sm:inline font-medium">Preferences</span>
             </button>
-          )}
-          <ModePill status={status} />
-          <ConnectSpotifyButton status={status} />
-        </div>
+          </div>
+        )}
       </div>
     </header>
   );

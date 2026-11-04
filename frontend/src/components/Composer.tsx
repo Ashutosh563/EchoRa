@@ -77,7 +77,7 @@ export function Composer({
           </div>
         )}
 
-        {/* Textarea */}
+        {/* Textarea with enhanced whitish font and bright visible placeholder */}
         <textarea
           ref={textareaRef}
           value={value}
@@ -88,15 +88,15 @@ export function Composer({
           placeholder={isFocused ? 'e.g. Peaceful instrumental music for studying at 3 AM...' : typewriterText}
           disabled={isLoading}
           rows={2}
-          className="w-full bg-transparent resize-none outline-none text-text placeholder:text-text-faint text-base sm:text-lg leading-relaxed font-normal"
+          className="w-full bg-transparent resize-none outline-none text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"
           aria-label="Describe what you want to listen to"
         />
 
         {/* Bottom Toolbar Row */}
         <div className="flex items-center justify-between pt-3 mt-1 border-t border-white/[0.06]">
           {/* Left: Character Counter */}
-          <div className="text-xs font-mono text-text-faint tracking-wider">
-            <span className={isOverLimit ? 'text-error-status font-bold' : ''}>
+          <div className="text-xs font-mono text-white/60 tracking-wider">
+            <span className={isOverLimit ? 'text-error-status font-bold' : 'text-white/80'}>
               {value.length}
             </span>
             <span className="opacity-60">/300</span>
@@ -145,4 +145,3 @@ export function Composer({
     </div>
   );
 }
-
