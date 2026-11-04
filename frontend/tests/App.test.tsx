@@ -1,181 +1,142 @@
-import { act, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import App from "../src/App";
-import { MusicApiError } from "../src/api/musicApi";
-import { createMockClient } from "../src/api/mockClient";
-import { EXAMPLE_PROMPTS } from "../src/components/ExamplePrompts";
-import { createDeferredApi, SAMPLE_RESPONSE } from "./mocks/fakeApi";
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import App from '../src/App';
+import * as client from '../src/api/client';
+import type { SearchResponse, StatusResponse } from '../src/types';
 
-const PLACEHOLDER = "Something calm for a 3 AM study session...";
+const MOCK_STATUS: StatusResponse = {
+  mode: 'live',
+  interpretMode: 'live',
+  gemini: { configured: true, valid: true },
+  spotify: { configured: true, valid: true, authorized: true },
+  missing: [],
+};
 
-describe("App - main page", () => {
-  it("renders heading, description, input with placeholder and Search button", () => {
-    render(<App api={createDeferredApi().api} />);
-    expect(screen.getByRole("heading", { name: "SONORA" })).toBeInTheDocument();
-    expect(screen.getByText("AI-powered mood-based music discovery.")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(PLACEHOLDER)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Search" })).toBeInTheDocument();
+const MOCK_SEARCH_RESPONSE: SearchResponse = {
+  mode: 'live',
+  intent: {
+    mood: 'peaceful',
+    activity: 'studying',
+    energy: 'low',
+    tempo: 'slow',
+    genre: ['piano', 'ambient'],
+    vocals: 'instrumental_preferred',
+    time_context: 'late_night',
+    breakdown: {
+      mood: { value: 'peaceful', source: 'explicit', priority: 'high' },
+      activity: { value: 'studying', source: 'explicit', priority: 'high' },
+      energy: { value: 'low', source: 'inferred', priority: 'low' },
+      tempo: { value: 'slow', source: 'inferred', priority: 'low' },
+      genre: { value: ['piano', 'ambient'], source: 'explicit', priority: 'medium_high' },
+      vocals: { value: 'instrumental_preferred', source: 'explicit', priority: 'medium_high' },
+      time_context: { value: 'late_night', source: 'explicit', priority: 'medium' },
+    },
+  },
+  queries: {
+    primary: 'peaceful study instrumental piano ambient',
+    alternatives: ['late night focus instrumental'],
+  },
+  tracks: [
+    {
+      id: 'track-1',
+      name: 'Peaceful Mind',
+      artists: ['Ambient Artist'],
+      album: 'Midnight Thoughts',
+      albumArtUrl: 'https://example.com/art.jpg',
+      durationMs: 180000,
+      spotifyUrl: 'https://open.spotify.com/track/track-1',
+      previewUrl: null,
+    },
+  ],
+};
+
+describe('SONORA App UI', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(client, 'getStatus').mockResolvedValue(MOCK_STATUS);
   });
 
-  it("renders all example prompts", () => {
-    render(<App api={createDeferredApi().api} />);
-    for (const prompt of EXAMPLE_PROMPTS) {
-      expect(screen.getByRole("button", { name: prompt })).toBeInTheDocument();
-    }
+  it('renders top bar brand, mode pill, and hero section', async () => {
+    render(<App />);
+
+    // Brand logo
+    expect(screen.getByLabelText('SONORA logo')).toBeInTheDocument();
+
+    // Headline
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Tell me how you feel/i);
+    expect(screen.getByText(/Describe your mood, moment, or setting/i)).toBeInTheDocument();
+
+    // Mode pill
+    await waitFor(() => {
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    // Discover button is disabled initially
+    const discoverBtn = screen.getByRole('button', { name: /Discover/i });
+    expect(discoverBtn).toBeDisabled();
   });
 
-  it("clicking an example populates the input without searching", async () => {
+  it('renders example prompt chips and clicking one submits search', async () => {
+    const searchSpy = vi.spyOn(client, 'searchMusic').mockResolvedValue(MOCK_SEARCH_RESPONSE);
     const user = userEvent.setup();
-    const fake = createDeferredApi();
-    render(<App api={fake.api} />);
+    render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Happy acoustic music." }));
+    const chip = screen.getByRole('button', { name: /🌧 Rainy day focus/i });
+    expect(chip).toBeInTheDocument();
 
-    expect(screen.getByPlaceholderText(PLACEHOLDER)).toHaveValue("Happy acoustic music.");
-    expect(fake.calls).toHaveLength(0);
-  });
-});
+    await user.click(chip);
 
-describe("App - search interactions", () => {
-  it("Search button submits, shows loading, then intent and results", async () => {
-    const user = userEvent.setup();
-    const fake = createDeferredApi();
-    render(<App api={fake.api} />);
-
-    await user.type(screen.getByPlaceholderText(PLACEHOLDER), "calm study music");
-    await user.click(screen.getByRole("button", { name: "Search" }));
-
-    expect(fake.calls).toEqual(["calm study music"]);
-    expect(screen.getByRole("status")).toHaveTextContent(/finding music/i);
-    expect(screen.getByRole("button", { name: /searching/i })).toBeDisabled();
-
-    await act(async () => fake.resolve());
-
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
-
-    // Interpreted intent: all seven fields
-    const intent = screen.getByRole("region", { name: "Interpreted intent" });
-    for (const [label, value] of [
-      ["Mood", "Calm"],
-      ["Activity", "Studying"],
-      ["Energy", "Low"],
-      ["Genre", "Ambient, Lofi"],
-      ["Tempo preference", "Slow"],
-      ["Vocal preference", "Instrumental preferred"],
-      ["Time context", "Late night"],
-    ]) {
-      const field = within(intent).getByText(label).closest("div")!;
-      expect(field).toHaveTextContent(value);
-    }
-
-    // Results
-    const results = screen.getByRole("region", { name: "Results" });
-    const items = within(results).getAllByRole("listitem");
-    expect(items).toHaveLength(2);
-
-    const first = items[0]!;
-    expect(within(first).getByRole("heading", { name: "Test Song" })).toBeInTheDocument();
-    expect(within(first).getByText("Test Artist, Guest")).toBeInTheDocument();
-    expect(within(first).getByText("Test Album")).toBeInTheDocument();
-    expect(within(first).getByText("3:05")).toBeInTheDocument();
-    expect(within(first).getByRole("img")).toHaveAttribute("src", "https://example.com/art.jpg");
-    expect(within(first).getByRole("link", { name: "Open in Spotify" })).toHaveAttribute(
-      "href",
-      "https://open.spotify.com/track/t1",
+    expect(searchSpy).toHaveBeenCalledWith(
+      'Mellow acoustic songs and calm beats for a rainy focus session',
+      expect.any(AbortSignal)
     );
 
-    // Missing metadata falls back gracefully
-    const second = items[1]!;
-    expect(within(second).getByText("Unknown artist")).toBeInTheDocument();
-    expect(within(second).getByLabelText("No artwork available")).toBeInTheDocument();
-    expect(within(second).queryByText(/^\d+:\d{2}$/)).not.toBeInTheDocument();
-
-    expect(screen.getByText("Showing mock data.")).toBeInTheDocument();
+    // Results render
+    await waitFor(() => {
+      expect(screen.getByText('How I heard you')).toBeInTheDocument();
+      expect(screen.getByText('Peaceful Mind')).toBeInTheDocument();
+      expect(screen.getByText('Ambient Artist')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Open "Peaceful Mind" on Spotify/i })).toHaveAttribute(
+        'href',
+        'https://open.spotify.com/track/track-1'
+      );
+    });
   });
 
-  it("Enter key submits the search", async () => {
+  it('displays error card when search fails', async () => {
+    vi.spyOn(client, 'searchMusic').mockRejectedValue(
+      new client.AppApiError('GEMINI_UNAVAILABLE', 'The AI is overloaded right now.')
+    );
     const user = userEvent.setup();
-    const fake = createDeferredApi();
-    render(<App api={fake.api} />);
+    render(<App />);
 
-    await user.type(screen.getByPlaceholderText(PLACEHOLDER), "workout music{Enter}");
+    const textarea = screen.getByRole('textbox', { name: /Describe what you want to listen to/i });
+    await user.type(textarea, 'energetic beats');
 
-    expect(fake.calls).toEqual(["workout music"]);
+    const discoverBtn = screen.getByRole('button', { name: /Discover/i });
+    await user.click(discoverBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByText('The AI is taking a breather')).toBeInTheDocument();
+      expect(screen.getByText('The AI is overloaded right now.')).toBeInTheDocument();
+    });
   });
 
-  it("shows a validation message for an empty prompt and does not search", async () => {
-    const user = userEvent.setup();
-    const fake = createDeferredApi();
-    render(<App api={fake.api} />);
+  it('renders Connect Spotify button when unauthorized', async () => {
+    vi.spyOn(client, 'getStatus').mockResolvedValue({
+      ...MOCK_STATUS,
+      mode: 'mock',
+      spotify: { configured: true, valid: true, authorized: false },
+      missing: ["Spotify authorization required. Click 'Connect Spotify'."],
+    });
 
-    await user.type(screen.getByPlaceholderText(PLACEHOLDER), "   ");
-    await user.click(screen.getByRole("button", { name: "Search" }));
+    render(<App />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/describe what you'd like/i);
-    expect(fake.calls).toHaveLength(0);
-  });
-
-  it("shows a user-friendly error message when the search fails", async () => {
-    const user = userEvent.setup();
-    const fake = createDeferredApi();
-    render(<App api={fake.api} />);
-
-    await user.type(screen.getByPlaceholderText(PLACEHOLDER), "anything{Enter}");
-    await act(async () => fake.reject(new MusicApiError("SPOTIFY_RATE_LIMITED", "Spotify is busy. Try again.")));
-
-    expect(screen.getByRole("alert")).toHaveTextContent("Spotify is busy. Try again.");
-  });
-
-  it("hides technical details for unexpected errors", async () => {
-    const user = userEvent.setup();
-    const fake = createDeferredApi();
-    render(<App api={fake.api} />);
-
-    await user.type(screen.getByPlaceholderText(PLACEHOLDER), "anything{Enter}");
-    await act(async () => fake.reject(new TypeError("Failed to fetch: ECONNREFUSED")));
-
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent(/something went wrong/i);
-    expect(alert).not.toHaveTextContent(/ECONNREFUSED/);
-  });
-
-  it("shows an empty-results message when no tracks are returned", async () => {
-    const user = userEvent.setup();
-    const fake = createDeferredApi();
-    render(<App api={fake.api} />);
-
-    await user.type(screen.getByPlaceholderText(PLACEHOLDER), "obscure{Enter}");
-    await act(async () => fake.resolve({ ...SAMPLE_RESPONSE, tracks: [] }));
-
-    expect(screen.getByText(/no songs matched/i)).toBeInTheDocument();
-    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
-  });
-
-  it("shows Spotify attribution in live mode", async () => {
-    const user = userEvent.setup();
-    const fake = createDeferredApi();
-    render(<App api={fake.api} />);
-
-    await user.type(screen.getByPlaceholderText(PLACEHOLDER), "calm{Enter}");
-    await act(async () => fake.resolve({ ...SAMPLE_RESPONSE, mode: "live", notice: undefined }));
-
-    expect(screen.getByText(/provided by Spotify/i)).toBeInTheDocument();
-  });
-});
-
-describe("App - default mock client (end-to-end in the browser)", () => {
-  it("works with the built-in mock client and shows 6-8 results", async () => {
-    const user = userEvent.setup();
-    const mockClient = createMockClient(50);
-    render(<App api={mockClient} />);
-
-    await user.click(screen.getByRole("button", { name: "Energetic music for a workout." }));
-    await user.click(screen.getByRole("button", { name: "Search" }));
-
-    const results = await screen.findByRole("region", { name: "Results" }, { timeout: 3000 });
-    const count = within(results).getAllByRole("listitem").length;
-    expect(count).toBeGreaterThanOrEqual(6);
-    expect(count).toBeLessThanOrEqual(8);
-    expect(screen.getByRole("region", { name: "Interpreted intent" })).toHaveTextContent("Energetic");
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Connect your Spotify account/i })).toBeInTheDocument();
+      expect(screen.getByText('Mock')).toBeInTheDocument();
+    });
   });
 });

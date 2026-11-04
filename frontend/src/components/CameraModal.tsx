@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import type { CameraAnalysisResponse, CameraModalState } from "../types/camera";
-import { MEDIUM_CONFIDENCE_MOOD_OPTIONS } from "../types/camera";
+import { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Camera, X, RefreshCw, AlertTriangle, Sparkles, Check } from 'lucide-react';
+import type { CameraAnalysisResponse, CameraModalState } from '../types/camera';
+import { MEDIUM_CONFIDENCE_MOOD_OPTIONS } from '../types/camera';
+import { analyzeCameraImage } from '../api/client';
 
 interface CameraModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectMusicDirection: (direction: string) => void;
+  onSelectMusicDirection: (direction: string, result?: CameraAnalysisResponse) => void;
   /** Injected analyzer for tests or custom environments */
   analyzeImageFn?: (base64Image: string) => Promise<CameraAnalysisResponse>;
 }
@@ -16,7 +19,7 @@ export function CameraModal({
   onSelectMusicDirection,
   analyzeImageFn,
 }: CameraModalProps) {
-  const [modalState, setModalState] = useState<CameraModalState>("idle");
+  const [modalState, setModalState] = useState<CameraModalState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<CameraAnalysisResponse | null>(null);
   const [selectedMoodIndex, setSelectedMoodIndex] = useState(0);
@@ -38,44 +41,45 @@ export function CameraModal({
 
   const startCamera = async () => {
     setErrorMessage(null);
-    setModalState("requesting_permission");
+    setModalState('requesting_permission');
 
     if (!navigator?.mediaDevices?.getUserMedia) {
-      setErrorMessage("Camera access is not supported in this browser or environment.");
-      setModalState("error");
+      setErrorMessage('Camera access is not supported in this browser or environment.');
+      setModalState('error');
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false,
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-      setModalState("camera_active");
-    } catch (err: any) {
+      setModalState('camera_active');
+    } catch (err: unknown) {
       stopCameraStream();
-      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
-        setErrorMessage("Camera permission was denied. Please allow camera access in your browser settings.");
-      } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
-        setErrorMessage("No camera hardware detected on this device.");
+      const errObj = err as { name?: string };
+      if (errObj?.name === 'NotAllowedError' || errObj?.name === 'PermissionDeniedError') {
+        setErrorMessage('Camera permission was denied. Please allow camera access in your browser settings.');
+      } else if (errObj?.name === 'NotFoundError' || errObj?.name === 'DevicesNotFoundError') {
+        setErrorMessage('No camera hardware detected on this device.');
       } else {
-        setErrorMessage("Could not start camera. Please check your permissions and try again.");
+        setErrorMessage('Could not start camera. Please check your permissions and try again.');
       }
-      setModalState("error");
+      setModalState('error');
     }
   };
 
-  // Open / Close lifecycle
+  // Lifecycle when opened / closed
   useEffect(() => {
     if (isOpen) {
       void startCamera();
     } else {
       stopCameraStream();
-      setModalState("idle");
+      setModalState('idle');
       setErrorMessage(null);
       setAnalysisResult(null);
     }
@@ -86,66 +90,55 @@ export function CameraModal({
 
   const handleCaptureAndAnalyze = async () => {
     if (!videoRef.current) return;
-    setModalState("capturing");
+    setModalState('capturing');
 
     // Grab 1 frame using HTML Canvas
-    const canvas = canvasRef.current || document.createElement("canvas");
+    const canvas = canvasRef.current || document.createElement('canvas');
     canvasRef.current = canvas;
     const video = videoRef.current;
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     }
-    const base64Data = canvas.toDataURL ? canvas.toDataURL("image/jpeg", 0.85) : "data:image/jpeg;base64,mockframe";
+    const base64Data = canvas.toDataURL ? canvas.toDataURL('image/jpeg', 0.85) : 'data:image/jpeg;base64,mockframe';
 
     // Stop camera immediately after capturing 1 frame
     stopCameraStream();
-    setModalState("analyzing");
+    setModalState('analyzing');
 
     try {
       let result: CameraAnalysisResponse;
       if (analyzeImageFn) {
         result = await analyzeImageFn(base64Data);
       } else {
-        const res = await fetch("/api/music/analyze-image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: base64Data, mimeType: "image/jpeg" }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData?.error?.message || "Failed to analyze camera image.");
-        }
-        result = await res.json();
+        result = await analyzeCameraImage(base64Data, 'image/jpeg');
       }
 
       setAnalysisResult(result);
 
       // Decision System Handling:
-      if (result.confidence === "HIGH") {
-        // High confidence: Automatically proceed to recommendations with suggested music direction
-        const direction = result.music_direction || "peaceful and cheerful music";
-        onSelectMusicDirection(direction);
+      if (result.confidence === 'HIGH') {
+        const direction = result.music_direction || 'peaceful and cheerful music';
+        onSelectMusicDirection(direction, result);
         onClose();
-      } else if (result.confidence === "MEDIUM") {
-        // Medium confidence: User selects their preferred mood
-        setModalState("medium_selection");
+      } else if (result.confidence === 'MEDIUM') {
+        setModalState('medium_selection');
       } else {
-        // Low confidence: Display exact required message and do NOT trigger recommendations
-        setModalState("low_confidence");
+        setModalState('low_confidence');
       }
-    } catch (err: any) {
-      setErrorMessage(err?.message || "Analysis failed. Please try again or type your request.");
-      setModalState("error");
+    } catch (err: unknown) {
+      const errObj = err as { message?: string };
+      setErrorMessage(errObj?.message || 'Analysis failed. Please try again or type your request.');
+      setModalState('error');
     }
   };
 
   const handleMediumContinue = () => {
     const chosen = MEDIUM_CONFIDENCE_MOOD_OPTIONS[selectedMoodIndex] || MEDIUM_CONFIDENCE_MOOD_OPTIONS[0];
-    onSelectMusicDirection(chosen!.direction);
+    onSelectMusicDirection(chosen.direction, analysisResult ?? undefined);
     onClose();
   };
 
@@ -158,111 +151,257 @@ export function CameraModal({
   if (!isOpen) return null;
 
   return (
-    <div className="camera-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="camera-modal-title">
-      <div className="camera-modal-card">
-        <h2 id="camera-modal-title" className="camera-modal-title">
-          Camera Mood Discovery
-        </h2>
-
-        {/* Live Camera Feed State */}
-        {(modalState === "camera_active" || modalState === "requesting_permission" || modalState === "capturing") && (
-          <div className="camera-preview-container">
-            <video ref={videoRef} autoPlay playsInline muted className="camera-video-feed" />
-            <div className="camera-framing-box" aria-hidden="true" />
-            {modalState === "requesting_permission" && (
-              <p className="camera-status-overlay">Requesting camera access…</p>
-            )}
-            <div className="camera-modal-actions">
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={handleCaptureAndAnalyze}
-                disabled={modalState !== "camera_active"}
-              >
-                {modalState === "capturing" ? "Capturing…" : "Analyze"}
-              </button>
-              <button type="button" className="btn btn--secondary" onClick={onClose}>
-                Cancel
-              </button>
+    <AnimatePresence>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/80 backdrop-blur-md"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="camera-modal-title"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.94, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.94, y: 12 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className="relative w-full max-w-lg glass-panel-strong p-5 sm:p-6 rounded-[24px] border border-white/15 shadow-glass-elevated"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-violet/20 border border-violet/30 text-violet">
+                <Camera className="w-5 h-5 text-violet" />
+              </div>
+              <div>
+                <h2 id="camera-modal-title" className="font-display font-semibold text-text text-base sm:text-lg">
+                  Camera Mood Discovery
+                </h2>
+                <p className="text-xs text-text-dim">Discover music from your visible expression</p>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Analyzing Spinner State */}
-        {modalState === "analyzing" && (
-          <div className="camera-analyzing-state">
-            <span className="spinner" aria-hidden="true" />
-            <p>Interpreting visible facial expression…</p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-full text-text-faint hover:text-text hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Close camera modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-        )}
 
-        {/* MEDIUM Confidence: Ask user to select preferred mood */}
-        {modalState === "medium_selection" && (
-          <div className="camera-medium-state" role="region" aria-label="Confirm mood">
-            <p className="camera-uncertain-msg">
-              We&apos;re not entirely sure about your expression. What kind of music are you in the mood for?
-            </p>
-            <div className="camera-dropdown-wrapper">
-              <label htmlFor="mood-dropdown" className="visually-hidden">
-                Select your mood
-              </label>
-              <select
-                id="mood-dropdown"
-                value={selectedMoodIndex}
-                onChange={(e) => setSelectedMoodIndex(Number(e.target.value))}
-                className="camera-mood-select"
-              >
-                {MEDIUM_CONFIDENCE_MOOD_OPTIONS.map((opt, idx) => (
-                  <option key={opt.label} value={idx}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="camera-modal-actions">
-              <button type="button" className="btn btn--primary" onClick={handleMediumContinue}>
-                Continue
-              </button>
-              <button type="button" className="btn btn--secondary" onClick={onClose}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+          {/* 1. Live Camera Feed State */}
+          {(modalState === 'camera_active' ||
+            modalState === 'requesting_permission' ||
+            modalState === 'capturing') && (
+            <div className="space-y-4">
+              <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
 
-        {/* LOW Confidence: Exactly required message + Try Again */}
-        {modalState === "low_confidence" && (
-          <div className="camera-low-state" role="alert">
-            <p className="camera-low-msg">Move to a better frame and try again.</p>
-            {analysisResult?.visual_observations?.length ? (
-              <p className="camera-subtext">Reason: {analysisResult.visual_observations.join(", ")}</p>
-            ) : null}
-            <div className="camera-modal-actions">
-              <button type="button" className="btn btn--primary" onClick={handleTryAgain}>
-                Try Again
-              </button>
-              <button type="button" className="btn btn--secondary" onClick={onClose}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+                {/* Viewfinder brackets */}
+                <div className="absolute inset-6 border border-white/20 rounded-2xl pointer-events-none">
+                  <span className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-cyan" />
+                  <span className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-cyan" />
+                  <span className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-cyan" />
+                  <span className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-cyan" />
+                </div>
 
-        {/* Error State */}
-        {modalState === "error" && (
-          <div className="camera-error-state" role="alert">
-            <p className="message message--error">{errorMessage || "An error occurred."}</p>
-            <div className="camera-modal-actions">
-              <button type="button" className="btn btn--primary" onClick={handleTryAgain}>
-                Try Again
-              </button>
-              <button type="button" className="btn btn--secondary" onClick={onClose}>
-                Cancel
-              </button>
+                {modalState === 'requesting_permission' && (
+                  <div className="absolute inset-0 bg-ink/70 backdrop-blur-sm flex flex-col items-center justify-center gap-2 text-sm text-text-dim">
+                    <span className="w-5 h-5 rounded-full border-2 border-cyan border-t-transparent animate-spin" />
+                    <span>Requesting camera access…</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-full glass-pill text-xs font-medium text-text-dim hover:text-text border border-white/10 hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCaptureAndAnalyze}
+                  disabled={modalState !== 'camera_active'}
+                  aria-label="Analyze"
+                  className={`px-5 py-2.5 rounded-full font-display font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-lg ${
+                    modalState === 'camera_active'
+                      ? 'bg-gradient-to-r from-violet via-magenta to-cyan text-white shadow-violet/30 hover:shadow-violet/50 hover:brightness-110 active:scale-95'
+                      : 'bg-white/5 text-text-faint border border-white/5 cursor-not-allowed opacity-50'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-white" />
+                  <span>{modalState === 'capturing' ? 'Capturing…' : 'Analyze'}</span>
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* 2. Analyzing State */}
+          {modalState === 'analyzing' && (
+            <div className="py-12 flex flex-col items-center justify-center text-center">
+              <div className="relative mb-5 flex items-center justify-center">
+                <div className="absolute w-20 h-20 rounded-full bg-gradient-to-r from-violet to-cyan blur-xl opacity-60 animate-pulse" />
+                <div className="w-12 h-12 rounded-full border-3 border-cyan border-t-transparent animate-spin" />
+              </div>
+              <h3 className="font-display font-semibold text-base text-text mb-1">
+                Analyzing Visible Expression
+              </h3>
+              <p className="text-xs text-text-dim max-w-xs">
+                Google Gemini Vision is observing facial cues to recommend matching music…
+              </p>
+            </div>
+          )}
+
+          {/* 3. Medium Confidence State */}
+          {modalState === 'medium_selection' && (
+            <div className="py-2 space-y-4" role="region" aria-label="Confirm mood">
+              <div className="p-3 rounded-xl bg-amber/10 border border-amber/20 text-xs text-amber leading-relaxed flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <p>
+                  We&apos;re not entirely sure about your expression. What kind of music are you in the mood for?
+                </p>
+              </div>
+
+              {/* Selection Options */}
+              <div className="space-y-2">
+                <label htmlFor="mood-dropdown" className="text-xs font-medium text-text-dim block">
+                  Select your current mood vibe:
+                </label>
+                <div className="relative mb-2">
+                  <select
+                    id="mood-dropdown"
+                    role="combobox"
+                    aria-label="Select your mood"
+                    value={selectedMoodIndex}
+                    onChange={(e) => setSelectedMoodIndex(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl glass-panel text-xs sm:text-sm font-medium text-text bg-ink/90 border border-white/10 outline-none focus:border-cyan cursor-pointer"
+                  >
+                    {MEDIUM_CONFIDENCE_MOOD_OPTIONS.map((opt, idx) => (
+                      <option key={opt.label} value={idx} className="bg-ink text-text">
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {MEDIUM_CONFIDENCE_MOOD_OPTIONS.map((opt, idx) => {
+                    const isSelected = selectedMoodIndex === idx;
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => setSelectedMoodIndex(idx)}
+                        className={`p-3 rounded-xl text-left text-xs sm:text-sm font-medium transition-all flex items-center justify-between cursor-pointer border ${
+                          isSelected
+                            ? 'bg-violet/20 border-violet/50 text-white shadow-sm shadow-violet/20'
+                            : 'glass-panel border-white/5 text-text-dim hover:text-text hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <span>{opt.label}</span>
+                        {isSelected && <Check className="w-4 h-4 text-cyan" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-full glass-pill text-xs font-medium text-text-dim hover:text-text border border-white/10 hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMediumContinue}
+                  className="px-5 py-2 rounded-full bg-gradient-to-r from-violet to-magenta text-white font-semibold text-xs sm:text-sm shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Low Confidence State */}
+          {modalState === 'low_confidence' && (
+            <div className="py-4 space-y-4" role="alert">
+              <div className="p-4 rounded-xl bg-amber/10 border border-amber/30 text-amber text-xs sm:text-sm leading-relaxed flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber" />
+                <div>
+                  <p className="font-semibold text-text mb-0.5">Move to a better frame and try again.</p>
+                  {analysisResult?.visual_observations?.length ? (
+                    <p className="text-text-dim text-xs mt-1">
+                      Observations: {analysisResult.visual_observations.join(', ')}
+                    </p>
+                  ) : (
+                    <p className="text-text-dim text-xs mt-1">
+                      The lighting may be low or the face was not clearly visible in the frame.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-full glass-pill text-xs font-medium text-text-dim hover:text-text border border-white/10 hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTryAgain}
+                  className="px-5 py-2 rounded-full bg-cyan hover:bg-[#38bdf8] text-black font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Try Again</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 5. Error State */}
+          {modalState === 'error' && (
+            <div className="py-4 space-y-4" role="alert">
+              <div className="p-4 rounded-xl bg-error-status/10 border border-error-status/30 text-error-status text-xs sm:text-sm leading-relaxed flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                <p className="text-text">{errorMessage || 'An error occurred.'}</p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-full glass-pill text-xs font-medium text-text-dim hover:text-text border border-white/10 hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTryAgain}
+                  className="px-5 py-2 rounded-full bg-cyan hover:bg-[#38bdf8] text-black font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Try Again</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </motion.div>
       </div>
-    </div>
+    </AnimatePresence>
   );
 }
