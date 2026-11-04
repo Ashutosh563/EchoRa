@@ -86,6 +86,15 @@ export function getMockIntent(prompt: string): MusicIntent {
       genre: ["edm", "hip hop"],
       vocals: "any",
       time_context: "any",
+      breakdown: {
+        mood: { value: "energetic", source: "explicit", priority: "high" },
+        activity: { value: "workout", source: "explicit", priority: "high" },
+        energy: { value: "high", source: "inferred", priority: "low" },
+        tempo: { value: "fast", source: "inferred", priority: "low" },
+        genre: { value: ["edm", "hip hop"], source: "optional", priority: "low" },
+        vocals: { value: null, source: "unspecified", priority: "none" },
+        time_context: { value: null, source: "unspecified", priority: "none" },
+      },
     };
   }
   if (p.includes("rain") || p.includes("sad") || p.includes("melanchol")) {
@@ -97,6 +106,15 @@ export function getMockIntent(prompt: string): MusicIntent {
       genre: ["acoustic", "indie"],
       vocals: "vocals_preferred",
       time_context: "evening",
+      breakdown: {
+        mood: { value: "melancholic", source: "explicit", priority: "high" },
+        activity: { value: "relaxing", source: "inferred", priority: "medium" },
+        energy: { value: "low", source: "inferred", priority: "low" },
+        tempo: { value: "slow", source: "inferred", priority: "low" },
+        genre: { value: ["acoustic", "indie"], source: "optional", priority: "low" },
+        vocals: { value: "vocals_preferred", source: "explicit", priority: "medium_high" },
+        time_context: { value: "evening", source: "explicit", priority: "medium" },
+      },
     };
   }
   if (p.includes("happy") || p.includes("acoustic")) {
@@ -108,6 +126,15 @@ export function getMockIntent(prompt: string): MusicIntent {
       genre: ["acoustic", "folk"],
       vocals: "any",
       time_context: "morning",
+      breakdown: {
+        mood: { value: "happy", source: "explicit", priority: "high" },
+        activity: { value: null, source: "unspecified", priority: "none" },
+        energy: { value: "medium", source: "inferred", priority: "low" },
+        tempo: { value: "medium", source: "inferred", priority: "low" },
+        genre: { value: ["acoustic", "folk"], source: "explicit", priority: "medium_high" },
+        vocals: { value: null, source: "unspecified", priority: "none" },
+        time_context: { value: "morning", source: "inferred", priority: "low" },
+      },
     };
   }
   return {
@@ -118,6 +145,14 @@ export function getMockIntent(prompt: string): MusicIntent {
     genre: ["ambient", "lofi"],
     vocals: "instrumental_preferred",
     time_context: "late_night",
+    breakdown: {
+      mood: { value: "calm", source: "explicit", priority: "high" },
+      activity: { value: "studying", source: "explicit", priority: "high" },
+      energy: { value: "low", source: "inferred", priority: "low" },
+      tempo: { value: "slow", source: "inferred", priority: "low" },
+      genre: { value: ["ambient", "lofi"], source: "optional", priority: "low" },
+      vocals: { value: "instrumental_preferred", source: "explicit", priority: "medium_high" },
+      time_context: { value: "late_night", source: "explicit", priority: "medium" },
+    },
   };
 }
-

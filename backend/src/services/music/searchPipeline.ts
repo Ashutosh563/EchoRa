@@ -48,32 +48,11 @@ export function createSearchPipeline({ intentExtractor, spotifySearch }: SearchP
       // 1. Gemini extracts intent from the user's prompt ONLY (COMPLIANCE: no Spotify data sent to Gemini)
       const intent = await intentExtractor(prompt, signal);
 
-      // 2. Pure semantic query generator
+      // 2. Pure semantic query generator (generates EXACTLY ONE search query)
       const queries = generateQueries(intent);
 
-      // 3. Search Spotify tracks (targeting 10-15 tracks across primary + alternative queries)
-      const tracks: Track[] = [];
-      const seenIds = new Set<string>();
-
-      const primaryTracks = await spotifySearch.searchTracks(queries.primary, 10, signal);
-      for (const t of primaryTracks) {
-        if (!seenIds.has(t.id)) {
-          seenIds.add(t.id);
-          tracks.push(t);
-        }
-      }
-
-      // If needed, search alternative queries to enrich results
-      for (const alt of queries.alternatives) {
-        if (tracks.length >= 10) break;
-        const altTracks = await spotifySearch.searchTracks(alt, 5, signal);
-        for (const t of altTracks) {
-          if (!seenIds.has(t.id)) {
-            seenIds.add(t.id);
-            tracks.push(t);
-          }
-        }
-      }
+      // 3. Search Spotify tracks using EXACTLY ONE Spotify search request
+      const tracks: Track[] = await spotifySearch.searchTracks(queries.primary, 10, signal);
 
       return {
         mode: "live",
@@ -84,4 +63,3 @@ export function createSearchPipeline({ intentExtractor, spotifySearch }: SearchP
     },
   };
 }
-

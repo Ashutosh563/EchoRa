@@ -1,11 +1,12 @@
-import type { MusicIntent } from "../../types/intent.js";
+import type { MusicIntent, PriorityLevel } from "../../types/intent.js";
 import type { SearchQueries } from "../../types/api.js";
 
-/** Keep queries short: Spotify matches better on a few strong keywords. */
-export const MAX_PRIMARY_TERMS = 6;
-export const MAX_ALTERNATIVES = 2;
+/**
+ * Maximum terms in a Spotify search query.
+ * Spotify search degrades when queries exceed 3-5 terms because terms are matched conjunctively.
+ */
+export const MAX_QUERY_TERMS = 4;
 
-/** Maps common activities to search-friendly keywords. */
 const ACTIVITY_KEYWORDS: Record<string, string> = {
   studying: "study",
   study: "study",
@@ -30,77 +31,151 @@ const ACTIVITY_KEYWORDS: Record<string, string> = {
   party: "party",
   dancing: "dance",
   cooking: "cooking",
-  dinner: "dinner",
 };
 
-/** Fallback keyword when the mood is unknown, derived from energy. */
-const ENERGY_KEYWORDS: Record<MusicIntent["energy"], string> = {
-  low: "chill",
-  medium: "feel good",
-  high: "energetic",
-};
-
-const TIME_KEYWORDS: Partial<Record<MusicIntent["time_context"], string>> = {
-  morning: "morning",
-  evening: "evening",
-  late_night: "late night",
-};
-
-function activityKeyword(activity: string | null): string | null {
-  if (!activity) return null;
-  return ACTIVITY_KEYWORDS[activity] ?? activity;
+interface PrioritizedTerm {
+  text: string;
+  weight: number;
+  priority: PriorityLevel;
+  source: string;
 }
 
-/** Joins terms, removing empty values and repeated words (case-insensitive). */
-function buildQuery(terms: Array<string | null | undefined>, maxTerms = Number.POSITIVE_INFINITY): string {
-  const seen = new Set<string>();
-  const words: string[] = [];
-  for (const term of terms) {
-    if (!term) continue;
-    const termWords = term.split(/\s+/).filter((w) => w && !seen.has(w.toLowerCase()));
-    if (termWords.length === 0) continue;
-    if (words.length + termWords.length > maxTerms) break;
-    for (const w of termWords) {
-      seen.add(w.toLowerCase());
-      words.push(w);
-    }
-  }
-  return words.join(" ");
-}
+/** Assigns a numeric sorting weight to priorities */
+const PRIORITY_WEIGHTS: Record<PriorityLevel, number> = {
+  high: 100,
+  medium_high: 80,
+  medium: 60,
+  low: 40,
+  none: 0,
+};
 
 /**
- * Converts structured intent into Spotify search queries.
- * Pure function: no API calls, works with incomplete or ambiguous intent.
+ * Generates EXACTLY ONE intelligent, prioritized Spotify search query.
+ * Does not generate multiple queries or alternative variations.
  *
- * Example: calm / studying / ambient,lofi / instrumental -> "calm ambient lofi instrumental study"
+ * Rules:
+ * 1. Prioritize explicit user preferences over inferred or optional ones.
+ * 2. Never include unspecified attributes.
+ * 3. Keep query concise (3-4 high-impact terms max).
+ * 4. Resolve conflicts cleanly (e.g. "relaxing but not too slow" -> prioritizes "relaxing", excludes "slow").
  */
 export function generateQueries(intent: MusicIntent): SearchQueries {
-  const mood = intent.mood && intent.mood !== "any" ? intent.mood : null;
-  const descriptor = mood ?? ENERGY_KEYWORDS[intent.energy];
-  const [genre1, genre2] = intent.genre;
-  const activity = activityKeyword(intent.activity);
-  const vocals = intent.vocals === "instrumental_preferred" ? "instrumental" : null;
-  const time = TIME_KEYWORDS[intent.time_context] ?? null;
+  const terms: PrioritizedTerm[] = [];
+  const breakdown = intent.breakdown;
 
-  const primary =
-    buildQuery([descriptor, genre1, genre2, vocals, activity], MAX_PRIMARY_TERMS) || ENERGY_KEYWORDS.medium;
-
-  // Shorter, differently-combined alternatives improve recall when the primary is too narrow.
-  const candidates = [
-    buildQuery([descriptor, genre1 ?? activity ?? vocals]),
-    buildQuery([activity ?? time ?? descriptor, genre2 ?? genre1 ?? "music"]),
-    buildQuery([time, genre1 ?? descriptor]),
-    buildQuery([descriptor, "music"]),
-  ];
-
-  const alternatives: string[] = [];
-  for (const candidate of candidates) {
-    if (candidate && candidate !== primary && !alternatives.includes(candidate) && candidate.includes(" ")) {
-      alternatives.push(candidate);
-    }
-    if (alternatives.length === MAX_ALTERNATIVES) break;
+  // 1. Mood
+  const moodBreakdown = breakdown?.mood;
+  const moodVal = moodBreakdown?.value ?? (intent.mood !== "any" ? intent.mood : null);
+  if (moodVal && moodVal !== "any") {
+    const isExplicit = moodBreakdown?.source === "explicit";
+    terms.push({
+      text: moodVal,
+      weight: isExplicit ? PRIORITY_WEIGHTS.high : PRIORITY_WEIGHTS.medium,
+      priority: moodBreakdown?.priority ?? (isExplicit ? "high" : "medium"),
+      source: "mood",
+    });
   }
 
-  return { primary, alternatives };
-}
+  // 2. Activity / Setting
+  const actBreakdown = breakdown?.activity;
+  const actVal = actBreakdown?.value ?? intent.activity;
+  if (actVal) {
+    const isExplicit = actBreakdown?.source === "explicit";
+    const mapped = ACTIVITY_KEYWORDS[actVal] ?? actVal;
+    terms.push({
+      text: mapped,
+      weight: isExplicit ? PRIORITY_WEIGHTS.high - 5 : PRIORITY_WEIGHTS.medium - 5,
+      priority: actBreakdown?.priority ?? (isExplicit ? "high" : "medium"),
+      source: "activity",
+    });
+  }
 
+  // 3. Vocals (e.g. "without lyrics", "instrumental")
+  const vocalsBreakdown = breakdown?.vocals;
+  const vocalsVal = vocalsBreakdown?.value ?? intent.vocals;
+  if (vocalsVal === "instrumental_preferred") {
+    const isExplicit = vocalsBreakdown?.source === "explicit";
+    terms.push({
+      text: "instrumental",
+      weight: isExplicit ? PRIORITY_WEIGHTS.medium_high : PRIORITY_WEIGHTS.low,
+      priority: vocalsBreakdown?.priority ?? (isExplicit ? "medium_high" : "low"),
+      source: "vocals",
+    });
+  }
+
+  // 4. Genres (Explicit genres high priority; optional genres lower priority)
+  const genreBreakdown = breakdown?.genre;
+  const genres = genreBreakdown?.value ?? intent.genre ?? [];
+  const isExplicitGenre = genreBreakdown?.source === "explicit";
+
+  if (genres.length > 0) {
+    // Take at most 1-2 most relevant genres to prevent query pollution
+    const topGenre = genres[0];
+    if (topGenre) {
+      terms.push({
+        text: topGenre,
+        weight: isExplicitGenre ? PRIORITY_WEIGHTS.medium_high - 5 : PRIORITY_WEIGHTS.low - 5,
+        priority: isExplicitGenre ? "medium_high" : "low",
+        source: "genre",
+      });
+    }
+  }
+
+  // 5. Energy / Tempo - only include if explicitly requested or needed when no mood/genre exists
+  const energyBreakdown = breakdown?.energy;
+  const tempoBreakdown = breakdown?.tempo;
+
+  if (energyBreakdown?.source === "explicit" && energyBreakdown.value === "high" && !terms.some((t) => t.text.includes("energetic"))) {
+    terms.push({
+      text: "high energy",
+      weight: PRIORITY_WEIGHTS.medium_high,
+      priority: "medium_high",
+      source: "energy",
+    });
+  }
+
+  if (tempoBreakdown?.source === "explicit" && tempoBreakdown.value && tempoBreakdown.value !== "any") {
+    terms.push({
+      text: tempoBreakdown.value,
+      weight: PRIORITY_WEIGHTS.medium,
+      priority: "medium",
+      source: "tempo",
+    });
+  }
+
+  // Fallback for completely ambiguous/vague prompts (e.g. "Something good to listen to")
+  if (terms.length === 0) {
+    if (intent.mood && intent.mood !== "any") {
+      terms.push({ text: intent.mood, weight: 50, priority: "medium", source: "mood" });
+    } else {
+      terms.push({ text: "good music", weight: 10, priority: "low", source: "fallback" });
+    }
+  }
+
+  // Sort terms by weight descending
+  terms.sort((a, b) => b.weight - a.weight);
+
+  // Build the clean single query with deduplication and word limit
+  const seenWords = new Set<string>();
+  const finalWords: string[] = [];
+
+  for (const term of terms) {
+    const words = term.text.split(/\s+/).filter(Boolean);
+    for (const w of words) {
+      const lower = w.toLowerCase();
+      if (!seenWords.has(lower) && finalWords.length < MAX_QUERY_TERMS) {
+        seenWords.add(lower);
+        finalWords.push(lower);
+      }
+    }
+    if (finalWords.length >= MAX_QUERY_TERMS) break;
+  }
+
+  const primary = finalWords.join(" ") || "music";
+
+  // STRICT REQUIREMENT: Exactly ONE query. alternatives array is kept empty for API contract compatibility.
+  return {
+    primary,
+    alternatives: [],
+  };
+}
