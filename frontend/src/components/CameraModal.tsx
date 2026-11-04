@@ -103,46 +103,47 @@ export function CameraModal({
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     }
-    const base64Data = canvas.toDataURL ? canvas.toDataURL('image/jpeg', 0.85) : 'data:image/jpeg;base64,mockframe';
 
-    // Stop camera immediately after capturing 1 frame
+    const base64Image = canvas.toDataURL('image/jpeg', 0.85);
+
+    // Turn off camera right after frame capture
     stopCameraStream();
     setModalState('analyzing');
 
     try {
-      let result: CameraAnalysisResponse;
-      if (analyzeImageFn) {
-        result = await analyzeImageFn(base64Data);
-      } else {
-        result = await analyzeCameraImage(base64Data, 'image/jpeg');
-      }
+      const result = analyzeImageFn
+        ? await analyzeImageFn(base64Image)
+        : await analyzeCameraImage(base64Image);
 
       setAnalysisResult(result);
 
-      // Decision System Handling:
       if (result.confidence === 'HIGH') {
+        // High confidence: proceed directly to recommendations
         const direction = result.music_direction || 'peaceful and cheerful music';
         onSelectMusicDirection(direction, result);
         onClose();
       } else if (result.confidence === 'MEDIUM') {
+        // Medium confidence: display clarification options
         setModalState('medium_selection');
       } else {
+        // Low confidence: prompt user to re-frame
         setModalState('low_confidence');
       }
     } catch (err: unknown) {
       const errObj = err as { message?: string };
-      setErrorMessage(errObj?.message || 'Analysis failed. Please try again or type your request.');
+      setErrorMessage(errObj?.message || 'Failed to analyze expression. Please try again.');
       setModalState('error');
     }
   };
 
   const handleMediumContinue = () => {
     const chosen = MEDIUM_CONFIDENCE_MOOD_OPTIONS[selectedMoodIndex] || MEDIUM_CONFIDENCE_MOOD_OPTIONS[0];
-    onSelectMusicDirection(chosen.direction, analysisResult ?? undefined);
+    const finalDirection = chosen.direction;
+    onSelectMusicDirection(finalDirection, analysisResult || undefined);
     onClose();
   };
 
-  const handleTryAgain = () => {
+  const handleRetry = () => {
     setAnalysisResult(null);
     setErrorMessage(null);
     void startCamera();
@@ -153,17 +154,20 @@ export function CameraModal({
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/80 backdrop-blur-md"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/35 backdrop-blur-xl saturate-150 transition-all duration-300"
         role="dialog"
         aria-modal="true"
         aria-labelledby="camera-modal-title"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
       >
         <motion.div
           initial={{ opacity: 0, scale: 0.94, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, y: 12 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="relative w-full max-w-lg glass-panel-strong p-5 sm:p-6 rounded-[24px] border border-white/15 shadow-glass-elevated"
+          className="relative w-full max-w-lg bg-[#12121E]/75 backdrop-blur-2xl p-5 sm:p-6 rounded-[24px] border border-white/20 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.25)]"
         >
           {/* Header */}
           <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-4">
@@ -194,7 +198,7 @@ export function CameraModal({
             modalState === 'requesting_permission' ||
             modalState === 'capturing') && (
             <div className="space-y-4">
-              <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+              <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-black/40 backdrop-blur-sm border border-white/15 flex items-center justify-center">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -212,7 +216,7 @@ export function CameraModal({
                 </div>
 
                 {modalState === 'requesting_permission' && (
-                  <div className="absolute inset-0 bg-ink/70 backdrop-blur-sm flex flex-col items-center justify-center gap-2 text-sm text-text-dim">
+                  <div className="absolute inset-0 bg-ink/40 backdrop-blur-md flex flex-col items-center justify-center gap-2 text-sm text-text-dim">
                     <span className="w-5 h-5 rounded-full border-2 border-cyan border-t-transparent animate-spin" />
                     <span>Requesting camera access…</span>
                   </div>
@@ -363,8 +367,8 @@ export function CameraModal({
                 </button>
                 <button
                   type="button"
-                  onClick={handleTryAgain}
-                  className="px-5 py-2 rounded-full bg-cyan hover:bg-[#38bdf8] text-black font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                  onClick={handleRetry}
+                  className="px-5 py-2 rounded-full bg-gradient-to-r from-violet to-cyan text-white font-semibold text-xs sm:text-sm shadow-md hover:brightness-110 active:scale-95 flex items-center gap-2 transition-all cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>Try Again</span>
@@ -376,9 +380,14 @@ export function CameraModal({
           {/* 5. Error State */}
           {modalState === 'error' && (
             <div className="py-4 space-y-4" role="alert">
-              <div className="p-4 rounded-xl bg-error-status/10 border border-error-status/30 text-error-status text-xs sm:text-sm leading-relaxed flex items-start gap-3">
+              <div className="p-4 rounded-xl bg-error-status/10 border border-error-status/25 text-error-status text-xs sm:text-sm leading-relaxed flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                <p className="text-text">{errorMessage || 'An error occurred.'}</p>
+                <div>
+                  <p className="font-semibold text-text mb-0.5">Camera Error</p>
+                  <p className="text-text-dim text-xs">
+                    {errorMessage || 'Unable to access camera. Please check camera permissions.'}
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -391,11 +400,11 @@ export function CameraModal({
                 </button>
                 <button
                   type="button"
-                  onClick={handleTryAgain}
-                  className="px-5 py-2 rounded-full bg-cyan hover:bg-[#38bdf8] text-black font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                  onClick={handleRetry}
+                  className="px-5 py-2 rounded-full bg-white/10 text-text hover:text-white hover:bg-white/15 text-xs sm:text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Try Again</span>
+                  <span>Retry</span>
                 </button>
               </div>
             </div>

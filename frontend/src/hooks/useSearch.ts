@@ -82,7 +82,7 @@ export function useSearch(options?: UseSearchOptions): UseSearchReturn {
           // Non-blocking
         }
 
-        // Update page title to "SONORA — {mood}"
+        // Update page title to "ECHORA — {mood}"
         if (response.intent?.mood) {
           const moodCap =
             response.intent.mood.charAt(0).toUpperCase() + response.intent.mood.slice(1);

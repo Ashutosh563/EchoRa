@@ -22,7 +22,7 @@ export function ErrorCard({ error, onRetry }: ErrorCardProps) {
   } else if (code === 'SPOTIFY_AUTH_REQUIRED') {
     title = 'Spotify needs your permission';
   } else if (code === 'NETWORK_ERROR') {
-    title = "Can't reach the SONORA server (127.0.0.1:4000)";
+    title = "Can't reach the ECHORA server (127.0.0.1:4000)";
   }
 
   const isSpotifyAuthRequired = code === 'SPOTIFY_AUTH_REQUIRED';

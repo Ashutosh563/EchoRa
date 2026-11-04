@@ -175,14 +175,16 @@ describe("Mood Transition UI Integration", () => {
     const approveBtn = screen.getByRole("button", { name: /approve & generate music/i });
     await user.click(approveBtn);
 
-    // Layered Playlist displays 4 sections
+    // Layered Playlist displays 4 sections and Spotify redirect play actions
     await waitFor(() => {
       expect(screen.getByText("01 — Starting Mood")).toBeInTheDocument();
       expect(screen.getByText("02 — First Transition")).toBeInTheDocument();
       expect(screen.getByText("03 — Second Transition")).toBeInTheDocument();
       expect(screen.getByText("04 — Destination Mood")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /play entire journey/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /new journey/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: /play sad song 1 on spotify/i })
+      ).toHaveAttribute("href", "https://spotify.com");
     });
   });
 });
-

@@ -12,7 +12,7 @@ export function Wordmark() {
   ];
 
   return (
-    <div className="flex items-center gap-2.5 select-none" aria-label="SONORA logo">
+    <div className="flex items-center gap-2.5 select-none" aria-label="ECHORA logo">
       {/* 4-bar Equalizer Glyph */}
       <div className="flex items-end gap-[3px] h-5 w-5 justify-center pb-0.5">
         {barConfigs.map((bar, idx) => (
@@ -37,9 +37,8 @@ export function Wordmark() {
 
       {/* Brand Text */}
       <span className="font-display font-extrabold text-xl tracking-[-0.02em] text-text bg-gradient-to-r from-text via-text to-text-dim bg-clip-text">
-        SONORA
+        ECHORA
       </span>
     </div>
   );
 }
-

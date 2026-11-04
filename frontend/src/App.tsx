@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { AuroraBackground } from './components/AuroraBackground';
 import { TopBar } from './components/TopBar';
 import { Hero } from './components/Hero';
@@ -127,12 +128,26 @@ export default function App({ api }: AppProps = {}) {
         onTabChange={setActiveTab}
       />
 
-      {/* Main Content Area */}
+      {/* Main Content Area with Fluid Tab Switching Animation */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 flex flex-col pb-16">
         {activeTab === 'transition' ? (
-          <MoodTransitionPage />
+          <motion.div
+            key="transition-view"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full flex-1 flex flex-col"
+          >
+            <MoodTransitionPage />
+          </motion.div>
         ) : (
-          <>
+          <motion.div
+            key="discover-view"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full flex-1 flex flex-col"
+          >
             {/* Hero Section & Composer */}
             <Hero
               hasSearched={hasSearched}
@@ -192,7 +207,7 @@ export default function App({ api }: AppProps = {}) {
                 </>
               )}
             </div>
-          </>
+          </motion.div>
         )}
       </main>
 

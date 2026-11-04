@@ -1,15 +1,11 @@
 import {
   Play,
-  Pause,
-  SkipForward,
-  SkipBack,
   RotateCcw,
   ExternalLink,
   Music,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { TransitionJourneyResponse } from "../../types/transition";
-import { useTransitionPlayback } from "../../hooks/useTransitionPlayback";
 import { formatDuration } from "../../lib/format";
 
 interface LayeredPlaylistViewProps {
@@ -18,20 +14,6 @@ interface LayeredPlaylistViewProps {
 }
 
 export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewProps) {
-  const {
-    currentItem,
-    activeTrackId,
-    activeStageNumber,
-    isPlaying,
-    progress,
-    playEntireJourney,
-    playStage,
-    playTrackInQueue,
-    togglePlay,
-    skipNext,
-    skipPrev,
-  } = useTransitionPlayback();
-
   const stageTitles: Record<number, string> = {
     1: "Starting Mood",
     2: "First Transition",
@@ -39,35 +21,39 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
     4: "Destination Mood",
   };
 
-  const stageColors: Record<number, { border: string; bg: string; text: string; dot: string }> = {
+  const stageColors: Record<number, { border: string; bg: string; text: string; dot: string; pill: string }> = {
     1: {
       border: "border-violet/30",
       bg: "bg-violet/5",
       text: "text-violet",
       dot: "bg-violet",
+      pill: "bg-violet/10 text-violet border-violet/20",
     },
     2: {
       border: "border-indigo-500/30",
       bg: "bg-indigo-500/5",
       text: "text-indigo-400",
       dot: "bg-indigo-400",
+      pill: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
     },
     3: {
       border: "border-cyan/30",
       bg: "bg-cyan/5",
       text: "text-cyan",
       dot: "bg-cyan",
+      pill: "bg-cyan/10 text-cyan border-cyan/20",
     },
     4: {
       border: "border-magenta/30",
       bg: "bg-magenta/5",
       text: "text-magenta",
       dot: "bg-magenta",
+      pill: "bg-magenta/10 text-magenta border-magenta/20",
     },
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-10 py-6 pb-28">
+    <div className="w-full max-w-5xl mx-auto space-y-10 py-6 pb-16">
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div>
@@ -79,24 +65,15 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
             <span className="text-cyan">{journey.destinationMood}</span>
           </h1>
           <p className="text-xs sm:text-sm text-text-dim pt-1">
-            {journey.totalTracks} unique tracks woven across four progressive emotional stages.
+            {journey.totalTracks} unique tracks curated across four progressive emotional stages. Click play on any track to listen on Spotify.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => playEntireJourney(journey.stages)}
-            className="px-5 py-2.5 rounded-full font-display font-semibold text-xs bg-gradient-to-r from-violet to-cyan text-white shadow-lg shadow-violet/25 hover:brightness-110 flex items-center gap-2 cursor-pointer"
-          >
-            <Play className="w-4 h-4 fill-white" />
-            <span>Play Entire Journey</span>
-          </button>
-
-          <button
-            type="button"
             onClick={onReset}
-            className="px-3.5 py-2 rounded-full glass-pill text-xs font-medium text-text-dim hover:text-text border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-full glass-pill text-xs font-semibold text-text-dim hover:text-text hover:bg-white/10 border border-white/10 flex items-center gap-2 transition-all cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>New Journey</span>
@@ -108,17 +85,14 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
       <div className="space-y-8">
         {journey.stages.map((stage) => {
           const styling = stageColors[stage.stage] || stageColors[1];
-          const isCurrentActiveStage = activeStageNumber === stage.stage;
 
           return (
             <motion.section
               key={`stage-playlist-${stage.stage}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: stage.stage * 0.12 }}
-              className={`rounded-2xl border ${styling.border} ${styling.bg} p-6 sm:p-7 relative transition-all ${
-                isCurrentActiveStage ? "ring-1 ring-white/20 shadow-glass-elevated" : ""
-              }`}
+              transition={{ delay: stage.stage * 0.1 }}
+              className={`rounded-2xl border ${styling.border} ${styling.bg} p-6 sm:p-7 relative transition-all shadow-glass`}
             >
               {/* Stage Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
@@ -127,12 +101,9 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                     <span className="text-xs font-mono font-bold uppercase tracking-wider text-text-dim">
                       0{stage.stage} — {stageTitles[stage.stage]}
                     </span>
-                    {isCurrentActiveStage && (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                        Now Playing
-                      </span>
-                    )}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${styling.pill}`}>
+                      {stage.tracks.length} {stage.tracks.length === 1 ? "track" : "tracks"}
+                    </span>
                   </div>
                   <h2 className="font-display font-extrabold text-2xl text-text">
                     {stage.mood}
@@ -151,181 +122,84 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                     ))}
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => playStage(stage)}
-                  className="px-4 py-2 rounded-full glass-pill border border-white/10 text-xs font-semibold text-text hover:text-white hover:bg-white/10 flex items-center gap-1.5 self-start sm:self-center transition-all cursor-pointer"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Play Stage 0{stage.stage}</span>
-                </button>
               </div>
 
-              {/* Stage Track Cards */}
-              <div className="pt-4 divide-y divide-white/5">
-                {stage.tracks.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-text-faint italic">
-                    No preview tracks found for this stage.
-                  </div>
-                ) : (
-                  stage.tracks.map((track) => {
-                    const isTrackPlaying = activeTrackId === track.id && isPlaying;
-                    const isTrackActive = activeTrackId === track.id;
-
-                    return (
-                      <div
-                        key={track.id}
-                        className={`py-3 px-2 sm:px-3 rounded-xl flex items-center justify-between gap-3 transition-colors ${
-                          isTrackActive
-                            ? "bg-white/10 border border-white/10"
-                            : "hover:bg-white/[0.04]"
-                        }`}
-                      >
-                        {/* Left: Index / Play Icon & Track Metadata */}
-                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              playTrackInQueue(track, stage.stage, stage.mood, journey.stages)
-                            }
-                            aria-label={`${isTrackPlaying ? "Pause" : "Play"} ${track.name}`}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
-                              isTrackActive
-                                ? "bg-violet text-white shadow-md shadow-violet/30"
-                                : "bg-white/5 hover:bg-white/15 text-text-dim hover:text-text border border-white/10"
-                            }`}
-                          >
-                            {isTrackPlaying ? (
-                              <Pause className="w-3.5 h-3.5 fill-current" />
-                            ) : (
-                              <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                            )}
-                          </button>
-
-                          {/* Album Art */}
-                          {track.albumArtUrl ? (
-                            <img
-                              src={track.albumArtUrl}
-                              alt={track.album}
-                              className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0 hidden sm:block"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 hidden sm:block text-text-faint">
-                              <Music className="w-4 h-4" />
-                            </div>
-                          )}
-
-                          {/* Title and Artist */}
-                          <div className="min-w-0">
-                            <h4
-                              className={`text-xs sm:text-sm font-semibold truncate ${
-                                isTrackActive ? "text-violet-light font-bold" : "text-text"
-                              }`}
-                            >
-                              {track.name}
-                            </h4>
-                            <p className="text-[11px] sm:text-xs text-text-dim truncate">
-                              {track.artists?.join(", ") || "Unknown Artist"} • {track.album}
-                            </p>
+              {/* Stage Track Cards - Arranged Side by Side (Horizontal Grid) */}
+              {stage.tracks.length === 0 ? (
+                <div className="py-6 text-center text-xs text-text-faint italic">
+                  No tracks found for this stage.
+                </div>
+              ) : (
+                <div className="pt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {stage.tracks.map((track) => (
+                    <div
+                      key={track.id}
+                      className="p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
+                    >
+                      {/* Top: Album Art + Track Info */}
+                      <div className="flex items-start gap-3 min-w-0">
+                        {track.albumArtUrl ? (
+                          <img
+                            src={track.albumArtUrl}
+                            alt={track.album}
+                            className="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0 shadow-md group-hover/track:scale-105 transition-transform duration-200"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 text-text-faint">
+                            <Music className="w-5 h-5" />
                           </div>
-                        </div>
+                        )}
 
-                        {/* Right: Duration & Spotify External Link */}
-                        <div className="flex items-center gap-3 shrink-0">
-                          {track.durationMs && (
-                            <span className="text-xs font-mono text-text-faint hidden sm:inline">
-                              {formatDuration(track.durationMs)}
-                            </span>
-                          )}
-
+                        <div className="min-w-0 flex-1">
                           <a
                             href={track.spotifyUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={`Open ${track.name} on Spotify`}
-                            className="p-1.5 rounded-full text-text-faint hover:text-emerald-400 hover:bg-white/5 transition-colors cursor-pointer"
+                            className="text-xs sm:text-sm font-semibold truncate block text-text hover:text-emerald-400 transition-colors"
+                            title={track.name}
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            {track.name}
                           </a>
+                          <p className="text-[11px] sm:text-xs text-text-dim truncate mt-0.5" title={track.artists?.join(", ")}>
+                            {track.artists?.join(", ") || "Unknown Artist"}
+                          </p>
+                          <p className="text-[10px] sm:text-[11px] text-text-faint truncate mt-0.5" title={track.album}>
+                            {track.album}
+                          </p>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
+
+                      {/* Bottom Row: Duration & Play on Spotify Button */}
+                      <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-auto">
+                        {track.durationMs ? (
+                          <span className="text-[11px] font-mono text-text-faint">
+                            {formatDuration(track.durationMs)}
+                          </span>
+                        ) : (
+                          <span />
+                        )}
+
+                        <a
+                          href={track.spotifyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Play ${track.name} on Spotify`}
+                          title="Play on Spotify"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer group-hover/track:scale-105"
+                        >
+                          <Play className="w-3 h-3 fill-current ml-0.5" />
+                          <span>Spotify</span>
+                          <ExternalLink className="w-3 h-3 opacity-70" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.section>
           );
         })}
       </div>
-
-      {/* Floating Sticky Continuous Playback Bar */}
-      {currentItem && (
-        <motion.div
-          initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-4 left-4 right-4 max-w-3xl mx-auto glass-panel bg-ink/90 border border-white/20 p-3 sm:p-4 rounded-2xl shadow-glass-elevated z-40 flex flex-col gap-2"
-        >
-          {/* Progress bar */}
-          <div className="w-full bg-white/10 h-1 rounded-full overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-violet via-fuchsia-500 to-cyan h-full transition-all duration-200"
-              style={{ width: `${Math.round(progress * 100)}%` }}
-            />
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            {/* Active Track & Stage Info */}
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet/20 text-violet shrink-0 border border-violet/30">
-                Stage 0{currentItem.stageNumber}: {currentItem.stageMood}
-              </span>
-              <div className="min-w-0">
-                <h5 className="text-xs font-bold text-text truncate">
-                  {currentItem.track.name}
-                </h5>
-                <p className="text-[10px] text-text-dim truncate">
-                  {currentItem.track.artists?.join(", ")}
-                </p>
-              </div>
-            </div>
-
-            {/* Playback Controls */}
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={skipPrev}
-                aria-label="Previous track"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-text-dim hover:text-text hover:bg-white/5 cursor-pointer"
-              >
-                <SkipBack className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={togglePlay}
-                aria-label={isPlaying ? "Pause" : "Play"}
-                className="w-9 h-9 rounded-full bg-gradient-to-r from-violet to-cyan text-white flex items-center justify-center shadow-md shadow-violet/30 cursor-pointer"
-              >
-                {isPlaying ? (
-                  <Pause className="w-4 h-4 fill-white" />
-                ) : (
-                  <Play className="w-4 h-4 fill-white ml-0.5" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={skipNext}
-                aria-label="Next track"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-text-dim hover:text-text hover:bg-white/5 cursor-pointer"
-              >
-                <SkipForward className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }
