@@ -124,45 +124,45 @@ export function Composer({
               disabled={isLoading}
             />
 
-            {/* Discover Button: Dim & desaturated at rest, full neon saturation on hover */}
+            {/* Discover Button: Dim & low-saturation at rest, balanced saturation on hover */}
             <div className="relative group/btn">
-              {/* 1. Wide ambient neon aura (dim at rest, full saturation on hover) */}
+              {/* 1. Wide ambient neon aura */}
               <div
-                className="absolute -inset-3 rounded-full bg-gradient-to-r from-[#7928CA] via-[#FF0080] to-[#00DFD8] blur-xl transition-all duration-300 pointer-events-none opacity-15 saturate-100 group-hover/btn:opacity-100 group-hover/btn:scale-125 group-hover/btn:blur-2xl group-hover/btn:saturate-[2.4]"
+                className="absolute -inset-2.5 rounded-full bg-gradient-to-r from-[#7C3AED] via-[#EC4899] to-[#06B6D4] blur-xl transition-all duration-300 pointer-events-none opacity-10 saturate-[0.75] group-hover/btn:opacity-60 group-hover/btn:scale-110 group-hover/btn:blur-xl group-hover/btn:saturate-[1.2]"
               />
 
-              {/* 2. Concentrated high-chroma core halo (dim at rest, full saturation on hover) */}
+              {/* 2. Core halo */}
               <div
-                className="absolute -inset-1 rounded-full bg-gradient-to-r from-[#8A00E6] via-[#FF007F] to-[#00F0FF] blur-md transition-all duration-200 pointer-events-none opacity-15 saturate-100 group-hover/btn:opacity-100 group-hover/btn:blur-lg group-hover/btn:saturate-[2]"
+                className="absolute -inset-1 rounded-full bg-gradient-to-r from-[#7C3AED] via-[#EC4899] to-[#06B6D4] blur-md transition-all duration-200 pointer-events-none opacity-10 saturate-[0.75] group-hover/btn:opacity-65 group-hover/btn:blur-md group-hover/btn:saturate-[1.15]"
               />
 
               <motion.button
                 type="button"
                 onClick={() => onSubmit(value)}
                 disabled={!canSubmit}
-                whileTap={canSubmit ? { scale: 0.92, y: 1 } : undefined}
+                whileTap={canSubmit ? { scale: 0.94, y: 1 } : undefined}
                 whileHover={
                   !isLoading
                     ? {
-                        scale: 1.1,
-                        y: -3,
-                        transition: { type: 'spring', stiffness: 500, damping: 14 },
+                        scale: 1.06,
+                        y: -2,
+                        transition: { type: 'spring', stiffness: 500, damping: 16 },
                       }
                     : undefined
                 }
-                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-extrabold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 select-none bg-gradient-to-r from-violet-900/45 via-fuchsia-900/40 to-cyan-900/45 text-white/75 border border-fuchsia-400/30 shadow-none saturate-100 contrast-100 group-hover/btn:from-[#7C3AED] group-hover/btn:via-[#FF007F] group-hover/btn:to-[#00DFD8] group-hover/btn:text-white group-hover/btn:border-cyan-300 group-hover/btn:shadow-[0_0_42px_#FF007F,0_0_28px_#7C3AED,0_0_24px_#00DFD8] group-hover/btn:saturate-[1.8] group-hover/btn:contrast-[1.1] group-hover/btn:brightness-110 ${
+                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-bold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 select-none bg-gradient-to-r from-violet-950/45 via-fuchsia-950/35 to-cyan-950/45 text-white/70 border border-white/15 shadow-none saturate-[0.8] group-hover/btn:from-[#7C3AED]/90 group-hover/btn:via-[#EC4899]/85 group-hover/btn:to-[#06B6D4]/90 group-hover/btn:text-white group-hover/btn:border-white/35 group-hover/btn:shadow-[0_0_22px_rgba(236,72,153,0.4),0_0_14px_rgba(124,58,237,0.4)] group-hover/btn:saturate-[1.15] ${
                   canSubmit ? 'cursor-pointer' : 'cursor-not-allowed'
                 }`}
                 aria-label="Discover music"
               >
                 <motion.div
                   className="flex items-center justify-center"
-                  whileHover={!isLoading ? { rotate: 25, scale: 1.3 } : undefined}
+                  whileHover={!isLoading ? { rotate: 20, scale: 1.2 } : undefined}
                   transition={{ type: 'spring', stiffness: 500, damping: 12 }}
                 >
-                  <Sparkles className="w-4 h-4 text-white/80 group-hover/btn:text-white group-hover/btn:drop-shadow-[0_0_8px_rgba(255,255,255,0.9)] transition-all" />
+                  <Sparkles className="w-4 h-4 text-white/75 group-hover/btn:text-white group-hover/btn:drop-shadow-[0_0_6px_rgba(255,255,255,0.7)] transition-all" />
                 </motion.div>
-                <span className="drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]">Discover</span>
+                <span className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">Discover</span>
               </motion.button>
             </div>
           </div>
