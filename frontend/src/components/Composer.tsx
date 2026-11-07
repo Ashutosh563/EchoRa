@@ -28,8 +28,8 @@ export function Composer({
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Typewriter placeholder continues animating until the user types text
-  const typewriterText = useTypewriter(undefined, value.length > 0);
+  // Typewriter placeholder stops when focused or has text
+  const typewriterText = useTypewriter(undefined, isFocused || value.length > 0);
 
   // Auto-grow textarea height
   useEffect(() => {
@@ -54,11 +54,18 @@ export function Composer({
 
   return (
     <div className="relative w-full max-w-[760px] mx-auto group">
+      {/* Rotating Conic Gradient Glow while focused */}
+      {isFocused && (
+        <div className="absolute -inset-[2px] rounded-[22px] overflow-hidden -z-10 pointer-events-none opacity-80 transition-opacity">
+          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[6px]" />
+        </div>
+      )}
+
       {/* Main Glass Card */}
       <div
         className={`glass-panel p-4 sm:p-5 transition-all duration-300 relative ${
           isFocused
-            ? 'border-white/20 shadow-glass-elevated'
+            ? 'border-white/25 bg-surface-strong shadow-glass-elevated'
             : 'border-white/10 hover:border-white/15'
         }`}
       >
@@ -78,7 +85,7 @@ export function Composer({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onKeyDown={handleKeyDown}
-          placeholder={typewriterText || 'e.g. Peaceful instrumental music for studying at 3 AM...'}
+          placeholder={isFocused ? 'e.g. Peaceful instrumental music for studying at 3 AM...' : typewriterText}
           disabled={isLoading}
           rows={2}
           className="w-full bg-transparent resize-none border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"
