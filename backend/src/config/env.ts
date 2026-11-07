@@ -10,9 +10,9 @@ export const SPOTIFY_TOKEN_FILE = path.join(DATA_DIR, "spotify-token.json");
 
 /** Fixed local addresses. Loopback IP (not "localhost") per Spotify redirect URI rules. */
 export const HOST = "127.0.0.1";
-export const PORT = 4000;
+export const PORT = Number(process.env.PORT) || 4000;
 export const BACKEND_URL = `http://${HOST}:${PORT}`;
-export const FRONTEND_URL = `http://${HOST}:5173`;
+export const FRONTEND_URL = process.env.FRONTEND_URL ?? `http://${HOST}:5173`;
 export const SPOTIFY_REDIRECT_URI = `${BACKEND_URL}/api/spotify/callback`;
 
 /** Default model alias; always points at the current Gemini Flash model. Override with GEMINI_MODEL. */
