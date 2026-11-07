@@ -58,8 +58,8 @@ export const Composer = memo(function Composer({
 
   return (
     <div className="relative w-full max-w-[760px] mx-auto group">
-      {/* Rotating Conic Gradient Glow while focused (mood-responsive) */}
-      {isFocused && (
+      {/* Rotating Conic Gradient Glow while focused or dictating (mood-responsive) */}
+      {(isFocused || isListening) && (
         <div className="conic-active absolute -inset-[2px] rounded-[22px] overflow-hidden -z-10 pointer-events-none opacity-80 transition-opacity">
           <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" />
         </div>
@@ -68,16 +68,39 @@ export const Composer = memo(function Composer({
       {/* Main Glass Card */}
       <div
         className={`glass-panel p-4 sm:p-5 transition-colors duration-300 relative ${
-          isFocused
+          isListening
+            ? 'border-magenta/45 bg-surface-strong shadow-[0_0_32px_rgba(236,72,153,0.2)]'
+            : isFocused
             ? 'border-white/25 bg-surface-strong shadow-glass-elevated'
             : 'border-white/10 hover:border-white/15'
         }`}
       >
-        {/* Listening indicator label */}
+        {/* Prominent Active Voice Dictation Studio Banner */}
         {isListening && (
-          <div className="flex items-center gap-2 mb-2 text-xs font-medium text-magenta animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-magenta" />
-            <span>Listening... Speak your mood or vibe</span>
+          <div className="flex items-center justify-between gap-3 mb-3 px-3.5 py-2 rounded-xl bg-gradient-to-r from-magenta/20 via-violet/15 to-cyan/10 border border-magenta/35">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-magenta opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-magenta" />
+              </span>
+              <div className="flex items-end gap-[2px] h-3.5 shrink-0" aria-hidden="true">
+                <span className="w-[2px] bg-magenta rounded-full eq-bar-1" />
+                <span className="w-[2px] bg-violet rounded-full eq-bar-2" />
+                <span className="w-[2px] bg-cyan rounded-full eq-bar-3" />
+              </div>
+              <span className="text-xs sm:text-sm font-semibold text-white truncate">
+                Listening… Speak your mood, activity, or vibe out loud
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={onToggleMic}
+              aria-label="Finish voice dictation"
+              className="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 text-[11px] font-semibold text-white border border-white/20 transition-colors cursor-pointer shrink-0"
+            >
+              Done
+            </button>
           </div>
         )}
 
@@ -96,18 +119,10 @@ export const Composer = memo(function Composer({
           aria-label="Describe what you want to listen to"
         />
 
-        {/* Bottom Toolbar Row */}
-        <div className="flex items-center justify-between pt-3 mt-1 border-t border-white/[0.06]">
-          {/* Left: Character Counter */}
-          <div className="text-xs font-mono text-white/60 tracking-wider">
-            <span className={isOverLimit ? 'text-error-status font-bold' : 'text-white/80'}>
-              {value.length}
-            </span>
-            <span className="opacity-60">/300</span>
-          </div>
-
-          {/* Right: Camera Button + Mic Button + Discover Button */}
-          <div className="flex items-center gap-3">
+        {/* Bottom Toolbar Row: Prominent Multimodal Pills (Left) + Counter & Discover CTA (Right) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 mt-1 border-t border-white/[0.08]">
+          {/* Left: Prominent Multimodal AI Actions (Scan Mood + Dictate) */}
+          <div className="flex items-center gap-2.5">
             {onOpenCamera && (
               <button
                 type="button"
@@ -115,9 +130,12 @@ export const Composer = memo(function Composer({
                 disabled={isLoading}
                 title="Analyze mood with camera"
                 aria-label="Analyze mood with camera"
-                className="w-10 h-10 rounded-full flex items-center justify-center glass-pill text-text-dim hover:text-cyan hover:border-cyan/40 hover:shadow-[0_0_14px_rgba(6,182,212,0.35)] active:scale-95 transition-transform border border-white/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-semibold bg-cyan/12 hover:bg-cyan/22 text-white/90 hover:text-white border border-cyan/35 hover:border-cyan/65 shadow-[0_0_16px_rgba(34,211,238,0.18)] hover:shadow-[0_0_22px_rgba(34,211,238,0.38)] active:scale-95 transition-all cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Camera className="w-4 h-4" />
+                <span className="w-5 h-5 rounded-full bg-cyan/25 border border-cyan/40 flex items-center justify-center text-cyan shrink-0">
+                  <Camera className="w-3 h-3" />
+                </span>
+                <span className="tracking-wide">Scan Mood</span>
               </button>
             )}
 
@@ -127,6 +145,16 @@ export const Composer = memo(function Composer({
               onToggle={onToggleMic}
               disabled={isLoading}
             />
+          </div>
+
+          {/* Right: Character Counter + Primary Discover CTA */}
+          <div className="flex items-center gap-3 ml-auto">
+            <div className="text-xs font-mono text-white/60 tracking-wider">
+              <span className={isOverLimit ? 'text-error-status font-bold' : 'text-white/80'}>
+                {value.length}
+              </span>
+              <span className="opacity-60">/300</span>
+            </div>
 
             {/* Discover Button: Mood-responsive gradient, dim at rest, balanced saturation on hover */}
             <div className="relative group/btn">
