@@ -139,10 +139,15 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                   {stage.tracks.map((track) => (
                     <div
                       key={track.id}
-                      className="p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
+                      className="relative overflow-hidden p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.06] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
                     >
+                      {/* Soft Moving Aurora Animation in Card Background on Hover */}
+                      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover/track:opacity-25 transition-opacity duration-500">
+                        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[16px]" />
+                      </div>
+
                       {/* Top: Album Art + Track Info */}
-                      <div className="flex items-start gap-3 min-w-0">
+                      <div className="relative z-10 flex items-start gap-3 min-w-0">
                         {track.albumArtUrl ? (
                           <img
                             src={track.albumArtUrl}
@@ -175,7 +180,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                       </div>
 
                       {/* Bottom Row: Duration & Play on Spotify Button */}
-                      <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-auto">
+                      <div className="relative z-10 flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-auto">
                         {track.durationMs ? (
                           <span className="text-[11px] font-mono text-text-faint">
                             {formatDuration(track.durationMs)}

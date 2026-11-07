@@ -72,17 +72,16 @@ export function TrackCard({
       }}
       className="relative group transition-transform duration-200"
     >
-      {/* Blurred Ambient Glow Behind Card matching album art or mood */}
+      {/* Rotating Conic Aurora Glow Behind Card on Hover / Playing (Lower Opacity) */}
       <div
-        className="absolute -inset-1 rounded-[24px] -z-10 blur-xl opacity-20 group-hover:opacity-45 transition-all duration-500 pointer-events-none"
-        style={{
-          backgroundImage: track.albumArtUrl
-            ? `url(${track.albumArtUrl})`
-            : 'radial-gradient(circle, var(--mood-primary, #8B5CF6) 0%, transparent 70%)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      />
+        className={`absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none transition-all duration-500 group-hover:-translate-y-1 ${
+          isPreviewPlaying
+            ? 'opacity-50'
+            : 'opacity-0 group-hover:opacity-40'
+        }`}
+      >
+        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[6px]" />
+      </div>
 
       {/* Main Apple Liquid Glass Card */}
       <article
@@ -98,11 +97,22 @@ export function TrackCard({
         aria-label={`View details for ${track.name} by ${artistText}`}
         className="apple-glass-card p-3.5 flex items-center gap-3.5 relative overflow-hidden cursor-pointer select-none group-hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan"
       >
+        {/* Soft Moving Aurora Animation in Card Background on Hover / Playing */}
+        <div
+          className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[20px] transition-opacity duration-500 ${
+            isPreviewPlaying
+              ? 'opacity-30'
+              : 'opacity-0 group-hover:opacity-25'
+          }`}
+        >
+          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[16px]" />
+        </div>
+
         {/* Top-edge specular glossy highlight overlay */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/[0.08] via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
 
         {/* Album Art (88x88) with Specular Rim */}
-        <div className="relative w-[88px] h-[88px] rounded-[16px] overflow-hidden shrink-0 bg-white/[0.04] border border-white/15 flex items-center justify-center shadow-md">
+        <div className="relative z-10 w-[88px] h-[88px] rounded-[16px] overflow-hidden shrink-0 bg-white/[0.04] border border-white/15 flex items-center justify-center shadow-md">
           {track.albumArtUrl && !artFailed ? (
             <img
               src={track.albumArtUrl}
