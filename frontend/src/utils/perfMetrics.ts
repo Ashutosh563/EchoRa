@@ -115,3 +115,4 @@ export function initPerfMetrics(): () => void {
 export function getPerfSnapshot(): PerfMetricsSnapshot {
   return { ...state };
 }
+
