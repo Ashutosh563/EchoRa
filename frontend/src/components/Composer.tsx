@@ -124,24 +124,16 @@ export function Composer({
               disabled={isLoading}
             />
 
-            {/* Discover Button with Deeply Saturated Neon Gradient & Kinetic Pop-Out */}
+            {/* Discover Button: Dim & desaturated at rest, full neon saturation on hover */}
             <div className="relative group/btn">
-              {/* 1. Ultra-saturated wide ambient neon aura */}
+              {/* 1. Wide ambient neon aura (dim at rest, full saturation on hover) */}
               <div
-                className={`absolute -inset-3 rounded-full bg-gradient-to-r from-[#7928CA] via-[#FF0080] to-[#00DFD8] blur-xl transition-all duration-300 pointer-events-none saturate-[2.4] ${
-                  canSubmit
-                    ? 'opacity-85 group-hover/btn:opacity-100 group-hover/btn:scale-125 group-hover/btn:blur-2xl'
-                    : 'opacity-25 group-hover/btn:opacity-50 group-hover/btn:scale-105'
-                }`}
+                className="absolute -inset-3 rounded-full bg-gradient-to-r from-[#7928CA] via-[#FF0080] to-[#00DFD8] blur-xl transition-all duration-300 pointer-events-none opacity-15 saturate-100 group-hover/btn:opacity-100 group-hover/btn:scale-125 group-hover/btn:blur-2xl group-hover/btn:saturate-[2.4]"
               />
 
-              {/* 2. Concentrated high-chroma core halo */}
+              {/* 2. Concentrated high-chroma core halo (dim at rest, full saturation on hover) */}
               <div
-                className={`absolute -inset-1 rounded-full bg-gradient-to-r from-[#8A00E6] via-[#FF007F] to-[#00F0FF] blur-md transition-all duration-200 pointer-events-none saturate-[2] ${
-                  canSubmit
-                    ? 'opacity-90 group-hover/btn:opacity-100 group-hover/btn:blur-lg'
-                    : 'opacity-20 group-hover/btn:opacity-40'
-                }`}
+                className="absolute -inset-1 rounded-full bg-gradient-to-r from-[#8A00E6] via-[#FF007F] to-[#00F0FF] blur-md transition-all duration-200 pointer-events-none opacity-15 saturate-100 group-hover/btn:opacity-100 group-hover/btn:blur-lg group-hover/btn:saturate-[2]"
               />
 
               <motion.button
@@ -150,27 +142,25 @@ export function Composer({
                 disabled={!canSubmit}
                 whileTap={canSubmit ? { scale: 0.92, y: 1 } : undefined}
                 whileHover={
-                  canSubmit
+                  !isLoading
                     ? {
-                        scale: 1.12,
-                        y: -4,
+                        scale: 1.1,
+                        y: -3,
                         transition: { type: 'spring', stiffness: 500, damping: 14 },
                       }
-                    : { scale: 1.04, y: -1 }
+                    : undefined
                 }
-                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-extrabold text-sm tracking-wide flex items-center gap-2 cursor-pointer transition-all duration-200 select-none saturate-[1.8] contrast-[1.1] ${
-                  canSubmit
-                    ? 'bg-gradient-to-r from-[#7C3AED] via-[#FF007F] to-[#00DFD8] text-white border-2 border-fuchsia-300/80 hover:border-cyan-300 shadow-[0_0_26px_rgba(255,0,128,0.7),0_0_16px_rgba(124,58,237,0.7)] hover:shadow-[0_0_42px_#FF007F,0_0_28px_#7C3AED,0_0_24px_#00DFD8] hover:brightness-110'
-                    : 'bg-gradient-to-r from-violet-900/40 via-fuchsia-900/35 to-cyan-900/40 text-white/75 border border-fuchsia-500/30 hover:border-fuchsia-400/60 hover:shadow-[0_0_18px_rgba(236,72,153,0.5)] cursor-not-allowed opacity-75'
+                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-extrabold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 select-none bg-gradient-to-r from-violet-900/45 via-fuchsia-900/40 to-cyan-900/45 text-white/75 border border-fuchsia-400/30 shadow-none saturate-100 contrast-100 group-hover/btn:from-[#7C3AED] group-hover/btn:via-[#FF007F] group-hover/btn:to-[#00DFD8] group-hover/btn:text-white group-hover/btn:border-cyan-300 group-hover/btn:shadow-[0_0_42px_#FF007F,0_0_28px_#7C3AED,0_0_24px_#00DFD8] group-hover/btn:saturate-[1.8] group-hover/btn:contrast-[1.1] group-hover/btn:brightness-110 ${
+                  canSubmit ? 'cursor-pointer' : 'cursor-not-allowed'
                 }`}
                 aria-label="Discover music"
               >
                 <motion.div
                   className="flex items-center justify-center"
-                  whileHover={canSubmit ? { rotate: 25, scale: 1.3 } : undefined}
+                  whileHover={!isLoading ? { rotate: 25, scale: 1.3 } : undefined}
                   transition={{ type: 'spring', stiffness: 500, damping: 12 }}
                 >
-                  <Sparkles className="w-4 h-4 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]" />
+                  <Sparkles className="w-4 h-4 text-white/80 group-hover/btn:text-white group-hover/btn:drop-shadow-[0_0_8px_rgba(255,255,255,0.9)] transition-all" />
                 </motion.div>
                 <span className="drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]">Discover</span>
               </motion.button>

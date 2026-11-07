@@ -93,6 +93,8 @@ export default function App({ api }: AppProps = {}) {
     const trimmed = searchPrompt.trim();
     if (!trimmed) return;
 
+    setPrompt(trimmed);
+
     // Add to search history (keep last 6)
     setRecentSearches((prev) => {
       const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
