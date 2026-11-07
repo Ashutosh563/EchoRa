@@ -28,8 +28,8 @@ export function Composer({
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Typewriter placeholder stops when focused or has text
-  const typewriterText = useTypewriter(undefined, isFocused || value.length > 0);
+  // Typewriter placeholder continues animating until the user types text
+  const typewriterText = useTypewriter(undefined, value.length > 0);
 
   // Auto-grow textarea height
   useEffect(() => {
@@ -78,7 +78,7 @@ export function Composer({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onKeyDown={handleKeyDown}
-          placeholder={isFocused ? 'e.g. Peaceful instrumental music for studying at 3 AM...' : typewriterText}
+          placeholder={typewriterText || 'e.g. Peaceful instrumental music for studying at 3 AM...'}
           disabled={isLoading}
           rows={2}
           className="w-full bg-transparent resize-none border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"

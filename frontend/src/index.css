@@ -214,9 +214,9 @@ body {
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* Focus ring accessibility (exclude text inputs/textareas which use glass container styling) */
+/* Focus ring accessibility */
 :focus-visible:not(textarea):not(input) {
-  outline: 2px solid rgba(255, 255, 255, 0.25);
+  outline: 2px solid rgba(139, 92, 246, 0.55);
   outline-offset: 2px;
 }
 
@@ -225,6 +225,7 @@ textarea:focus-visible,
 input:focus,
 input:focus-visible {
   outline: none !important;
+  box-shadow: none !important;
 }
 
 /* prefers-reduced-motion: disable drift, tilt, pulses, keep only simple fades */
