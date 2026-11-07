@@ -60,8 +60,11 @@ export const Composer = memo(function Composer({
     <div className="relative w-full max-w-[760px] mx-auto group">
       {/* Rotating Conic Gradient Glow while focused (mood-responsive) */}
       {isFocused && (
-        <div className="conic-active absolute -inset-[2px] rounded-[22px] overflow-hidden -z-10 pointer-events-none opacity-80 transition-opacity">
-          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" />
+        <div
+          style={{ clipPath: 'inset(0 round 22px)' }}
+          className="conic-active absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none opacity-80 transition-opacity"
+        >
+          <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] animate-conic mood-conic-aurora blur-[6px]" />
         </div>
       )}
 

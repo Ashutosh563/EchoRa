@@ -119,18 +119,7 @@ export const TrackCard = memo(function TrackCard({
         isPreviewPlaying ? ' conic-active' : ''
       }`}
     >
-      {/* Rotating Conic Aurora Glow Behind Card on Hover / Playing (Paused when idle) */}
-      <div
-        className={`absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none transition-all duration-500 group-hover:-translate-y-1 ${
-          isPreviewPlaying
-            ? 'opacity-50'
-            : 'opacity-0 group-hover:opacity-40'
-        }`}
-      >
-        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" />
-      </div>
-
-      {/* Main Apple Liquid Glass Card */}
+      {/* Main Apple Liquid Glass Card (strictly clips inner aurora to card border) */}
       <article
         onClick={() => onSelectTrack(track)}
         onKeyDown={(e) => {
@@ -144,15 +133,15 @@ export const TrackCard = memo(function TrackCard({
         aria-label={`View details for ${track.name} by ${artistText}`}
         className="apple-glass-card p-3.5 flex items-center gap-3.5 relative overflow-hidden cursor-pointer select-none group-hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan"
       >
-        {/* Soft Moving Mood-Responsive Aurora Animation in Card Background on Hover / Playing */}
+        {/* Soft Moving Mood-Responsive Aurora Animation clipped strictly inside Card Borders */}
         <div
           className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[20px] transition-opacity duration-500 ${
             isPreviewPlaying
-              ? 'opacity-30'
-              : 'opacity-0 group-hover:opacity-25'
+              ? 'opacity-35'
+              : 'opacity-0 group-hover:opacity-28'
           }`}
         >
-          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[16px]" />
+          <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] animate-conic mood-conic-aurora blur-[16px]" />
         </div>
 
         {/* Top-edge specular glossy highlight overlay */}

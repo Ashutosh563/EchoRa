@@ -153,7 +153,9 @@ body {
     0 12px 32px -8px rgba(0, 0, 0, 0.5),
     0 0 20px -6px color-mix(in srgb, var(--mood-primary, #8B5CF6) 18%, transparent);
   border-radius: 20px;
-  contain: layout paint;
+  overflow: hidden;
+  isolation: isolate;
+  clip-path: inset(0 round 20px);
   transition:
     transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
     border-color 250ms ease,

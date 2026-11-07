@@ -146,11 +146,12 @@ export const LayeredPlaylistView = memo(function LayeredPlaylistView({ journey, 
                   {stage.tracks.map((track) => (
                     <div
                       key={track.id}
-                      className="relative overflow-hidden p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.06] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
+                      style={{ clipPath: "inset(0 round 12px)" }}
+                      className="relative overflow-hidden isolate p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.06] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
                     >
                       {/* Soft Moving Mood-Responsive Aurora Animation in Card Background on Hover */}
                       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover/track:opacity-25 transition-opacity duration-500">
-                        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic stage-conic-aurora blur-[16px]" />
+                        <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] animate-conic stage-conic-aurora blur-[16px]" />
                       </div>
 
                       {/* Top: Album Art + Track Info */}
