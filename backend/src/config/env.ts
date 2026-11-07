@@ -17,10 +17,13 @@ export const SPOTIFY_REDIRECT_URI = `${BACKEND_URL}/api/spotify/callback`;
 
 /** Default model alias; always points at the current Gemini Flash model. Override with GEMINI_MODEL. */
 export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
+export const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 
 export interface AppConfig {
   geminiApiKey: string | null;
   geminiModel: string;
+  openaiApiKey: string | null;
+  openaiModel: string;
   spotifyClientId: string | null;
   spotifyClientSecret: string | null;
   spotifyRedirectUri: string;
@@ -38,6 +41,8 @@ export function buildConfig(env: NodeJS.ProcessEnv): AppConfig {
   return {
     geminiApiKey: clean(env.GEMINI_API_KEY),
     geminiModel: clean(env.GEMINI_MODEL) ?? DEFAULT_GEMINI_MODEL,
+    openaiApiKey: clean(env.OPENAI_API_KEY),
+    openaiModel: clean(env.OPENAI_MODEL) ?? DEFAULT_OPENAI_MODEL,
     spotifyClientId: clean(env.SPOTIFY_CLIENT_ID),
     spotifyClientSecret: clean(env.SPOTIFY_CLIENT_SECRET),
     spotifyRedirectUri: SPOTIFY_REDIRECT_URI,

@@ -1,5 +1,7 @@
 import { Sparkles, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import type { CSSProperties } from "react";
+import { getMoodTheme } from "../../lib/moodTheme";
 
 export const PRESET_MOODS = [
   "Sad",
@@ -18,7 +20,7 @@ export const PRESET_MOODS = [
 
 interface MoodSelectorSectionProps {
   startingMood: string;
-  destinationMood: string;
+  destinationMood?: string;
   onSelectStarting: (mood: string) => void;
   onSelectDestination: (mood: string) => void;
   onGenerate: () => void;
@@ -28,7 +30,7 @@ interface MoodSelectorSectionProps {
 
 export function MoodSelectorSection({
   startingMood,
-  destinationMood,
+  destinationMood = "",
   onSelectStarting,
   onSelectDestination,
   onGenerate,
@@ -59,9 +61,9 @@ export function MoodSelectorSection({
       </div>
 
       {/* Grid of Two Questions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Question 1: Starting Mood */}
-        <div className="glass-panel p-6 rounded-2xl border border-white/10 space-y-4">
+        <div className="glass-panel p-5 sm:p-6 rounded-[26px] border border-white/10 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono tracking-wider uppercase text-violet font-semibold">
               Step 01
@@ -76,29 +78,32 @@ export function MoodSelectorSection({
             How are you feeling right now?
           </h2>
 
-          <div className="flex flex-wrap gap-2 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2">
             {PRESET_MOODS.map((mood) => {
               const isSelected = startingMood.toLowerCase() === mood.toLowerCase();
+              const theme = getMoodTheme(null, mood);
+              const emoji = moodEmoji(mood);
               return (
-                <button
+                <motion.button
                   key={`start-${mood}`}
                   type="button"
                   onClick={() => onSelectStarting(mood)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                    isSelected
-                      ? "bg-violet text-white shadow-md shadow-violet/30 border border-violet-light"
-                      : "bg-white/5 text-text-dim hover:text-text hover:bg-white/10 border border-white/5"
-                  }`}
+                  whileTap={{ scale: 0.97 }}
+                  style={{ "--tile-mood": theme.primary, "--tile-secondary": theme.secondary } as CSSProperties}
+                  className={`mood-choice group relative overflow-hidden flex items-center gap-2.5 text-left px-3 py-3 rounded-2xl border transition-all cursor-pointer ${isSelected ? "mood-choice-selected" : "border-white/[0.09] bg-white/[0.035] hover:bg-white/[0.07] hover:border-white/20"}`}
+                  aria-pressed={isSelected}
+                  aria-label={mood}
                 >
-                  {mood}
-                </button>
+                  <span className="relative z-10 w-9 h-9 rounded-xl flex items-center justify-center text-lg bg-white/[0.06] border border-white/10">{emoji}</span>
+                  <span className="relative z-10 text-xs sm:text-sm font-semibold text-text">{mood}</span>
+                </motion.button>
               );
             })}
           </div>
         </div>
 
         {/* Question 2: Destination Mood */}
-        <div className="glass-panel p-6 rounded-2xl border border-white/10 space-y-4">
+        <div className="glass-panel p-5 sm:p-6 rounded-[26px] border border-white/10 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono tracking-wider uppercase text-cyan font-semibold">
               Step 02
@@ -113,22 +118,25 @@ export function MoodSelectorSection({
             How would you like to feel?
           </h2>
 
-          <div className="flex flex-wrap gap-2 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2">
             {PRESET_MOODS.map((mood) => {
               const isSelected = destinationMood.toLowerCase() === mood.toLowerCase();
+              const theme = getMoodTheme(null, mood);
+              const emoji = moodEmoji(mood);
               return (
-                <button
+                <motion.button
                   key={`dest-${mood}`}
                   type="button"
                   onClick={() => onSelectDestination(mood)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                    isSelected
-                      ? "bg-cyan text-ink font-semibold shadow-md shadow-cyan/30 border border-cyan-light"
-                      : "bg-white/5 text-text-dim hover:text-text hover:bg-white/10 border border-white/5"
-                  }`}
+                  whileTap={{ scale: 0.97 }}
+                  style={{ "--tile-mood": theme.primary, "--tile-secondary": theme.secondary } as CSSProperties}
+                  className={`mood-choice group relative overflow-hidden flex items-center gap-2.5 text-left px-3 py-3 rounded-2xl border transition-all cursor-pointer ${isSelected ? "mood-choice-selected" : "border-white/[0.09] bg-white/[0.035] hover:bg-white/[0.07] hover:border-white/20"}`}
+                  aria-pressed={isSelected}
+                  aria-label={mood}
                 >
-                  {mood}
-                </button>
+                  <span className="relative z-10 w-9 h-9 rounded-xl flex items-center justify-center text-lg bg-white/[0.06] border border-white/10">{emoji}</span>
+                  <span className="relative z-10 text-xs sm:text-sm font-semibold text-text">{mood}</span>
+                </motion.button>
               );
             })}
           </div>
@@ -158,7 +166,7 @@ export function MoodSelectorSection({
           whileTap={canProceed ? { scale: 0.98 } : undefined}
           className={`px-8 py-3.5 rounded-full font-display font-bold text-sm flex items-center gap-2.5 transition-all shadow-lg ${
             canProceed
-              ? "bg-gradient-to-r from-violet via-[#A855F7] to-cyan text-white shadow-violet/30 hover:brightness-110 cursor-pointer"
+              ? "mood-cta text-white hover:brightness-110 cursor-pointer"
               : "bg-white/5 text-text-faint border border-white/5 cursor-not-allowed opacity-40"
           }`}
         >
@@ -168,5 +176,16 @@ export function MoodSelectorSection({
       </div>
     </div>
   );
+}
+
+function moodEmoji(mood: string): string {
+  const key = mood.toLowerCase();
+  if (/sad|melanchol|lonely/.test(key)) return "🌧️";
+  if (/happy|hopeful|confident/.test(key)) return "☀️";
+  if (/anxious/.test(key)) return "🌫️";
+  if (/relaxed|peaceful/.test(key)) return "🌿";
+  if (/energetic/.test(key)) return "⚡";
+  if (/nostalgic/.test(key)) return "📼";
+  return "🌙";
 }
 

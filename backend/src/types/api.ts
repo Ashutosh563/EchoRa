@@ -30,6 +30,7 @@ export interface StatusResponse {
   /** Mode used by POST /api/music/interpret (only needs Gemini). */
   interpretMode: AppMode;
   gemini: { configured: boolean; valid: boolean | null };
+  openai: { configured: boolean; valid: boolean | null };
   spotify: { configured: boolean; valid: boolean | null; authorized: boolean };
   /** Human-readable list of missing credentials / steps. Empty in live mode. */
   missing: string[];

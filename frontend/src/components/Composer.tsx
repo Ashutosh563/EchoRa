@@ -54,10 +54,10 @@ export function Composer({
 
   return (
     <div className="relative w-full max-w-[760px] mx-auto group">
-      {/* Rotating Conic Gradient Glow while focused */}
+      {/* Rotating Conic Gradient Glow while focused (mood-responsive) */}
       {isFocused && (
         <div className="absolute -inset-[2px] rounded-[22px] overflow-hidden -z-10 pointer-events-none opacity-80 transition-opacity">
-          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[6px]" />
+          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" />
         </div>
       )}
 
@@ -88,7 +88,7 @@ export function Composer({
           placeholder={isFocused ? 'e.g. Peaceful instrumental music for studying at 3 AM...' : typewriterText}
           disabled={isLoading}
           rows={2}
-          className="w-full bg-transparent resize-none outline-none text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"
+          className="w-full bg-transparent resize-none border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"
           aria-label="Describe what you want to listen to"
         />
 
@@ -124,55 +124,45 @@ export function Composer({
               disabled={isLoading}
             />
 
-            {/* Discover Button with Deeply Saturated Neon Gradient & Kinetic Pop-Out */}
+            {/* Discover Button: Mood-responsive gradient, dim at rest, balanced saturation on hover */}
             <div className="relative group/btn">
-              {/* 1. Ultra-saturated wide ambient neon aura */}
+              {/* 1. Wide ambient mood aura */}
               <div
-                className={`absolute -inset-3 rounded-full bg-gradient-to-r from-[#7928CA] via-[#FF0080] to-[#00DFD8] blur-xl transition-all duration-300 pointer-events-none saturate-[2.2] ${
-                  canSubmit
-                    ? 'opacity-75 group-hover/btn:opacity-100 group-hover/btn:scale-130 group-hover/btn:blur-2xl'
-                    : 'opacity-30 group-hover/btn:opacity-60 group-hover/btn:scale-110'
-                }`}
+                className="absolute -inset-2.5 rounded-full mood-gradient blur-xl transition-all duration-300 pointer-events-none opacity-10 saturate-[0.75] group-hover/btn:opacity-55 group-hover/btn:scale-110 group-hover/btn:blur-xl group-hover/btn:saturate-[1.15]"
               />
 
-              {/* 2. Concentrated high-chroma core halo */}
+              {/* 2. Core mood halo */}
               <div
-                className={`absolute -inset-1 rounded-full bg-gradient-to-r from-[#8A00E6] via-[#FF007F] to-[#00F0FF] blur-md transition-all duration-200 pointer-events-none saturate-[2] ${
-                  canSubmit
-                    ? 'opacity-90 group-hover/btn:opacity-100 group-hover/btn:blur-lg'
-                    : 'opacity-25 group-hover/btn:opacity-55'
-                }`}
+                className="absolute -inset-1 rounded-full mood-gradient blur-md transition-all duration-200 pointer-events-none opacity-10 saturate-[0.75] group-hover/btn:opacity-60 group-hover/btn:blur-md group-hover/btn:saturate-[1.1]"
               />
 
               <motion.button
                 type="button"
                 onClick={() => onSubmit(value)}
                 disabled={!canSubmit}
-                whileTap={canSubmit ? { scale: 0.92, y: 1 } : undefined}
+                whileTap={canSubmit ? { scale: 0.94, y: 1 } : undefined}
                 whileHover={
-                  canSubmit
+                  !isLoading
                     ? {
-                        scale: 1.12,
-                        y: -4,
-                        transition: { type: 'spring', stiffness: 500, damping: 14 },
+                        scale: 1.06,
+                        y: -2,
+                        transition: { type: 'spring', stiffness: 500, damping: 16 },
                       }
-                    : { scale: 1.04, y: -1 }
+                    : undefined
                 }
-                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-extrabold text-sm tracking-wide flex items-center gap-2 cursor-pointer transition-all duration-200 select-none saturate-[1.8] contrast-[1.1] ${
-                  canSubmit
-                    ? 'bg-gradient-to-r from-[#6D28D9] via-[#EC4899] to-[#0284C7] hover:from-[#7C3AED] hover:via-[#FF007F] hover:to-[#00F0FF] text-white border-2 border-fuchsia-300/80 hover:border-cyan-300 shadow-[0_0_24px_rgba(255,0,128,0.7),0_0_14px_rgba(109,40,217,0.7)] hover:shadow-[0_0_42px_#FF007F,0_0_28px_#7C3AED,0_0_22px_#00F0FF] hover:brightness-110'
-                    : 'bg-gradient-to-r from-violet-900/40 via-fuchsia-900/35 to-cyan-900/40 text-white/75 border border-fuchsia-500/30 hover:border-fuchsia-400/60 hover:shadow-[0_0_18px_rgba(236,72,153,0.5)] cursor-not-allowed opacity-75'
+                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-bold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 select-none mood-discover-btn text-white/75 border saturate-[0.8] group-hover/btn:text-white group-hover/btn:saturate-[1.1] ${
+                  canSubmit ? 'cursor-pointer' : 'cursor-not-allowed'
                 }`}
                 aria-label="Discover music"
               >
                 <motion.div
                   className="flex items-center justify-center"
-                  whileHover={canSubmit ? { rotate: 25, scale: 1.3 } : undefined}
+                  whileHover={!isLoading ? { rotate: 20, scale: 1.2 } : undefined}
                   transition={{ type: 'spring', stiffness: 500, damping: 12 }}
                 >
-                  <Sparkles className="w-4 h-4 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]" />
+                  <Sparkles className="w-4 h-4 text-white/75 group-hover/btn:text-white group-hover/btn:drop-shadow-[0_0_6px_rgba(255,255,255,0.7)] transition-all" />
                 </motion.div>
-                <span className="drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]">Discover</span>
+                <span className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">Discover</span>
               </motion.button>
             </div>
           </div>

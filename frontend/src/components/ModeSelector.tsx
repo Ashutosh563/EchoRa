@@ -66,7 +66,7 @@ export function ModeSelector({ currentMode, onChange, disabled }: ModeSelectorPr
               <motion.div
                 layoutId="active-discovery-mode-indicator"
                 transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                className="absolute inset-0 rounded-full bg-gradient-to-r from-violet/80 to-magenta/70 border border-white/20 shadow-sm -z-10"
+                className="absolute inset-0 rounded-full mood-surface border border-white/20 shadow-sm -z-10"
               />
             )}
             <Icon

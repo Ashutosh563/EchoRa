@@ -1,7 +1,7 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import fs from "node:fs";
-import { ENV_FILE, loadConfig, DEFAULT_GEMINI_MODEL } from "../src/config/env.js";
+import { ENV_FILE, loadConfig, DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL } from "../src/config/env.js";
 import { validateGeminiKey } from "../src/services/gemini/validateKey.js";
 import { validateSpotifyCredentials } from "../src/services/spotify/validateCredentials.js";
 
@@ -29,6 +29,13 @@ async function main() {
     const currentGemini = existing.geminiApiKey ? `[configured: ...${existing.geminiApiKey.slice(-4)}]` : "[not configured]";
     const geminiKey = await promptSecret(rl, `   Enter Gemini API Key ${currentGemini} (press Enter to keep): `);
     const finalGeminiKey = geminiKey || existing.geminiApiKey || "";
+
+    console.log("\n1b. OpenAI API Key (fallback provider, optional)");
+    const currentOpenAI = existing.openaiApiKey ? "[configured: hidden]" : "[not configured]";
+    const openaiKey = await promptSecret(rl, `   Enter OpenAI API Key ${currentOpenAI} (press Enter to keep): `);
+    const finalOpenAIKey = openaiKey || existing.openaiApiKey || "";
+    const openaiModelInput = await promptSecret(rl, `   OpenAI model [${existing.openaiModel || DEFAULT_OPENAI_MODEL}] (press Enter to keep): `);
+    const finalOpenAIModel = openaiModelInput || existing.openaiModel || DEFAULT_OPENAI_MODEL;
 
     if (finalGeminiKey) {
       process.stdout.write("   Validating Gemini API Key... ");
@@ -70,6 +77,8 @@ async function main() {
       `# SONORA API Credentials`,
       `GEMINI_API_KEY=${finalGeminiKey}`,
       `GEMINI_MODEL=${existing.geminiModel || DEFAULT_GEMINI_MODEL}`,
+      `OPENAI_API_KEY=${finalOpenAIKey}`,
+      `OPENAI_MODEL=${finalOpenAIModel}`,
       `SPOTIFY_CLIENT_ID=${finalSpotifyId}`,
       `SPOTIFY_CLIENT_SECRET=${finalSpotifySecret}`,
       ``,

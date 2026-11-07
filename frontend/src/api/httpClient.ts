@@ -65,6 +65,7 @@ export function createHttpMusicClient(): FullMusicApi {
           mode: "mock",
           interpretMode: "mock",
           gemini: { configured: false, valid: null },
+          openai: { configured: false, valid: null },
           spotify: { configured: false, valid: null, authorized: false },
           missing: ["Backend server unavailable."],
         };

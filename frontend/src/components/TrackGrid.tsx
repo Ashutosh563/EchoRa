@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, Music } from 'lucide-react';
 import type { Track } from '../types';
 import { TrackCard } from './TrackCard';
 import { SpotifyIcon } from './ConnectSpotifyButton';
+import { SongDetailsDialog } from './SongDetailsDialog';
 
 interface TrackGridProps {
   tracks: Track[];
@@ -11,6 +13,7 @@ interface TrackGridProps {
 export function TrackGrid({ tracks }: TrackGridProps) {
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
   const [previewProgress, setPreviewProgress] = useState(0);
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -98,24 +101,46 @@ export function TrackGrid({ tracks }: TrackGridProps) {
       </div>
 
       {/* Grid of Track Cards: 1 col mobile, 2 col tablet, 3 col desktop */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: {
+            opacity: 1,
+            transition: { staggerChildren: 0.05 },
+          },
+        }}
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+      >
         {tracks.map((track, index) => (
           <TrackCard
             key={track.id || index}
             track={track}
-            index={index}
             activePreviewId={activePreviewId}
             previewProgress={previewProgress}
             onTogglePreview={handleTogglePreview}
+            onSelectTrack={setSelectedTrack}
           />
         ))}
-      </div>
+      </motion.div>
 
       {/* Attribution Footer */}
       <div className="mt-8 flex items-center justify-center gap-2 text-xs text-text-faint">
         <SpotifyIcon className="w-3.5 h-3.5 text-text-faint" />
         <span>Track data and artwork provided by Spotify.</span>
       </div>
+      <AnimatePresence>
+        {selectedTrack && (
+          <SongDetailsDialog
+            track={selectedTrack}
+            onClose={() => setSelectedTrack(null)}
+            isPreviewPlaying={activePreviewId === selectedTrack.id}
+            previewProgress={activePreviewId === selectedTrack.id ? previewProgress : 0}
+            onTogglePreview={handleTogglePreview}
+          />
+        )}
+      </AnimatePresence>
     </section>
   );
 }

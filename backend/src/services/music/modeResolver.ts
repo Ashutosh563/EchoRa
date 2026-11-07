@@ -15,13 +15,17 @@ export function resolveAppMode(
   spotifyAuth: SpotifyAuth | null,
 ): ModeResolution {
   const geminiConfigured = Boolean(config.geminiApiKey);
+  const openaiConfigured = Boolean(config.openaiApiKey);
+  const aiReady = (geminiConfigured && credState.geminiValid !== false) || (openaiConfigured && credState.openaiValid !== false);
   const spotifyConfigured = Boolean(config.spotifyClientId && config.spotifyClientSecret);
   const spotifyAuthorized = Boolean(spotifyAuth?.isAuthorized());
 
   const missing: string[] = [];
-  if (!geminiConfigured) {
-    missing.push("Gemini API key is not configured.");
-  } else if (credState.geminiValid === false) {
+  if (!aiReady) {
+    if (!geminiConfigured) missing.push("Gemini API key is not configured.");
+    if (!openaiConfigured) missing.push("OpenAI API key is not configured.");
+  }
+  if (geminiConfigured && credState.geminiValid === false && !openaiConfigured) {
     missing.push("Gemini API key was rejected by the API.");
   }
 
@@ -33,7 +37,7 @@ export function resolveAppMode(
     missing.push("Spotify authorization required. Click 'Connect Spotify'.");
   }
 
-  const geminiReady = geminiConfigured && credState.geminiValid !== false;
+  const geminiReady = aiReady;
   const spotifyReady = spotifyConfigured && credState.spotifyValid !== false && spotifyAuthorized;
 
   const interpretMode: AppMode = geminiReady ? "live" : "mock";
@@ -46,6 +50,7 @@ export function resolveAppMode(
       configured: geminiConfigured,
       valid: credState.geminiValid,
     },
+    openai: { configured: openaiConfigured, valid: credState.openaiValid },
     spotify: {
       configured: spotifyConfigured,
       valid: credState.spotifyValid,
