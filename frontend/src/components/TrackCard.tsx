@@ -72,7 +72,7 @@ export function TrackCard({
       }}
       className="relative group transition-transform duration-200"
     >
-      {/* Rotating Conic Aurora Glow Behind Card on Hover / Playing (Lower Opacity) */}
+      {/* Rotating Conic Aurora Glow Behind Card on Hover / Playing (Mood-Responsive, Lower Opacity) */}
       <div
         className={`absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none transition-all duration-500 group-hover:-translate-y-1 ${
           isPreviewPlaying
@@ -80,7 +80,7 @@ export function TrackCard({
             : 'opacity-0 group-hover:opacity-40'
         }`}
       >
-        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[6px]" />
+        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" />
       </div>
 
       {/* Main Apple Liquid Glass Card */}
@@ -97,7 +97,7 @@ export function TrackCard({
         aria-label={`View details for ${track.name} by ${artistText}`}
         className="apple-glass-card p-3.5 flex items-center gap-3.5 relative overflow-hidden cursor-pointer select-none group-hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan"
       >
-        {/* Soft Moving Aurora Animation in Card Background on Hover / Playing */}
+        {/* Soft Moving Mood-Responsive Aurora Animation in Card Background on Hover / Playing */}
         <div
           className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[20px] transition-opacity duration-500 ${
             isPreviewPlaying
@@ -105,7 +105,7 @@ export function TrackCard({
               : 'opacity-0 group-hover:opacity-25'
           }`}
         >
-          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[16px]" />
+          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[16px]" />
         </div>
 
         {/* Top-edge specular glossy highlight overlay */}

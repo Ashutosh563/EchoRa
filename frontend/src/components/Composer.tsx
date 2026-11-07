@@ -54,10 +54,10 @@ export function Composer({
 
   return (
     <div className="relative w-full max-w-[760px] mx-auto group">
-      {/* Rotating Conic Gradient Glow while focused */}
+      {/* Rotating Conic Gradient Glow while focused (mood-responsive) */}
       {isFocused && (
         <div className="absolute -inset-[2px] rounded-[22px] overflow-hidden -z-10 pointer-events-none opacity-80 transition-opacity">
-          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[6px]" />
+          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" />
         </div>
       )}
 

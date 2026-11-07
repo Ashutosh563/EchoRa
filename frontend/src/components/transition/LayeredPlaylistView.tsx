@@ -95,7 +95,14 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: stage.stage * 0.1 }}
-              style={{ "--tile-mood": moodTheme.primary, "--tile-secondary": moodTheme.secondary } as CSSProperties}
+              style={
+                {
+                  "--tile-mood": moodTheme.primary,
+                  "--tile-secondary": moodTheme.secondary,
+                  "--tile-accent": moodTheme.accent1,
+                  "--tile-accent-2": moodTheme.accent2,
+                } as CSSProperties
+              }
               className={`mood-stage-card rounded-2xl border ${styling.border} ${styling.bg} p-6 sm:p-7 relative transition-all shadow-glass`}
             >
               {/* Stage Header */}
@@ -141,9 +148,9 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                       key={track.id}
                       className="relative overflow-hidden p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.06] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
                     >
-                      {/* Soft Moving Aurora Animation in Card Background on Hover */}
+                      {/* Soft Moving Mood-Responsive Aurora Animation in Card Background on Hover */}
                       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover/track:opacity-25 transition-opacity duration-500">
-                        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[16px]" />
+                        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic stage-conic-aurora blur-[16px]" />
                       </div>
 
                       {/* Top: Album Art + Track Info */}

@@ -195,6 +195,28 @@ body {
   animation: rotateConic 8s linear infinite;
 }
 
+.mood-conic-aurora {
+  background: conic-gradient(
+    from 0deg,
+    var(--mood-primary, #8B5CF6),
+    var(--mood-accent, #EC4899),
+    var(--mood-secondary, #22D3EE),
+    var(--mood-accent-2, #F59E0B),
+    var(--mood-primary, #8B5CF6)
+  );
+}
+
+.stage-conic-aurora {
+  background: conic-gradient(
+    from 0deg,
+    var(--tile-mood, var(--mood-primary, #8B5CF6)),
+    var(--tile-accent, var(--mood-accent, #EC4899)),
+    var(--tile-secondary, var(--mood-secondary, #22D3EE)),
+    var(--tile-accent-2, var(--mood-accent-2, #F59E0B)),
+    var(--tile-mood, var(--mood-primary, #8B5CF6))
+  );
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
