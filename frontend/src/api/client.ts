@@ -50,7 +50,7 @@ export async function getStatus(signal?: AbortSignal): Promise<StatusResponse> {
   } catch (err: unknown) {
     if (err instanceof AppApiError) throw err;
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
-    throw new AppApiError('NETWORK_ERROR', "Can't reach the SONORA server (127.0.0.1:4000)");
+    throw new AppApiError('NETWORK_ERROR', "Can't reach the ECHORA server (127.0.0.1:4000)");
   }
 }
 
@@ -77,7 +77,7 @@ export async function searchMusic(
   } catch (err: unknown) {
     if (err instanceof AppApiError) throw err;
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
-    throw new AppApiError('NETWORK_ERROR', "Can't reach the SONORA server (127.0.0.1:4000)");
+    throw new AppApiError('NETWORK_ERROR', "Can't reach the ECHORA server (127.0.0.1:4000)");
   }
 }
 
@@ -99,6 +99,6 @@ export async function analyzeCameraImage(
   } catch (err: unknown) {
     if (err instanceof AppApiError) throw err;
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
-    throw new AppApiError('NETWORK_ERROR', "Can't reach the SONORA server (127.0.0.1:4000)");
+    throw new AppApiError('NETWORK_ERROR', "Can't reach the ECHORA server (127.0.0.1:4000)");
   }
 }

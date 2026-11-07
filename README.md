@@ -1,8 +1,8 @@
-# SONORA (Phase 1)
+# ECHORA (Phase 1)
 
 AI-powered, mood-aware music discovery and recommendation application.
 
-SONORA enables natural-language music discovery: users describe their vibe, setting, or state of mind (e.g. *"Recommend peaceful instrumental music for studying at 3 AM"*), and the system extracts structured listening intent via **Google Gemini** and retrieves matching tracks via the **Spotify Web API**.
+ECHORA enables natural-language music discovery: users describe their vibe, setting, or state of mind (e.g. *"Recommend peaceful instrumental music for studying at 3 AM"*), and the system extracts structured listening intent via **Google Gemini** and retrieves matching tracks via the **Spotify Web API**.
 
 ---
 

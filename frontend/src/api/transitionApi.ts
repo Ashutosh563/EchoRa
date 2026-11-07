@@ -47,7 +47,7 @@ export async function planTransition(
   } catch (err: unknown) {
     if (err instanceof AppApiError) throw err;
     if (err instanceof DOMException && err.name === "AbortError") throw err;
-    throw new AppApiError("NETWORK_ERROR", "Could not reach SONORA transition planner.");
+    throw new AppApiError("NETWORK_ERROR", "Could not reach ECHORA transition planner.");
   }
 }
 
@@ -68,7 +68,7 @@ export async function generateTransitionMusic(
   } catch (err: unknown) {
     if (err instanceof AppApiError) throw err;
     if (err instanceof DOMException && err.name === "AbortError") throw err;
-    throw new AppApiError("NETWORK_ERROR", "Could not reach SONORA music generator.");
+    throw new AppApiError("NETWORK_ERROR", "Could not reach ECHORA music generator.");
   }
 }
 

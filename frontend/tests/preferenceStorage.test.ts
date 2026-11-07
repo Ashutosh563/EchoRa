@@ -34,7 +34,7 @@ describe("preferenceStorage", () => {
   });
 
   it("gracefully recovers from malformed localStorage JSON", () => {
-    localStorage.setItem("sonora_discovery_profile_v1", "INVALID_JSON{{[");
+    localStorage.setItem("echora_discovery_profile_v1", "INVALID_JSON{{[");
     const profile = getStoredProfile();
     expect(profile.discoveryMode).toBe("FAMILIAR");
     expect(profile.preferences.favoriteGenres).toEqual([]);

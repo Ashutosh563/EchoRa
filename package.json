@@ -1,8 +1,8 @@
 {
-  "name": "sonora",
+  "name": "echora",
   "version": "0.1.0",
   "private": true,
-  "description": "SONORA - AI-powered mood-based music discovery (Phase 1)",
+  "description": "ECHORA - AI-powered mood-based music discovery (Phase 1)",
   "workspaces": [
     "frontend",
     "backend"

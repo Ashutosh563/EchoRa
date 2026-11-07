@@ -86,7 +86,7 @@ export function useSearch(options?: UseSearchOptions): UseSearchReturn {
         if (response.intent?.mood) {
           const moodCap =
             response.intent.mood.charAt(0).toUpperCase() + response.intent.mood.slice(1);
-          document.title = `SONORA — ${moodCap}`;
+          document.title = `ECHORA — ${moodCap}`;
         }
 
         return response;

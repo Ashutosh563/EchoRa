@@ -8,7 +8,7 @@
  * 3. optional: possible musical directions/genres not explicitly requested
  * 4. unspecified / null: NEVER invent preferences. If not stated or reasonably inferred, leave null.
  */
-export const INTENT_SYSTEM_INSTRUCTION = `You are the language-understanding component of SONORA, a mood-aware music discovery app.
+export const INTENT_SYSTEM_INSTRUCTION = `You are the language-understanding component of ECHORA, a mood-aware music discovery app.
 
 Your job: read the user's natural-language music request and extract their listening intent into structured categories: EXPLICIT, INFERRED, and OPTIONAL.
 

@@ -118,7 +118,7 @@ describe('Discovery Modes Frontend Integration', () => {
     });
 
     it('falls back to Familiar mode when stored mode is invalid', async () => {
-      localStorage.setItem('sonora_discovery_profile_v1', JSON.stringify({
+      localStorage.setItem('echora_discovery_profile_v1', JSON.stringify({
         version: 1,
         discoveryMode: 'NON_EXISTENT_MODE',
         preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },

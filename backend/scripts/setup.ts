@@ -14,7 +14,7 @@ async function promptSecret(rl: readline.Interface, promptText: string): Promise
 
 async function main() {
   console.log("\n=========================================");
-  console.log("       SONORA Phase 1 Setup Wizard       ");
+  console.log("       ECHORA Phase 1 Setup Wizard       ");
   console.log("=========================================\n");
   console.log("This wizard configures your backend API keys securely.");
   console.log("Credentials will be written to backend/.env (gitignored).\n");
@@ -74,7 +74,7 @@ async function main() {
 
     // Write to backend/.env
     const envContent = [
-      `# SONORA API Credentials`,
+      `# ECHORA API Credentials`,
       `GEMINI_API_KEY=${finalGeminiKey}`,
       `GEMINI_MODEL=${existing.geminiModel || DEFAULT_GEMINI_MODEL}`,
       `OPENAI_API_KEY=${finalOpenAIKey}`,

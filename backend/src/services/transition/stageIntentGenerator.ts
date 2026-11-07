@@ -2,7 +2,7 @@ import type { GeminiClient } from "../gemini/geminiClient.js";
 import type { MoodStage, StageSearchIntent } from "../../types/transition.js";
 import { AppError } from "../../utils/AppError.js";
 
-const STAGE_INTENTS_SYSTEM = `You are SONORA's Stage Music Intent Generator.
+const STAGE_INTENTS_SYSTEM = `You are ECHORA's Stage Music Intent Generator.
 Given four approved stages of a musical mood transition journey, generate exactly four targeted, concise Spotify search queries (one query per stage).
 
 RULES:
