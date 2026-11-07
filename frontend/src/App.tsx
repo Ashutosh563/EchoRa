@@ -201,6 +201,7 @@ export default function App({ api }: AppProps = {}) {
                   <IntentPanel
                     data={data}
                     userPrompt={lastPrompt}
+                    onCopyNotice={() => addToast('Search query copied to clipboard!', 'success')}
                   />
 
                   {/* Tracks Grid */}

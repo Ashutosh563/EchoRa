@@ -15,14 +15,16 @@ import {
 } from 'lucide-react';
 import type { SearchResponse } from '../types';
 import { IntentTile } from './IntentTile';
+import { QueryLine } from './QueryLine';
 
 interface IntentPanelProps {
   data: SearchResponse;
   userPrompt: string;
+  onCopyNotice?: () => void;
 }
 
-export function IntentPanel({ data, userPrompt }: IntentPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
   const { intent, mode } = data;
   const breakdown = intent.breakdown;
 
@@ -270,6 +272,15 @@ export function IntentPanel({ data, userPrompt }: IntentPanelProps) {
           {renderTimeContent()}
         </IntentTile>
       </div>
+
+      {/* Spotify Search Queries Generated */}
+      {data.queries && (
+        <QueryLine
+          primary={data.queries.primary}
+          alternatives={data.queries.alternatives}
+          onCopyNotice={onCopyNotice}
+        />
+      )}
 
       </div>}
     </div>

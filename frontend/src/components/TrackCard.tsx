@@ -43,9 +43,9 @@ export function TrackCard({
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
-    // Max 6 degrees tilt
-    const rX = ((y - centerY) / centerY) * -6;
-    const rY = ((x - centerX) / centerX) * 6;
+    // Subtle 4 degrees tilt for premium liquid glass feel
+    const rX = ((y - centerY) / centerY) * -4;
+    const rY = ((x - centerX) / centerX) * 4;
 
     setRotateX(rX);
     setRotateY(rY);
@@ -58,9 +58,9 @@ export function TrackCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.97 }}
+      initial={{ opacity: 0, y: 16, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.4, delay: index * 0.05, ease: 'easeOut' }}
+      transition={{ duration: 0.35, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={{
@@ -71,28 +71,37 @@ export function TrackCard({
       }}
       className="relative group transition-transform duration-200"
     >
-      {/* Blurred Album Art Glow Behind Card */}
-      {track.albumArtUrl && (
-        <div
-          className="absolute -inset-1 rounded-[22px] -z-10 blur-xl opacity-25 group-hover:opacity-45 transition-opacity duration-300 pointer-events-none"
-          style={{
-            backgroundImage: `url(${track.albumArtUrl})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        />
-      )}
+      {/* Blurred Ambient Glow Behind Card matching album art or mood */}
+      <div
+        className="absolute -inset-1 rounded-[24px] -z-10 blur-xl opacity-20 group-hover:opacity-45 transition-all duration-500 pointer-events-none"
+        style={{
+          backgroundImage: track.albumArtUrl
+            ? `url(${track.albumArtUrl})`
+            : 'radial-gradient(circle, var(--mood-primary, #8B5CF6) 0%, transparent 70%)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      />
 
-      {/* Main Glass Card */}
-      <article className="glass-panel p-3.5 rounded-card relative overflow-hidden transition-all duration-300 group-hover:-translate-y-1 group-hover:border-white/20 group-hover:bg-white/[0.065] shadow-glass">
-        <button
-          type="button"
-          onClick={() => onSelectTrack(track)}
-          aria-label={`View details for ${track.name} by ${artistText}`}
-          className="w-full text-left flex items-center gap-3.5 rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan"
-        >
-          {/* Album Art (88x88) */}
-          <div className="relative w-[88px] h-[88px] rounded-[14px] overflow-hidden shrink-0 bg-white/[0.04] border border-white/10 flex items-center justify-center">
+      {/* Main Apple Liquid Glass Card */}
+      <article
+        onClick={() => onSelectTrack(track)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelectTrack(track);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label={`View details for ${track.name} by ${artistText}`}
+        className="apple-glass-card p-3.5 flex items-center gap-3.5 relative overflow-hidden cursor-pointer select-none group-hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan"
+      >
+        {/* Top-edge specular glossy highlight overlay */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/[0.08] via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
+
+        {/* Album Art (88x88) with Specular Rim */}
+        <div className="relative w-[88px] h-[88px] rounded-[16px] overflow-hidden shrink-0 bg-white/[0.04] border border-white/15 flex items-center justify-center shadow-md">
           {track.albumArtUrl && !artFailed ? (
             <img
               src={track.albumArtUrl}
@@ -109,10 +118,18 @@ export function TrackCard({
             </div>
           )}
 
-          </div>
+          {/* Centered Audio Preview Play/Pause button */}
+          {track.previewUrl && (
+            <PreviewButton
+              isPlaying={isPreviewPlaying}
+              progress={isPreviewPlaying ? previewProgress : 0}
+              onToggle={() => onTogglePreview(track)}
+            />
+          )}
+        </div>
 
         {/* Track Details */}
-          <div className="flex-1 min-w-0 flex flex-col justify-center h-[88px] py-0.5">
+        <div className="flex-1 min-w-0 flex flex-col justify-between h-[88px] py-0.5 z-10">
           <div>
             {/* Track Name */}
             <h3
@@ -123,47 +140,36 @@ export function TrackCard({
             </h3>
 
             {/* Artists */}
-            <p className="text-xs text-text-dim truncate mt-0.5" title={artistText}>
+            <p className="text-xs text-text-dim truncate mt-0.5 group-hover:text-text transition-colors" title={artistText}>
               {artistText}
             </p>
 
-            {/* Album & Duration */}
-            <div className="flex items-center gap-2 text-[11px] text-text-faint truncate mt-0.5">
-              <span className="truncate" title={track.album}>
-                {track.album}
-              </span>
-              {durationText && (
-                <>
-                  <span className="text-white/20">•</span>
-                  <span className="shrink-0 font-mono">{durationText}</span>
-                </>
-              )}
-            </div>
+            {/* Album Name */}
+            <p className="text-[11px] text-text-faint truncate mt-0.5" title={track.album}>
+              {track.album}
+            </p>
           </div>
 
+          {/* Bottom Actions: Duration badge & Open in Spotify link */}
+          <div className="flex items-center justify-between gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+            {durationText ? (
+              <span className="font-mono text-[10px] text-text-faint bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-full">
+                {durationText}
+              </span>
+            ) : <span />}
+
+            <a
+              href={track.spotifyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open "${track.name}" on Spotify`}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-spotify/15 hover:bg-spotify/25 text-spotify text-[11px] font-semibold transition-all border border-spotify/30 hover:border-spotify/50 hover:scale-[1.03] active:scale-[0.98] shadow-sm"
+            >
+              <SpotifyIcon className="w-3 h-3 text-spotify" />
+              <span>Spotify</span>
+              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+            </a>
           </div>
-        </button>
-        {track.previewUrl && (
-          <div className="absolute left-[58px] top-[58px] z-10 -translate-x-1/2 -translate-y-1/2">
-            <PreviewButton
-              isPlaying={isPreviewPlaying}
-              progress={isPreviewPlaying ? previewProgress : 0}
-              onToggle={() => onTogglePreview(track)}
-            />
-          </div>
-        )}
-        <div className="pt-2 pl-[102px]">
-          <a
-            href={track.spotifyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Open "${track.name}" on Spotify`}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-spotify/15 hover:bg-spotify/25 text-spotify text-[11px] font-semibold transition-all border border-spotify/30 hover:border-spotify/50 hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <SpotifyIcon className="w-3 h-3 text-spotify" />
-            <span>Open in Spotify</span>
-            <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-          </a>
         </div>
       </article>
     </motion.div>

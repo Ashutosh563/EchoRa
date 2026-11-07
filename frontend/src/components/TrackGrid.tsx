@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Sparkles, Music } from 'lucide-react';
 import type { Track } from '../types';
 import { TrackCard } from './TrackCard';
@@ -100,7 +101,18 @@ export function TrackGrid({ tracks }: TrackGridProps) {
       </div>
 
       {/* Grid of Track Cards: 1 col mobile, 2 col tablet, 3 col desktop */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: {
+            opacity: 1,
+            transition: { staggerChildren: 0.05 },
+          },
+        }}
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+      >
         {tracks.map((track, index) => (
           <TrackCard
             key={track.id || index}
@@ -112,7 +124,7 @@ export function TrackGrid({ tracks }: TrackGridProps) {
             onSelectTrack={setSelectedTrack}
           />
         ))}
-      </div>
+      </motion.div>
 
       {/* Attribution Footer */}
       <div className="mt-8 flex items-center justify-center gap-2 text-xs text-text-faint">
