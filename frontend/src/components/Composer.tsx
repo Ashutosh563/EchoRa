@@ -124,16 +124,16 @@ export function Composer({
               disabled={isLoading}
             />
 
-            {/* Discover Button: Dim & low-saturation at rest, balanced saturation on hover */}
+            {/* Discover Button: Mood-responsive gradient, dim at rest, balanced saturation on hover */}
             <div className="relative group/btn">
-              {/* 1. Wide ambient neon aura */}
+              {/* 1. Wide ambient mood aura */}
               <div
-                className="absolute -inset-2.5 rounded-full bg-gradient-to-r from-[#7C3AED] via-[#EC4899] to-[#06B6D4] blur-xl transition-all duration-300 pointer-events-none opacity-10 saturate-[0.75] group-hover/btn:opacity-60 group-hover/btn:scale-110 group-hover/btn:blur-xl group-hover/btn:saturate-[1.2]"
+                className="absolute -inset-2.5 rounded-full mood-gradient blur-xl transition-all duration-300 pointer-events-none opacity-10 saturate-[0.75] group-hover/btn:opacity-55 group-hover/btn:scale-110 group-hover/btn:blur-xl group-hover/btn:saturate-[1.15]"
               />
 
-              {/* 2. Core halo */}
+              {/* 2. Core mood halo */}
               <div
-                className="absolute -inset-1 rounded-full bg-gradient-to-r from-[#7C3AED] via-[#EC4899] to-[#06B6D4] blur-md transition-all duration-200 pointer-events-none opacity-10 saturate-[0.75] group-hover/btn:opacity-65 group-hover/btn:blur-md group-hover/btn:saturate-[1.15]"
+                className="absolute -inset-1 rounded-full mood-gradient blur-md transition-all duration-200 pointer-events-none opacity-10 saturate-[0.75] group-hover/btn:opacity-60 group-hover/btn:blur-md group-hover/btn:saturate-[1.1]"
               />
 
               <motion.button
@@ -150,7 +150,7 @@ export function Composer({
                       }
                     : undefined
                 }
-                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-bold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 select-none bg-gradient-to-r from-violet-950/45 via-fuchsia-950/35 to-cyan-950/45 text-white/70 border border-white/15 shadow-none saturate-[0.8] group-hover/btn:from-[#7C3AED]/90 group-hover/btn:via-[#EC4899]/85 group-hover/btn:to-[#06B6D4]/90 group-hover/btn:text-white group-hover/btn:border-white/35 group-hover/btn:shadow-[0_0_22px_rgba(236,72,153,0.4),0_0_14px_rgba(124,58,237,0.4)] group-hover/btn:saturate-[1.15] ${
+                className={`relative z-10 px-6 py-2.5 rounded-full font-display font-bold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 select-none mood-discover-btn text-white/75 border saturate-[0.8] group-hover/btn:text-white group-hover/btn:saturate-[1.1] ${
                   canSubmit ? 'cursor-pointer' : 'cursor-not-allowed'
                 }`}
                 aria-label="Discover music"

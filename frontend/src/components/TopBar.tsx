@@ -34,14 +34,14 @@ export function TopBar({
               role="tab"
               aria-selected={activeTab === 'discover'}
               onClick={() => onTabChange('discover')}
-              className={`group/tab px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer relative ${
-                activeTab === 'discover' ? 'text-white/80 hover:text-white' : 'text-text-dim hover:text-text'
+              className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
+                activeTab === 'discover' ? 'text-white' : 'text-text-dim hover:text-text'
               }`}
             >
               {activeTab === 'discover' && (
                 <motion.span
                   layoutId="activeTabBadge"
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-950/45 via-fuchsia-950/35 to-cyan-950/45 border border-white/15 saturate-[0.8] transition-all duration-300 group-hover/tab:from-[#7C3AED]/85 group-hover/tab:via-[#EC4899]/80 group-hover/tab:to-[#06B6D4]/85 group-hover/tab:border-white/30 group-hover/tab:saturate-[1.1] group-hover/tab:shadow-[0_0_16px_rgba(236,72,153,0.35)]"
+                  className="absolute inset-0 rounded-full mood-gradient shadow-md shadow-violet/20"
                   transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
                 />
               )}
@@ -52,14 +52,14 @@ export function TopBar({
               role="tab"
               aria-selected={activeTab === 'transition'}
               onClick={() => onTabChange('transition')}
-              className={`group/tab px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer relative ${
-                activeTab === 'transition' ? 'text-white/80 hover:text-white' : 'text-text-dim hover:text-text'
+              className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
+                activeTab === 'transition' ? 'text-white' : 'text-text-dim hover:text-text'
               }`}
             >
               {activeTab === 'transition' && (
                 <motion.span
                   layoutId="activeTabBadge"
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-950/45 via-fuchsia-950/35 to-cyan-950/45 border border-white/15 saturate-[0.8] transition-all duration-300 group-hover/tab:from-[#7C3AED]/85 group-hover/tab:via-[#EC4899]/80 group-hover/tab:to-[#06B6D4]/85 group-hover/tab:border-white/30 group-hover/tab:saturate-[1.1] group-hover/tab:shadow-[0_0_16px_rgba(236,72,153,0.35)]"
+                  className="absolute inset-0 rounded-full mood-gradient shadow-md shadow-cyan/20"
                   transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
                 />
               )}
