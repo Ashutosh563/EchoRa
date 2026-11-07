@@ -8,7 +8,6 @@ import { PreviewButton } from './PreviewButton';
 
 interface TrackCardProps {
   track: Track;
-  index: number;
   activePreviewId: string | null;
   previewProgress: number;
   onTogglePreview: (track: Track) => void;
@@ -17,7 +16,6 @@ interface TrackCardProps {
 
 export function TrackCard({
   track,
-  index,
   activePreviewId,
   previewProgress,
   onTogglePreview,
@@ -58,9 +56,12 @@ export function TrackCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.35, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
+      variants={{
+        hidden: shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.98 },
+        visible: shouldReduceMotion
+          ? { opacity: 1, transition: { duration: 0.12 } }
+          : { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', damping: 26, stiffness: 320 } },
+      }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={{

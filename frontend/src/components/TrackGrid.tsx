@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, Music } from 'lucide-react';
 import type { Track } from '../types';
 import { TrackCard } from './TrackCard';
@@ -117,7 +117,6 @@ export function TrackGrid({ tracks }: TrackGridProps) {
           <TrackCard
             key={track.id || index}
             track={track}
-            index={index}
             activePreviewId={activePreviewId}
             previewProgress={previewProgress}
             onTogglePreview={handleTogglePreview}
@@ -131,9 +130,17 @@ export function TrackGrid({ tracks }: TrackGridProps) {
         <SpotifyIcon className="w-3.5 h-3.5 text-text-faint" />
         <span>Track data and artwork provided by Spotify.</span>
       </div>
-      {selectedTrack && (
-        <SongDetailsDialog track={selectedTrack} onClose={() => setSelectedTrack(null)} />
-      )}
+      <AnimatePresence>
+        {selectedTrack && (
+          <SongDetailsDialog
+            track={selectedTrack}
+            onClose={() => setSelectedTrack(null)}
+            isPreviewPlaying={activePreviewId === selectedTrack.id}
+            previewProgress={activePreviewId === selectedTrack.id ? previewProgress : 0}
+            onTogglePreview={handleTogglePreview}
+          />
+        )}
+      </AnimatePresence>
     </section>
   );
 }

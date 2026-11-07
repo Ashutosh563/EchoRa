@@ -24,7 +24,7 @@ interface IntentPanelProps {
 }
 
 export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const { intent, mode } = data;
   const breakdown = intent.breakdown;
 
