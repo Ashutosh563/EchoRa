@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import {
   AudioWaveform,
   Zap,
@@ -23,7 +23,7 @@ interface IntentPanelProps {
   onCopyNotice?: () => void;
 }
 
-export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps) {
+export const IntentPanel = memo(function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { intent, mode } = data;
   const breakdown = intent.breakdown;
@@ -285,4 +285,4 @@ export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps
       </div>}
     </div>
   );
-}
+});
