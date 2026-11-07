@@ -2,7 +2,7 @@ import type { GeminiClient } from "../gemini/geminiClient.js";
 import type { MoodStage, TransitionPlanResponse } from "../../types/transition.js";
 import { AppError } from "../../utils/AppError.js";
 
-const TRANSITION_PLANNER_SYSTEM = `You are SONORA's Emotional Transition Planner.
+const TRANSITION_PLANNER_SYSTEM = `You are ECHORA's Emotional Transition Planner.
 Given a starting mood and a destination mood, produce a coherent, gradual 4-stage emotional and musical transition.
 
 RULES:

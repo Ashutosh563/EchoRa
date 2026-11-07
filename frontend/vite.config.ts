@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 
 // Bind to 127.0.0.1 (not "localhost"): Spotify no longer accepts "localhost"
 // redirect URIs, so the whole app consistently runs on the loopback IP.
-const BACKEND_URL = process.env.SONORA_BACKEND_URL ?? "http://127.0.0.1:4000";
+const BACKEND_URL = process.env.ECHORA_BACKEND_URL ?? "http://127.0.0.1:4000";
 
 export default defineConfig({
   plugins: [react()],

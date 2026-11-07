@@ -51,7 +51,7 @@ const MOCK_SEARCH_RESPONSE: SearchResponse = {
   ],
 };
 
-describe('SONORA App UI', () => {
+describe('ECHORA App UI', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(client, 'getStatus').mockResolvedValue(MOCK_STATUS);

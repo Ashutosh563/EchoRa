@@ -1,4 +1,4 @@
-# EchoRa (SONORA) — AI Mood Music Recommender
+# ECHORA (Phase 1)
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -8,9 +8,7 @@
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-8E75B2?logo=google-gemini&logoColor=white)](https://aistudio.google.com/)
 [![Spotify Web API](https://img.shields.io/badge/Spotify-Web_API-1DB954?logo=spotify&logoColor=white)](https://developer.spotify.com/)
 
-**EchoRa (SONORA)** is an intelligent, multimodal music discovery engine that bridges human emotional states with music. Users express their vibe, environment, or state of mind via natural language text, voice dictation, or camera mood capture. The system extracts structured listening intent through **Google Gemini 2.5 Flash** and dynamically orchestrates catalog retrieval via the **Spotify Web API**.
-
-Beyond simple searches, EchoRa features an emotional trajectory engine that plans and generates multi-stage **Mood Transition Journeys** (e.g., transforming an *anxious* state into a *deeply focused* state across a 4-stage psychological bridge).
+ECHORA enables natural-language music discovery: users describe their vibe, setting, or state of mind (e.g. *"Recommend peaceful instrumental music for studying at 3 AM"*), and the system extracts structured listening intent via **Google Gemini** and retrieves matching tracks via the **Spotify Web API**.
 
 ---
 

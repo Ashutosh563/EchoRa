@@ -6,6 +6,6 @@ const PORT = Number(process.env.PORT) || 4000;
 const app = createApp();
 
 app.listen(PORT, HOST, () => {
-  console.log(`[sonora] backend listening on http://${HOST}:${PORT}`);
+  console.log(`[echora] backend listening on http://${HOST}:${PORT}`);
 });
 

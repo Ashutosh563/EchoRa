@@ -6,7 +6,7 @@ import type {
   UserPreferences,
 } from "../types/discovery";
 
-const STORAGE_KEY = "sonora_discovery_profile_v1";
+const STORAGE_KEY = "echora_discovery_profile_v1";
 const MAX_HISTORY_LENGTH = 100;
 
 export const DEFAULT_PREFERENCES: UserPreferences = {

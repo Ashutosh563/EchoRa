@@ -41,13 +41,13 @@ const silent = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
 
 export const logger = {
   info: (...args: unknown[]) => {
-    if (!silent) console.log(`[sonora] ${format(args)}`);
+    if (!silent) console.log(`[echora] ${format(args)}`);
   },
   warn: (...args: unknown[]) => {
-    if (!silent) console.warn(`[sonora] WARN ${format(args)}`);
+    if (!silent) console.warn(`[echora] WARN ${format(args)}`);
   },
   error: (...args: unknown[]) => {
-    if (!silent) console.error(`[sonora] ERROR ${format(args)}`);
+    if (!silent) console.error(`[echora] ERROR ${format(args)}`);
   },
 };
 
