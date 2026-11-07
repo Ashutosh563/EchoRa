@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Sparkles, ArrowRight, RotateCw, CheckCircle2, Edit3, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 import type { MoodStage } from "../../types/transition";
+import { getMoodTheme } from "../../lib/moodTheme";
 
 interface JourneyReviewCardProps {
   startingMood: string;
@@ -79,6 +80,7 @@ export function JourneyReviewCard({
         {stages.map((stage) => {
           const isIntermediate = stage.stage === 2 || stage.stage === 3;
           const isEditing = editingStage === stage.stage;
+          const stageTheme = getMoodTheme(null, stage.mood);
 
           // Distinct color accents per stage
           const accentColor =
@@ -96,7 +98,8 @@ export function JourneyReviewCard({
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: stage.stage * 0.1 }}
-              className="glass-panel p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4 relative"
+              style={{ "--tile-mood": stageTheme.primary, "--tile-secondary": stageTheme.secondary } as CSSProperties}
+              className="glass-panel p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4 relative mood-stage-card"
             >
               {/* Stage Badge & Label */}
               <div>
@@ -153,6 +156,7 @@ export function JourneyReviewCard({
                 ) : (
                   <div>
                     <h3 className="font-display font-bold text-lg text-text">
+                      <span className="mr-2" aria-hidden="true">{moodEmoji(stage.mood)}</span>
                       {stage.mood}
                     </h3>
                     <p className="text-xs text-text-dim line-clamp-3 pt-1">
@@ -204,5 +208,17 @@ export function JourneyReviewCard({
       </div>
     </div>
   );
+}
+
+function moodEmoji(mood: string): string {
+  const key = mood.toLowerCase();
+  if (/sad|melanchol|lonely|grief/.test(key)) return "🌧️";
+  if (/happy|hopeful|joy|confident/.test(key)) return "☀️";
+  if (/anxious|tense/.test(key)) return "🌫️";
+  if (/relax|peace|calm/.test(key)) return "🌿";
+  if (/energetic|excited|power/.test(key)) return "⚡";
+  if (/nostalg/.test(key)) return "📼";
+  if (/dream|romantic|love/.test(key)) return "✨";
+  return "🌙";
 }
 

@@ -3,6 +3,7 @@ import { Sparkles, Music } from 'lucide-react';
 import type { Track } from '../types';
 import { TrackCard } from './TrackCard';
 import { SpotifyIcon } from './ConnectSpotifyButton';
+import { SongDetailsDialog } from './SongDetailsDialog';
 
 interface TrackGridProps {
   tracks: Track[];
@@ -11,6 +12,7 @@ interface TrackGridProps {
 export function TrackGrid({ tracks }: TrackGridProps) {
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
   const [previewProgress, setPreviewProgress] = useState(0);
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -107,6 +109,7 @@ export function TrackGrid({ tracks }: TrackGridProps) {
             activePreviewId={activePreviewId}
             previewProgress={previewProgress}
             onTogglePreview={handleTogglePreview}
+            onSelectTrack={setSelectedTrack}
           />
         ))}
       </div>
@@ -116,6 +119,9 @@ export function TrackGrid({ tracks }: TrackGridProps) {
         <SpotifyIcon className="w-3.5 h-3.5 text-text-faint" />
         <span>Track data and artwork provided by Spotify.</span>
       </div>
+      {selectedTrack && (
+        <SongDetailsDialog track={selectedTrack} onClose={() => setSelectedTrack(null)} />
+      )}
     </section>
   );
 }

@@ -7,6 +7,8 @@ import {
 import { motion } from "framer-motion";
 import type { TransitionJourneyResponse } from "../../types/transition";
 import { formatDuration } from "../../lib/format";
+import { getMoodTheme } from "../../lib/moodTheme";
+import type { CSSProperties } from "react";
 
 interface LayeredPlaylistViewProps {
   journey: TransitionJourneyResponse;
@@ -85,6 +87,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
       <div className="space-y-8">
         {journey.stages.map((stage) => {
           const styling = stageColors[stage.stage] || stageColors[1];
+          const moodTheme = getMoodTheme(null, stage.mood);
 
           return (
             <motion.section
@@ -92,7 +95,8 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: stage.stage * 0.1 }}
-              className={`rounded-2xl border ${styling.border} ${styling.bg} p-6 sm:p-7 relative transition-all shadow-glass`}
+              style={{ "--tile-mood": moodTheme.primary, "--tile-secondary": moodTheme.secondary } as CSSProperties}
+              className={`mood-stage-card rounded-2xl border ${styling.border} ${styling.bg} p-6 sm:p-7 relative transition-all shadow-glass`}
             >
               {/* Stage Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
@@ -106,6 +110,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                     </span>
                   </div>
                   <h2 className="font-display font-extrabold text-2xl text-text">
+                    <span className="mr-2" aria-hidden="true">{moodEmoji(stage.mood)}</span>
                     {stage.mood}
                   </h2>
                   <p className="text-xs sm:text-sm text-text-dim max-w-xl">
@@ -202,4 +207,16 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
       </div>
     </div>
   );
+}
+
+function moodEmoji(mood: string): string {
+  const key = mood.toLowerCase();
+  if (/sad|melanchol|lonely|grief/.test(key)) return "🌧️";
+  if (/happy|hopeful|joy|confident/.test(key)) return "☀️";
+  if (/anxious|tense/.test(key)) return "🌫️";
+  if (/relax|peace|calm/.test(key)) return "🌿";
+  if (/energetic|excited|power/.test(key)) return "⚡";
+  if (/nostalg/.test(key)) return "📼";
+  if (/dream|romantic|love/.test(key)) return "✨";
+  return "🌙";
 }

@@ -41,7 +41,7 @@ export function TopBar({
               {activeTab === 'discover' && (
                 <motion.span
                   layoutId="activeTabBadge"
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-violet/90 to-magenta/80 shadow-md shadow-violet/20"
+                  className="absolute inset-0 rounded-full mood-gradient shadow-md shadow-violet/20"
                   transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
                 />
               )}
@@ -59,7 +59,7 @@ export function TopBar({
               {activeTab === 'transition' && (
                 <motion.span
                   layoutId="activeTabBadge"
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-violet/90 to-cyan/80 shadow-md shadow-cyan/20"
+                  className="absolute inset-0 rounded-full mood-gradient shadow-md shadow-cyan/20"
                   transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
                 />
               )}
@@ -78,7 +78,7 @@ export function TopBar({
               title="Taste Preferences"
               className="glass-pill p-2 sm:px-3 sm:py-1.5 flex items-center gap-1.5 text-xs font-medium text-text-dim hover:text-text hover:bg-white/[0.08] transition-all cursor-pointer border border-white/10"
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-violet" />
+              <SlidersHorizontal className="w-3.5 h-3.5 mood-accent-text" />
               <span className="hidden sm:inline font-medium">Preferences</span>
             </button>
           )}

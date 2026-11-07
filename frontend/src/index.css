@@ -18,6 +18,10 @@
   --live-status: #34D399;
   --mock-status: #FBBF24;
   --error: #F87171;
+  --mood-primary: #8B5CF6;
+  --mood-secondary: #22D3EE;
+  --mood-accent: #EC4899;
+  --mood-accent-2: #F59E0B;
 }
 
 body {
@@ -31,12 +35,69 @@ body {
 
 /* Glass panel style */
 .glass-panel {
-  background: var(--surface);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--mood-primary) 5%, transparent), transparent 48%),
+    var(--surface);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 16px 40px rgba(0, 0, 0, 0.08);
   border-radius: 20px;
+}
+
+/* Mood-responsive liquid surfaces. The dark base stays stable while accents
+   and reflections gently follow the interpreted listening mood. */
+.mood-shell {
+  transition: color 900ms ease;
+}
+
+.mood-accent-text {
+  color: var(--mood-primary);
+  transition: color 900ms ease;
+}
+
+.mood-surface {
+  background: color-mix(in srgb, var(--mood-primary) 12%, rgba(255, 255, 255, 0.04));
+  border-color: color-mix(in srgb, var(--mood-primary) 38%, rgba(255, 255, 255, 0.12));
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--mood-primary) 13%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  transition: background 900ms ease, border-color 900ms ease, box-shadow 900ms ease;
+}
+
+.mood-gradient {
+  background: linear-gradient(135deg, var(--mood-primary), var(--mood-secondary) 55%, var(--mood-accent));
+  transition: background 900ms ease, box-shadow 900ms ease;
+}
+
+.mood-cta {
+  background: linear-gradient(135deg, var(--mood-primary), var(--mood-secondary) 55%, var(--mood-accent));
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--mood-primary) 35%, transparent), 0 0 20px color-mix(in srgb, var(--mood-accent) 24%, transparent);
+  transition: background 900ms ease, box-shadow 400ms ease, filter 200ms ease, transform 200ms ease;
+}
+
+.mood-cta:hover:not(:disabled) {
+  filter: brightness(1.12) saturate(1.08);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--mood-primary) 45%, transparent), 0 0 30px color-mix(in srgb, var(--mood-accent) 35%, transparent);
+}
+
+.mood-choice-selected {
+  border-color: color-mix(in srgb, var(--tile-mood) 65%, white 10%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--tile-mood) 24%, rgba(255,255,255,.06)), color-mix(in srgb, var(--tile-secondary) 16%, rgba(255,255,255,.035)));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--tile-mood) 22%, transparent), inset 0 1px 0 rgba(255,255,255,.2);
+}
+
+.mood-choice-selected::after {
+  content: "";
+  position: absolute;
+  inset: -45% -20%;
+  background: radial-gradient(ellipse at 25% 20%, color-mix(in srgb, var(--tile-mood) 28%, transparent), transparent 58%);
+  pointer-events: none;
+}
+
+.mood-stage-card {
+  border-color: color-mix(in srgb, var(--tile-mood) 28%, rgba(255,255,255,.12));
+  background-image: linear-gradient(135deg, color-mix(in srgb, var(--tile-mood) 10%, transparent), color-mix(in srgb, var(--tile-secondary) 6%, transparent) 55%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.11), 0 16px 36px color-mix(in srgb, var(--tile-mood) 8%, transparent);
+  transition: border-color 700ms ease, background 700ms ease, box-shadow 700ms ease;
 }
 
 .glass-panel-strong {

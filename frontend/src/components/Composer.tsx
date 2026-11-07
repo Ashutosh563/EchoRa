@@ -126,22 +126,14 @@ export function Composer({
 
             {/* Discover Button with Deeply Saturated Neon Gradient & Kinetic Pop-Out */}
             <div className="relative group/btn">
-              {/* 1. Ultra-saturated wide ambient neon aura */}
+              {/* Ambient color stays hidden until the CTA is hovered or focused. */}
               <div
-                className={`absolute -inset-3 rounded-full bg-gradient-to-r from-[#7928CA] via-[#FF0080] to-[#00DFD8] blur-xl transition-all duration-300 pointer-events-none saturate-[2.2] ${
-                  canSubmit
-                    ? 'opacity-75 group-hover/btn:opacity-100 group-hover/btn:scale-130 group-hover/btn:blur-2xl'
-                    : 'opacity-30 group-hover/btn:opacity-60 group-hover/btn:scale-110'
-                }`}
+                className={`absolute -inset-3 rounded-full bg-gradient-to-r from-[#7928CA] via-[#FF0080] to-[#00DFD8] blur-xl opacity-0 transition-all duration-300 pointer-events-none saturate-[2.2] group-hover/btn:opacity-70 group-hover/btn:scale-110 group-hover/btn:blur-2xl group-focus-within/btn:opacity-70 ${!canSubmit ? 'group-hover/btn:opacity-30' : ''}`}
               />
 
-              {/* 2. Concentrated high-chroma core halo */}
+              {/* A smaller focus halo keeps the resting button edge clean. */}
               <div
-                className={`absolute -inset-1 rounded-full bg-gradient-to-r from-[#8A00E6] via-[#FF007F] to-[#00F0FF] blur-md transition-all duration-200 pointer-events-none saturate-[2] ${
-                  canSubmit
-                    ? 'opacity-90 group-hover/btn:opacity-100 group-hover/btn:blur-lg'
-                    : 'opacity-25 group-hover/btn:opacity-55'
-                }`}
+                className={`absolute -inset-1 rounded-full bg-gradient-to-r from-[#8A00E6] via-[#FF007F] to-[#00F0FF] blur-md opacity-0 transition-all duration-200 pointer-events-none saturate-[2] group-hover/btn:opacity-85 group-hover/btn:blur-lg group-focus-within/btn:opacity-85 ${!canSubmit ? 'group-hover/btn:opacity-30' : ''}`}
               />
 
               <motion.button
@@ -160,7 +152,7 @@ export function Composer({
                 }
                 className={`relative z-10 px-6 py-2.5 rounded-full font-display font-extrabold text-sm tracking-wide flex items-center gap-2 cursor-pointer transition-all duration-200 select-none saturate-[1.8] contrast-[1.1] ${
                   canSubmit
-                    ? 'bg-gradient-to-r from-[#6D28D9] via-[#EC4899] to-[#0284C7] hover:from-[#7C3AED] hover:via-[#FF007F] hover:to-[#00F0FF] text-white border-2 border-fuchsia-300/80 hover:border-cyan-300 shadow-[0_0_24px_rgba(255,0,128,0.7),0_0_14px_rgba(109,40,217,0.7)] hover:shadow-[0_0_42px_#FF007F,0_0_28px_#7C3AED,0_0_22px_#00F0FF] hover:brightness-110'
+                    ? 'mood-cta text-white border-2 border-white/50 hover:border-white/80'
                     : 'bg-gradient-to-r from-violet-900/40 via-fuchsia-900/35 to-cyan-900/40 text-white/75 border border-fuchsia-500/30 hover:border-fuchsia-400/60 hover:shadow-[0_0_18px_rgba(236,72,153,0.5)] cursor-not-allowed opacity-75'
                 }`}
                 aria-label="Discover music"

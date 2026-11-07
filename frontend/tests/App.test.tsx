@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import App from '../src/App';
@@ -90,7 +90,9 @@ describe('SONORA App UI', () => {
 
     // Results render
     await waitFor(() => {
-      expect(screen.getByText('How I heard you')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /How I heard you/i })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText('Your listening mood')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /View search details/i })).not.toBeInTheDocument();
       expect(screen.getByText('Peaceful Mind')).toBeInTheDocument();
       expect(screen.getByText('Ambient Artist')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /Open "Peaceful Mind" on Spotify/i })).toHaveAttribute(
@@ -98,6 +100,19 @@ describe('SONORA App UI', () => {
         'https://open.spotify.com/track/track-1'
       );
     });
+
+    await user.click(screen.getByRole('button', { name: /How I heard you/i }));
+    expect(screen.getByRole('button', { name: /How I heard you/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Your listening mood')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /View search details/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /View details for Peaceful Mind/i }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('dialog').querySelector('img')).toHaveAttribute('src', 'https://example.com/art.jpg');
+    expect(within(screen.getByRole('dialog')).getByRole('heading', { name: 'Peaceful Mind' })).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByText('Midnight Thoughts')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close song details' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('displays error card when search fails', async () => {

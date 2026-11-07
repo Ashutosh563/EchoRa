@@ -5,6 +5,8 @@ import type { AppConfig } from "../../src/config/env.js";
 const baseConfig: AppConfig = {
   geminiApiKey: null,
   geminiModel: "gemini-flash-latest",
+  openaiApiKey: null,
+  openaiModel: "gpt-4o-mini",
   spotifyClientId: null,
   spotifyClientSecret: null,
   spotifyRedirectUri: "http://127.0.0.1:4000/api/spotify/callback",
@@ -14,7 +16,7 @@ const baseConfig: AppConfig = {
 
 describe("modeResolver", () => {
   it("resolves to mock mode when no credentials are provided", () => {
-    const credState = { geminiValid: null, spotifyValid: null };
+    const credState = { geminiValid: null, openaiValid: null, spotifyValid: null };
     const res = resolveAppMode(baseConfig, credState, null);
 
     expect(res.searchMode).toBe("mock");
@@ -24,7 +26,7 @@ describe("modeResolver", () => {
 
   it("enables live interpretMode when only Gemini is configured", () => {
     const config = { ...baseConfig, geminiApiKey: "fake-gemini-key" };
-    const credState = { geminiValid: true, spotifyValid: null };
+    const credState = { geminiValid: true, openaiValid: null, spotifyValid: null };
     const res = resolveAppMode(config, credState, null);
 
     expect(res.interpretMode).toBe("live");
@@ -38,7 +40,7 @@ describe("modeResolver", () => {
       spotifyClientId: "sp-id",
       spotifyClientSecret: "sp-sec",
     };
-    const credState = { geminiValid: true, spotifyValid: true };
+    const credState = { geminiValid: true, openaiValid: null, spotifyValid: true };
     const mockAuth = {
       isAuthorized: () => true,
     } as any;
