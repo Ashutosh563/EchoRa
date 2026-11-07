@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   AudioWaveform,
   Zap,
@@ -10,6 +11,7 @@ import {
   Sunset,
   Moon,
   Sparkles,
+  ChevronDown,
 } from 'lucide-react';
 import type { SearchResponse } from '../types';
 import { IntentTile } from './IntentTile';
@@ -22,7 +24,8 @@ interface IntentPanelProps {
 }
 
 export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps) {
-  const { intent, queries, mode } = data;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { intent, mode } = data;
   const breakdown = intent.breakdown;
 
   // Time context icon mapping
@@ -89,11 +92,23 @@ export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps
   const energyLevel = getEnergySegments();
 
   return (
-    <div className="glass-panel p-5 sm:p-6 mb-8 rounded-card border border-white/10 shadow-glass">
+    <div className="mb-8">
+      <button
+        type="button"
+        aria-expanded={isExpanded}
+        aria-controls="how-i-heard-you-panel"
+        onClick={() => setIsExpanded((expanded) => !expanded)}
+        className="glass-pill inline-flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-text hover:bg-white/[0.08] border border-white/10 transition-all cursor-pointer"
+      >
+        <AudioWaveform className="w-4 h-4 mood-accent-text" />
+        <span>How I heard you</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isExpanded && <div id="how-i-heard-you-panel" className="glass-panel mt-3 p-5 sm:p-6 rounded-card border border-white/10 shadow-glass">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/[0.08] mb-4">
         <div className="flex items-center gap-2">
-          <AudioWaveform className="w-4 h-4 text-violet" />
           <h2 className="font-display font-semibold text-sm sm:text-base text-text">
             How I heard you
           </h2>
@@ -118,6 +133,19 @@ export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps
           &ldquo;{userPrompt}&rdquo;
         </blockquote>
       )}
+
+      <div className="mood-surface rounded-2xl border border-white/10 px-4 py-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="text-[10px] uppercase tracking-[0.16em] text-text-faint font-semibold">
+          Your listening mood
+        </span>
+        <span className="text-sm font-display font-semibold capitalize text-text">
+          {intent.mood || 'Open'}
+        </span>
+        {intent.activity && <span className="text-xs text-text-dim">for {intent.activity}</span>}
+        {intent.time_context && intent.time_context !== 'any' && (
+          <span className="text-xs text-text-dim">· {intent.time_context.replace('_', ' ')}</span>
+        )}
+      </div>
 
       {/* Grid of 7 Intent Tiles (2 cols on mobile, 4 on desktop) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
@@ -245,12 +273,16 @@ export function IntentPanel({ data, userPrompt, onCopyNotice }: IntentPanelProps
         </IntentTile>
       </div>
 
-      {/* Query Line at bottom */}
-      <QueryLine
-        primary={queries.primary}
-        alternatives={queries.alternatives}
-        onCopyNotice={onCopyNotice}
-      />
+      {/* Spotify Search Queries Generated */}
+      {data.queries && (
+        <QueryLine
+          primary={data.queries.primary}
+          alternatives={data.queries.alternatives}
+          onCopyNotice={onCopyNotice}
+        />
+      )}
+
+      </div>}
     </div>
   );
 }

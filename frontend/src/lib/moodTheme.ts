@@ -10,9 +10,9 @@ export interface MoodTheme {
   opacity: number;
 }
 
-export function getMoodTheme(intent?: MusicIntent | null): MoodTheme {
+export function getMoodTheme(intent?: MusicIntent | null, moodOverride?: string): MoodTheme {
   const energy: Energy = intent?.energy ?? 'medium';
-  const mood = (intent?.mood ?? '').toLowerCase();
+  const mood = (moodOverride ?? intent?.mood ?? '').toLowerCase();
 
   // Energy modifies animation speed & opacity
   let animationDuration = 30;

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMoodTransition } from "../../hooks/useMoodTransition";
 import { MoodSelectorSection } from "./MoodSelectorSection";
 import { JourneyReviewCard } from "./JourneyReviewCard";
@@ -5,7 +6,7 @@ import { LayeredPlaylistView } from "./LayeredPlaylistView";
 import { ThinkingState } from "../ThinkingState";
 import { ErrorCard } from "../ErrorCard";
 
-export function MoodTransitionPage() {
+export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: string | undefined) => void }) {
   const {
     status,
     startingMood,
@@ -21,6 +22,15 @@ export function MoodTransitionPage() {
     approveAndGenerateMusic,
     reset,
   } = useMoodTransition();
+
+  useEffect(() => {
+    const paletteMood = status === "playlist" && journey
+      ? journey.stages[Math.floor((journey.stages.length - 1) / 2)]?.mood || startingMood
+      : status === "review"
+      ? stages[1]?.mood || startingMood
+      : startingMood || destinationMood || undefined;
+    onMoodChange?.(paletteMood);
+  }, [onMoodChange, status, startingMood, destinationMood, stages, journey]);
 
   if (status === "planning") {
     return (

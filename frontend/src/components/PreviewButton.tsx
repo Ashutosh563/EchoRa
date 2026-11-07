@@ -1,4 +1,4 @@
-import { Play, Pause } from 'lucide-react';
+import { Play } from 'lucide-react';
 
 interface PreviewButtonProps {
   isPlaying: boolean;
@@ -48,7 +48,11 @@ export function PreviewButton({ isPlaying, onToggle, progress = 0 }: PreviewButt
       </svg>
 
       {isPlaying ? (
-        <Pause className="w-4 h-4 fill-white text-white ml-0" />
+        <div className="flex items-end justify-center gap-[2.5px] h-4 w-4">
+          <span className="w-[2.5px] bg-spotify rounded-full eq-bar-1" />
+          <span className="w-[2.5px] bg-spotify rounded-full eq-bar-2" />
+          <span className="w-[2.5px] bg-spotify rounded-full eq-bar-3" />
+        </div>
       ) : (
         <Play className="w-4 h-4 fill-white text-white ml-0.5" />
       )}

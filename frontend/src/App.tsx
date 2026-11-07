@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { AuroraBackground } from './components/AuroraBackground';
 import { TopBar } from './components/TopBar';
@@ -44,6 +44,7 @@ export default function App({ api }: AppProps = {}) {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'discover' | 'transition'>('discover');
+  const [transitionMood, setTransitionMood] = useState<string | undefined>();
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -53,7 +54,13 @@ export default function App({ api }: AppProps = {}) {
   }, []);
 
   // Aurora mood theme retints smoothly based on intent
-  const theme = useMoodTheme(data?.intent);
+  const theme = useMoodTheme(data?.intent, activeTab === 'transition' ? transitionMood : undefined);
+  const moodStyle = {
+    '--mood-primary': theme.primary,
+    '--mood-secondary': theme.secondary,
+    '--mood-accent': theme.accent1,
+    '--mood-accent-2': theme.accent2,
+  } as CSSProperties;
 
   // Toast management with auto-dismiss duration
   const addToast = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info', durationMs = 3000) => {
@@ -86,6 +93,8 @@ export default function App({ api }: AppProps = {}) {
     const trimmed = searchPrompt.trim();
     if (!trimmed) return;
 
+    setPrompt(trimmed);
+
     // Add to search history (keep last 6)
     setRecentSearches((prev) => {
       const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
@@ -116,7 +125,11 @@ export default function App({ api }: AppProps = {}) {
   const hasSearched = searchStatus === 'success' || searchStatus === 'loading' || Boolean(data);
 
   return (
-    <div className="relative min-h-screen flex flex-col font-sans selection:bg-magenta/30 selection:text-text">
+    <div
+      className="mood-shell relative min-h-screen flex flex-col font-sans selection:bg-magenta/30 selection:text-text"
+      style={moodStyle}
+      data-mood={data?.intent?.mood || 'neutral'}
+    >
       {/* Background Aurora */}
       <AuroraBackground theme={theme} />
 
@@ -138,7 +151,7 @@ export default function App({ api }: AppProps = {}) {
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             className="w-full flex-1 flex flex-col"
           >
-            <MoodTransitionPage />
+            <MoodTransitionPage onMoodChange={setTransitionMood} />
           </motion.div>
         ) : (
           <motion.div

@@ -7,6 +7,8 @@ import {
 import { motion } from "framer-motion";
 import type { TransitionJourneyResponse } from "../../types/transition";
 import { formatDuration } from "../../lib/format";
+import { getMoodTheme } from "../../lib/moodTheme";
+import type { CSSProperties } from "react";
 
 interface LayeredPlaylistViewProps {
   journey: TransitionJourneyResponse;
@@ -85,6 +87,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
       <div className="space-y-8">
         {journey.stages.map((stage) => {
           const styling = stageColors[stage.stage] || stageColors[1];
+          const moodTheme = getMoodTheme(null, stage.mood);
 
           return (
             <motion.section
@@ -92,7 +95,15 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: stage.stage * 0.1 }}
-              className={`rounded-2xl border ${styling.border} ${styling.bg} p-6 sm:p-7 relative transition-all shadow-glass`}
+              style={
+                {
+                  "--tile-mood": moodTheme.primary,
+                  "--tile-secondary": moodTheme.secondary,
+                  "--tile-accent": moodTheme.accent1,
+                  "--tile-accent-2": moodTheme.accent2,
+                } as CSSProperties
+              }
+              className={`mood-stage-card rounded-2xl border ${styling.border} ${styling.bg} p-6 sm:p-7 relative transition-all shadow-glass`}
             >
               {/* Stage Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
@@ -106,6 +117,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                     </span>
                   </div>
                   <h2 className="font-display font-extrabold text-2xl text-text">
+                    <span className="mr-2" aria-hidden="true">{moodEmoji(stage.mood)}</span>
                     {stage.mood}
                   </h2>
                   <p className="text-xs sm:text-sm text-text-dim max-w-xl">
@@ -134,10 +146,15 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                   {stage.tracks.map((track) => (
                     <div
                       key={track.id}
-                      className="p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
+                      className="relative overflow-hidden p-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.06] border border-white/10 hover:border-white/25 transition-all duration-200 flex flex-col justify-between gap-3 group/track hover:-translate-y-1 hover:shadow-lg shadow-black/20"
                     >
+                      {/* Soft Moving Mood-Responsive Aurora Animation in Card Background on Hover */}
+                      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover/track:opacity-25 transition-opacity duration-500">
+                        <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic stage-conic-aurora blur-[16px]" />
+                      </div>
+
                       {/* Top: Album Art + Track Info */}
-                      <div className="flex items-start gap-3 min-w-0">
+                      <div className="relative z-10 flex items-start gap-3 min-w-0">
                         {track.albumArtUrl ? (
                           <img
                             src={track.albumArtUrl}
@@ -170,7 +187,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                       </div>
 
                       {/* Bottom Row: Duration & Play on Spotify Button */}
-                      <div className="flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-auto">
+                      <div className="relative z-10 flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-auto">
                         {track.durationMs ? (
                           <span className="text-[11px] font-mono text-text-faint">
                             {formatDuration(track.durationMs)}
@@ -202,4 +219,16 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
       </div>
     </div>
   );
+}
+
+function moodEmoji(mood: string): string {
+  const key = mood.toLowerCase();
+  if (/sad|melanchol|lonely|grief/.test(key)) return "🌧️";
+  if (/happy|hopeful|joy|confident/.test(key)) return "☀️";
+  if (/anxious|tense/.test(key)) return "🌫️";
+  if (/relax|peace|calm/.test(key)) return "🌿";
+  if (/energetic|excited|power/.test(key)) return "⚡";
+  if (/nostalg/.test(key)) return "📼";
+  if (/dream|romantic|love/.test(key)) return "✨";
+  return "🌙";
 }
