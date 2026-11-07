@@ -1,5 +1,4 @@
 import { memo } from 'react';
-import { motion } from 'framer-motion';
 import { Mic } from 'lucide-react';
 
 interface MicButtonProps {
@@ -30,15 +29,6 @@ export const MicButton = memo(function MicButton({
     );
   }
 
-  // 5 animated waveform bars when listening
-  const waveformBars = [
-    { duration: 0.45, delay: 0 },
-    { duration: 0.65, delay: 0.12 },
-    { duration: 0.5, delay: 0.05 },
-    { duration: 0.7, delay: 0.18 },
-    { duration: 0.4, delay: 0.08 },
-  ];
-
   return (
     <div className="relative inline-flex items-center justify-center">
       {/* Expanding Pulse Rings when listening */}
@@ -55,7 +45,7 @@ export const MicButton = memo(function MicButton({
         disabled={disabled}
         title={isListening ? 'Stop voice dictation' : 'Dictate your mood with voice'}
         aria-label={isListening ? 'Stop voice listening' : 'Start voice input'}
-        className={`relative z-10 h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-semibold transition-all cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`relative z-10 h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-semibold transition-[transform,border-color,box-shadow,background-color,color] duration-200 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed ${
           isListening
             ? 'bg-gradient-to-r from-magenta to-violet text-white shadow-[0_0_20px_rgba(236,72,153,0.55)] scale-[1.03] border border-white/30'
             : 'bg-violet/15 hover:bg-violet/25 text-white/90 hover:text-white border border-violet/40 hover:border-magenta/60 shadow-[0_0_16px_rgba(139,92,246,0.2)] hover:shadow-[0_0_20px_rgba(236,72,153,0.35)] active:scale-95'
@@ -63,22 +53,13 @@ export const MicButton = memo(function MicButton({
       >
         {isListening ? (
           <>
-            {/* Live 5-bar Waveform */}
-            <div className="flex items-center gap-[2px] h-3.5 justify-center">
-              {waveformBars.map((bar, idx) => (
-                <motion.div
-                  key={idx}
-                  className="w-[2px] rounded-full bg-white"
-                  style={{ height: '12px', transformOrigin: 'center' }}
-                  animate={{ scaleY: [0.3, 1, 0.3] }}
-                  transition={{
-                    duration: bar.duration,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                    delay: bar.delay,
-                  }}
-                />
-              ))}
+            {/* Compositor-driven CSS Waveform (zero JS rAF overhead) */}
+            <div className="flex items-end gap-[2px] h-3.5 justify-center" aria-hidden="true">
+              <span className="w-[2px] rounded-full bg-white eq-bar-1" />
+              <span className="w-[2px] rounded-full bg-white eq-bar-2" />
+              <span className="w-[2px] rounded-full bg-white eq-bar-3" />
+              <span className="w-[2px] rounded-full bg-white eq-bar-2" />
+              <span className="w-[2px] rounded-full bg-white eq-bar-1" />
             </div>
             <span className="tracking-wide">Listening…</span>
           </>

@@ -15,21 +15,38 @@ interface ComposerProps {
   onOpenCamera?: () => void;
 }
 
-export const Composer = memo(function Composer({
+interface ComposerTextareaProps {
+  value: string;
+  isFocused: boolean;
+  isLoading: boolean;
+  isListening: boolean;
+  onChange: (value: string) => void;
+  onFocus: () => void;
+  onBlur: () => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+}
+
+/**
+ * Isolated textarea component so that `useTypewriter` ticks (every 28–55ms when idle)
+ * only reconcile the `<textarea>` node and never re-render the Composer toolbar buttons.
+ */
+const ComposerTextarea = memo(function ComposerTextarea({
   value,
-  onChange,
-  onSubmit,
+  isFocused,
   isLoading,
   isListening,
-  isMicSupported,
-  onToggleMic,
-  onOpenCamera,
-}: ComposerProps) {
-  const [isFocused, setIsFocused] = useState(false);
+  onChange,
+  onFocus,
+  onBlur,
+  onKeyDown,
+}: ComposerTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Typewriter placeholder stops when focused or has text
-  const typewriterText = useTypewriter(undefined, isFocused || value.length > 0);
+  // Typewriter placeholder stops when focused, dictating, loading, or has text
+  const typewriterText = useTypewriter(
+    undefined,
+    isFocused || isListening || isLoading || value.length > 0
+  );
 
   // Auto-grow textarea height only when value changes (skip layout read when empty)
   useEffect(() => {
@@ -43,6 +60,39 @@ export const Composer = memo(function Composer({
     const newHeight = Math.min(Math.max(el.scrollHeight, 60), 160);
     el.style.height = `${newHeight}px`;
   }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value}
+      onChange={(e) => onChange(e.target.value.slice(0, 300))}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
+      placeholder={
+        isFocused
+          ? 'e.g. Peaceful instrumental music for studying at 3 AM...'
+          : typewriterText
+      }
+      disabled={isLoading}
+      rows={2}
+      className="w-full bg-transparent resize-none border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"
+      aria-label="Describe what you want to listen to"
+    />
+  );
+});
+
+export const Composer = memo(function Composer({
+  value,
+  onChange,
+  onSubmit,
+  isLoading,
+  isListening,
+  isMicSupported,
+  onToggleMic,
+  onOpenCamera,
+}: ComposerProps) {
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -104,19 +154,16 @@ export const Composer = memo(function Composer({
           </div>
         )}
 
-        {/* Textarea with enhanced whitish font and bright visible placeholder */}
-        <textarea
-          ref={textareaRef}
+        {/* Isolated Textarea with Typewriter Placeholder */}
+        <ComposerTextarea
           value={value}
-          onChange={(e) => onChange(e.target.value.slice(0, 300))}
+          isFocused={isFocused}
+          isLoading={isLoading}
+          isListening={isListening}
+          onChange={onChange}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onKeyDown={handleKeyDown}
-          placeholder={isFocused ? 'e.g. Peaceful instrumental music for studying at 3 AM...' : typewriterText}
-          disabled={isLoading}
-          rows={2}
-          className="w-full bg-transparent resize-none border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"
-          aria-label="Describe what you want to listen to"
         />
 
         {/* Bottom Toolbar Row: Prominent Multimodal Pills (Left) + Counter & Discover CTA (Right) */}
@@ -130,7 +177,7 @@ export const Composer = memo(function Composer({
                 disabled={isLoading}
                 title="Analyze mood with camera"
                 aria-label="Analyze mood with camera"
-                className="h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-semibold bg-cyan/12 hover:bg-cyan/22 text-white/90 hover:text-white border border-cyan/35 hover:border-cyan/65 shadow-[0_0_16px_rgba(34,211,238,0.18)] hover:shadow-[0_0_22px_rgba(34,211,238,0.38)] active:scale-95 transition-all cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-semibold bg-cyan/12 hover:bg-cyan/22 text-white/90 hover:text-white border border-cyan/35 hover:border-cyan/65 shadow-[0_0_16px_rgba(34,211,238,0.18)] hover:shadow-[0_0_22px_rgba(34,211,238,0.38)] active:scale-95 transition-[transform,border-color,box-shadow,background-color,color] duration-200 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="w-5 h-5 rounded-full bg-cyan/25 border border-cyan/40 flex items-center justify-center text-cyan shrink-0">
                   <Camera className="w-3 h-3" />
