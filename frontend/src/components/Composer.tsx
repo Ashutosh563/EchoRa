@@ -54,18 +54,11 @@ export function Composer({
 
   return (
     <div className="relative w-full max-w-[760px] mx-auto group">
-      {/* Rotating Conic Gradient Glow while focused */}
-      {isFocused && (
-        <div className="absolute -inset-[2px] rounded-[22px] overflow-hidden -z-10 pointer-events-none opacity-80 transition-opacity">
-          <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic bg-[conic-gradient(from_0deg,#8B5CF6,#EC4899,#22D3EE,#8B5CF6)] blur-[6px]" />
-        </div>
-      )}
-
       {/* Main Glass Card */}
       <div
         className={`glass-panel p-4 sm:p-5 transition-all duration-300 relative ${
           isFocused
-            ? 'border-white/25 bg-surface-strong shadow-glass-elevated'
+            ? 'border-white/20 shadow-glass-elevated'
             : 'border-white/10 hover:border-white/15'
         }`}
       >
@@ -88,7 +81,7 @@ export function Composer({
           placeholder={isFocused ? 'e.g. Peaceful instrumental music for studying at 3 AM...' : typewriterText}
           disabled={isLoading}
           rows={2}
-          className="w-full bg-transparent resize-none outline-none text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"
+          className="w-full bg-transparent resize-none border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-white placeholder:text-white/80 text-base sm:text-lg leading-relaxed font-medium"
           aria-label="Describe what you want to listen to"
         />
 
