@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Music, ExternalLink } from 'lucide-react';
 import type { Track } from '../types';
@@ -8,14 +8,16 @@ import { PreviewButton } from './PreviewButton';
 
 interface TrackCardProps {
   track: Track;
-  activePreviewId: string | null;
+  isPreviewPlaying?: boolean;
+  activePreviewId?: string | null;
   previewProgress: number;
   onTogglePreview: (track: Track) => void;
   onSelectTrack: (track: Track) => void;
 }
 
-export function TrackCard({
+export const TrackCard = memo(function TrackCard({
   track,
+  isPreviewPlaying: isPreviewPlayingProp,
   activePreviewId,
   previewProgress,
   onTogglePreview,
@@ -25,54 +27,99 @@ export function TrackCard({
   const [artLoaded, setArtLoaded] = useState(false);
   const [artFailed, setArtFailed] = useState(false);
 
-  // 3D tilt state
-  const [rotateX, setRotateX] = useState(0);
-  const [rotateY, setRotateY] = useState(0);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const rectRef = useRef<DOMRect | null>(null);
+  const rafRef = useRef<number | null>(null);
 
-  const isPreviewPlaying = activePreviewId === track.id;
+  const isPreviewPlaying =
+    typeof isPreviewPlayingProp === 'boolean'
+      ? isPreviewPlayingProp
+      : activePreviewId === track.id;
   const durationText = formatDuration(track.durationMs);
   const artistText = track.artists?.join(', ') || 'Unknown Artist';
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (shouldReduceMotion) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
 
-    // Subtle 4 degrees tilt for premium liquid glass feel
-    const rX = ((y - centerY) / centerY) * -4;
-    const rY = ((x - centerX) / centerX) * 4;
+  const handleMouseEnter = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (shouldReduceMotion) return;
+      rectRef.current = e.currentTarget.getBoundingClientRect();
+    },
+    [shouldReduceMotion]
+  );
 
-    setRotateX(rX);
-    setRotateY(rY);
-  };
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (shouldReduceMotion || !cardRef.current) return;
+      const clientX = e.clientX;
+      const clientY = e.clientY;
 
-  const handleMouseLeave = () => {
-    setRotateX(0);
-    setRotateY(0);
-  };
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+
+      rafRef.current = requestAnimationFrame(() => {
+        const el = cardRef.current;
+        if (!el) return;
+        const rect = rectRef.current ?? el.getBoundingClientRect();
+        rectRef.current = rect;
+
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+
+        // Subtle 4 degrees tilt via CSS custom properties (zero React re-renders)
+        const rX = ((y - centerY) / (centerY || 1)) * -4;
+        const rY = ((x - centerX) / (centerX || 1)) * 4;
+
+        el.style.setProperty('--rx', `${rX.toFixed(2)}deg`);
+        el.style.setProperty('--ry', `${rY.toFixed(2)}deg`);
+        rafRef.current = null;
+      });
+    },
+    [shouldReduceMotion]
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    rectRef.current = null;
+    if (cardRef.current) {
+      cardRef.current.style.setProperty('--rx', '0deg');
+      cardRef.current.style.setProperty('--ry', '0deg');
+    }
+  }, []);
+
+  const handleToggle = useCallback(() => {
+    onTogglePreview(track);
+  }, [onTogglePreview, track]);
 
   return (
     <motion.div
+      ref={cardRef}
       variants={{
         hidden: shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.98 },
         visible: shouldReduceMotion
           ? { opacity: 1, transition: { duration: 0.12 } }
           : { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', damping: 26, stiffness: 320 } },
       }}
+      onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{
-        transformStyle: 'preserve-3d',
-        transform: shouldReduceMotion
-          ? undefined
-          : `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`,
-      }}
-      className="relative group transition-transform duration-200"
+      className={`relative group${shouldReduceMotion ? '' : ' tilt-card'}${
+        isPreviewPlaying ? ' conic-active' : ''
+      }`}
     >
-      {/* Rotating Conic Aurora Glow Behind Card on Hover / Playing (Mood-Responsive, Lower Opacity) */}
+      {/* Rotating Conic Aurora Glow Behind Card on Hover / Playing (Paused when idle) */}
       <div
         className={`absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none transition-all duration-500 group-hover:-translate-y-1 ${
           isPreviewPlaying
@@ -117,6 +164,8 @@ export function TrackCard({
             <img
               src={track.albumArtUrl}
               alt={track.name}
+              loading="lazy"
+              decoding="async"
               onLoad={() => setArtLoaded(true)}
               onError={() => setArtFailed(true)}
               className={`w-full h-full object-cover transition-opacity duration-300 ${
@@ -134,7 +183,7 @@ export function TrackCard({
             <PreviewButton
               isPlaying={isPreviewPlaying}
               progress={isPreviewPlaying ? previewProgress : 0}
-              onToggle={() => onTogglePreview(track)}
+              onToggle={handleToggle}
             />
           )}
         </div>
@@ -185,4 +234,4 @@ export function TrackCard({
       </article>
     </motion.div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { AuroraBackground } from './components/AuroraBackground';
 import { TopBar } from './components/TopBar';
@@ -22,6 +22,7 @@ import {
   setDiscoveryMode,
   subscribeToProfile,
 } from './services/preferenceStorage';
+import { initPerfMetrics } from './utils/perfMetrics';
 import type { ToastInfo } from './types';
 import type { CameraAnalysisResponse } from './types/camera';
 import type { DiscoveryMode, StoredProfile } from './types/discovery';
@@ -48,6 +49,11 @@ export default function App({ api }: AppProps = {}) {
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // Initialize non-intrusive performance metrics observer
+  useEffect(() => {
+    return initPerfMetrics();
+  }, []);
+
   // Subscribe to storage changes
   useEffect(() => {
     return subscribeToProfile((updated) => setProfile(updated));
@@ -55,12 +61,16 @@ export default function App({ api }: AppProps = {}) {
 
   // Aurora mood theme retints smoothly based on intent
   const theme = useMoodTheme(data?.intent, activeTab === 'transition' ? transitionMood : undefined);
-  const moodStyle = {
-    '--mood-primary': theme.primary,
-    '--mood-secondary': theme.secondary,
-    '--mood-accent': theme.accent1,
-    '--mood-accent-2': theme.accent2,
-  } as CSSProperties;
+  const moodStyle = useMemo(
+    () =>
+      ({
+        '--mood-primary': theme.primary,
+        '--mood-secondary': theme.secondary,
+        '--mood-accent': theme.accent1,
+        '--mood-accent-2': theme.accent2,
+      }) as CSSProperties,
+    [theme.primary, theme.secondary, theme.accent1, theme.accent2]
+  );
 
   // Toast management with auto-dismiss duration
   const addToast = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info', durationMs = 3000) => {
@@ -89,29 +99,55 @@ export default function App({ api }: AppProps = {}) {
     },
   });
 
-  const handleSearchSubmit = async (searchPrompt: string) => {
-    const trimmed = searchPrompt.trim();
-    if (!trimmed) return;
+  const handleSearchSubmit = useCallback(
+    async (searchPrompt: string) => {
+      const trimmed = searchPrompt.trim();
+      if (!trimmed) return;
 
-    setPrompt(trimmed);
+      setPrompt(trimmed);
 
-    // Add to search history (keep last 6)
-    setRecentSearches((prev) => {
-      const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
-      return [trimmed, ...filtered].slice(0, 6);
-    });
+      // Add to search history (keep last 6)
+      setRecentSearches((prev) => {
+        const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
+        return [trimmed, ...filtered].slice(0, 6);
+      });
 
-    await search(trimmed);
-  };
+      await search(trimmed);
+    },
+    [search]
+  );
 
-  const handleModeChange = (newMode: DiscoveryMode) => {
-    const updated = setDiscoveryMode(newMode);
-    setProfile(updated);
-    const modeName = newMode.charAt(0) + newMode.slice(1).toLowerCase();
-    // Clear any previous mode switch toasts and dismiss quickly (1.5s)
-    setToasts((prev) => prev.filter((t) => !t.message.startsWith('Discovery mode set to')));
-    addToast(`Discovery mode set to ${modeName}.`, 'info', 1500);
-  };
+  const handleModeChange = useCallback(
+    (newMode: DiscoveryMode) => {
+      const updated = setDiscoveryMode(newMode);
+      setProfile(updated);
+      const modeName = newMode.charAt(0) + newMode.slice(1).toLowerCase();
+      // Clear any previous mode switch toasts and dismiss quickly (1.5s)
+      setToasts((prev) => prev.filter((t) => !t.message.startsWith('Discovery mode set to')));
+      addToast(`Discovery mode set to ${modeName}.`, 'info', 1500);
+    },
+    [addToast]
+  );
+
+  const handleOpenPreferences = useCallback(() => {
+    setIsPreferencesOpen(true);
+  }, []);
+
+  const handleOpenCamera = useCallback(() => {
+    setIsCameraOpen(true);
+  }, []);
+
+  const handleCopyNotice = useCallback(() => {
+    addToast('Search query copied to clipboard!', 'success');
+  }, [addToast]);
+
+  const handleRecentSelect = useCallback(
+    (selectedPrompt: string) => {
+      setPrompt(selectedPrompt);
+      void handleSearchSubmit(selectedPrompt);
+    },
+    [handleSearchSubmit]
+  );
 
   // Smooth scroll into results when search finishes
   useEffect(() => {
@@ -136,7 +172,7 @@ export default function App({ api }: AppProps = {}) {
       {/* Sticky Glass Top Bar */}
       <TopBar
         status={status}
-        onOpenPreferences={activeTab === 'discover' ? () => setIsPreferencesOpen(true) : undefined}
+        onOpenPreferences={activeTab === 'discover' ? handleOpenPreferences : undefined}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
@@ -148,7 +184,7 @@ export default function App({ api }: AppProps = {}) {
             key="transition-view"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
             className="w-full flex-1 flex flex-col"
           >
             <MoodTransitionPage onMoodChange={setTransitionMood} />
@@ -158,7 +194,7 @@ export default function App({ api }: AppProps = {}) {
             key="discover-view"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
             className="w-full flex-1 flex flex-col"
           >
             {/* Hero Section & Composer */}
@@ -171,7 +207,7 @@ export default function App({ api }: AppProps = {}) {
               isListening={speech.isListening}
               isMicSupported={speech.isSupported}
               onToggleMic={speech.toggleListening}
-              onOpenCamera={() => setIsCameraOpen(true)}
+              onOpenCamera={handleOpenCamera}
               discoveryMode={profile.discoveryMode}
               onDiscoveryModeChange={handleModeChange}
             />
@@ -203,7 +239,7 @@ export default function App({ api }: AppProps = {}) {
                   <IntentPanel
                     data={data}
                     userPrompt={lastPrompt}
-                    onCopyNotice={() => addToast('Search query copied to clipboard!', 'success')}
+                    onCopyNotice={handleCopyNotice}
                   />
 
                   {/* Tracks Grid */}
@@ -212,10 +248,7 @@ export default function App({ api }: AppProps = {}) {
                   {/* Search History Chips */}
                   <RecentChips
                     history={recentSearches}
-                    onSelect={(selectedPrompt) => {
-                      setPrompt(selectedPrompt);
-                      void handleSearchSubmit(selectedPrompt);
-                    }}
+                    onSelect={handleRecentSelect}
                   />
                 </>
               )}
@@ -224,26 +257,30 @@ export default function App({ api }: AppProps = {}) {
         )}
       </main>
 
-      {/* Camera Modal */}
-      <CameraModal
-        isOpen={isCameraOpen}
-        onClose={() => setIsCameraOpen(false)}
-        onSelectMusicDirection={(direction, result?: CameraAnalysisResponse) => {
-          setPrompt(direction);
-          if (result?.expression) {
-            addToast(`Expression detected: ${result.expression}`, 'success');
-          }
-          void handleSearchSubmit(direction);
-        }}
-      />
+      {/* Camera Modal - mounted only when open to avoid idle hook overhead */}
+      {isCameraOpen && (
+        <CameraModal
+          isOpen={isCameraOpen}
+          onClose={() => setIsCameraOpen(false)}
+          onSelectMusicDirection={(direction, result?: CameraAnalysisResponse) => {
+            setPrompt(direction);
+            if (result?.expression) {
+              addToast(`Expression detected: ${result.expression}`, 'success');
+            }
+            void handleSearchSubmit(direction);
+          }}
+        />
+      )}
 
-      {/* Preferences Management Modal */}
-      <PreferencesModal
-        isOpen={isPreferencesOpen}
-        onClose={() => setIsPreferencesOpen(false)}
-        onProfileUpdated={(updated) => setProfile(updated)}
-        onNotify={(msg, type) => addToast(msg, type)}
-      />
+      {/* Preferences Management Modal - mounted only when open */}
+      {isPreferencesOpen && (
+        <PreferencesModal
+          isOpen={isPreferencesOpen}
+          onClose={() => setIsPreferencesOpen(false)}
+          onProfileUpdated={(updated) => setProfile(updated)}
+          onNotify={(msg, type) => addToast(msg, type)}
+        />
+      )}
 
       {/* Floating Toast Stack */}
       <Toasts toasts={toasts} onDismiss={dismissToast} />

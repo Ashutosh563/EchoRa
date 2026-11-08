@@ -1,3 +1,4 @@
+import { memo, type CSSProperties } from "react";
 import {
   Play,
   RotateCcw,
@@ -8,14 +9,13 @@ import { motion } from "framer-motion";
 import type { TransitionJourneyResponse } from "../../types/transition";
 import { formatDuration } from "../../lib/format";
 import { getMoodTheme } from "../../lib/moodTheme";
-import type { CSSProperties } from "react";
 
 interface LayeredPlaylistViewProps {
   journey: TransitionJourneyResponse;
   onReset: () => void;
 }
 
-export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewProps) {
+export const LayeredPlaylistView = memo(function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewProps) {
   const stageTitles: Record<number, string> = {
     1: "Starting Mood",
     2: "First Transition",
@@ -159,6 +159,8 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                           <img
                             src={track.albumArtUrl}
                             alt={track.album}
+                            loading="lazy"
+                            decoding="async"
                             className="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0 shadow-md group-hover/track:scale-105 transition-transform duration-200"
                           />
                         ) : (
@@ -219,7 +221,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
       </div>
     </div>
   );
-}
+});
 
 function moodEmoji(mood: string): string {
   const key = mood.toLowerCase();

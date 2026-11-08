@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, Music } from 'lucide-react';
 import type { Track } from '../types';
@@ -10,22 +10,24 @@ interface TrackGridProps {
   tracks: Track[];
 }
 
-export function TrackGrid({ tracks }: TrackGridProps) {
+export const TrackGrid = memo(function TrackGrid({ tracks }: TrackGridProps) {
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
   const [previewProgress, setPreviewProgress] = useState(0);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const activePreviewIdRef = useRef<string | null>(null);
 
-  // Manage single audio preview instance
-  const handleTogglePreview = (track: Track) => {
+  // Manage single audio preview instance with stable callback reference
+  const handleTogglePreview = useCallback((track: Track) => {
     if (!track.previewUrl) return;
 
-    if (activePreviewId === track.id) {
+    if (activePreviewIdRef.current === track.id) {
       // Pause
       if (audioRef.current) {
         audioRef.current.pause();
       }
+      activePreviewIdRef.current = null;
       setActivePreviewId(null);
       setPreviewProgress(0);
       return;
@@ -39,7 +41,9 @@ export function TrackGrid({ tracks }: TrackGridProps) {
 
     const audio = new Audio(track.previewUrl);
     audioRef.current = audio;
+    activePreviewIdRef.current = track.id;
     setActivePreviewId(track.id);
+    setPreviewProgress(0);
 
     audio.ontimeupdate = () => {
       if (audio.duration) {
@@ -48,19 +52,21 @@ export function TrackGrid({ tracks }: TrackGridProps) {
     };
 
     audio.onended = () => {
+      activePreviewIdRef.current = null;
       setActivePreviewId(null);
       setPreviewProgress(0);
       audioRef.current = null;
     };
 
     audio.onerror = () => {
+      activePreviewIdRef.current = null;
       setActivePreviewId(null);
       setPreviewProgress(0);
       audioRef.current = null;
     };
 
     void audio.play();
-  };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -68,6 +74,7 @@ export function TrackGrid({ tracks }: TrackGridProps) {
         audioRef.current.pause();
         audioRef.current = null;
       }
+      activePreviewIdRef.current = null;
     };
   }, []);
 
@@ -108,21 +115,24 @@ export function TrackGrid({ tracks }: TrackGridProps) {
           hidden: { opacity: 0 },
           visible: {
             opacity: 1,
-            transition: { staggerChildren: 0.05 },
+            transition: { staggerChildren: 0.04 },
           },
         }}
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
       >
-        {tracks.map((track, index) => (
-          <TrackCard
-            key={track.id || index}
-            track={track}
-            activePreviewId={activePreviewId}
-            previewProgress={previewProgress}
-            onTogglePreview={handleTogglePreview}
-            onSelectTrack={setSelectedTrack}
-          />
-        ))}
+        {tracks.map((track, index) => {
+          const isPlaying = activePreviewId === track.id;
+          return (
+            <TrackCard
+              key={track.id || index}
+              track={track}
+              isPreviewPlaying={isPlaying}
+              previewProgress={isPlaying ? previewProgress : 0}
+              onTogglePreview={handleTogglePreview}
+              onSelectTrack={setSelectedTrack}
+            />
+          );
+        })}
       </motion.div>
 
       {/* Attribution Footer */}
@@ -143,5 +153,4 @@ export function TrackGrid({ tracks }: TrackGridProps) {
       </AnimatePresence>
     </section>
   );
-}
-
+});

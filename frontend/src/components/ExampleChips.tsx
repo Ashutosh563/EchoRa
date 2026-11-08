@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 
 export interface ExamplePromptOption {
@@ -33,7 +34,7 @@ interface ExampleChipsProps {
   disabled?: boolean;
 }
 
-export function ExampleChips({ onSelect, disabled = false }: ExampleChipsProps) {
+export const ExampleChips = memo(function ExampleChips({ onSelect, disabled = false }: ExampleChipsProps) {
   return (
     <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
       {EXAMPLE_CHIPS.map((chip, index) => (
@@ -55,4 +56,4 @@ export function ExampleChips({ onSelect, disabled = false }: ExampleChipsProps) 
       ))}
     </div>
   );
-}
+});

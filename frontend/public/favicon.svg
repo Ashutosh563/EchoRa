@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none" aria-label="ECHORA Liquid Glass Favicon">
+  <defs>
+    <!-- Squircle Clip (22% border radius = 112.64px) -->
+    <clipPath id="squircle">
+      <rect width="512" height="512" rx="112.64" ry="112.64" />
+    </clipPath>
+
+    <!-- Liquid Glass Surface Gradient -->
+    <linearGradient id="glass-surface" x1="40" y1="24" x2="460" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.102" />
+      <stop offset="43%" stop-color="#FFFFFF" stop-opacity="0.016" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0" />
+    </linearGradient>
+
+    <!-- Inner Shine Gradient (135deg) -->
+    <linearGradient id="icon-shine" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.14" />
+      <stop offset="24%" stop-color="#FFFFFF" stop-opacity="0" />
+      <stop offset="74%" stop-color="#FFFFFF" stop-opacity="0" />
+      <stop offset="100%" stop-color="#22D3EE" stop-opacity="0.04" />
+    </linearGradient>
+
+    <!-- Specular Border Gradient -->
+    <linearGradient id="glass-border" x1="256" y1="0" x2="256" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.34" />
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.22" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.12" />
+    </linearGradient>
+
+    <!-- Soft Ambient Aura Blur -->
+    <filter id="ambient-blur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="28" />
+    </filter>
+
+    <!-- Primary Aurora Bar Gradient (exact Figma Make coordinates in 224x224 glyph space) -->
+    <linearGradient id="aurora" x1="25" y1="29" x2="200" y2="197" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6" />
+      <stop offset="0.47" stop-color="#EC4899" />
+      <stop offset="0.76" stop-color="#22D3EE" />
+      <stop offset="1" stop-color="#22D3EE" />
+    </linearGradient>
+
+    <!-- Aurora Glyph Glow Filter -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+    </filter>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    <!-- Deep Ink Base + Liquid Glass Fill -->
+    <rect width="512" height="512" rx="112.64" fill="#0B0A14" />
+    <rect width="512" height="512" rx="112.64" fill="#100F1B" fill-opacity="0.78" />
+    <rect width="512" height="512" rx="112.64" fill="url(#glass-surface)" />
+
+    <!-- Soft Blurred Ambient Aura Blobs (matches .icon-ambient in Figma Make) -->
+    <g filter="url(#ambient-blur)">
+      <circle cx="145" cy="152" r="115" fill="#8B5CF6" fill-opacity="0.34" />
+      <circle cx="368" cy="348" r="118" fill="#22D3EE" fill-opacity="0.22" />
+      <circle cx="298" cy="268" r="122" fill="#EC4899" fill-opacity="0.20" />
+    </g>
+
+    <!-- Inner Liquid Shine -->
+    <rect x="1" y="1" width="510" height="510" rx="111.64" fill="url(#icon-shine)" />
+
+    <!-- 4-Stage Echo Glyph (64% scale = 327.68px centered in 512x512 -> offset 92.16, scale 1.462857) -->
+    <g transform="translate(92.16, 92.16) scale(1.462857)">
+      <ellipse cx="164" cy="174" rx="35" ry="20" fill="#F59E0B" opacity="0.28" filter="url(#glow)" />
+      <path d="M42 91V133M88 61V163M134 77V147M180 45V179" stroke="url(#aurora)" stroke-width="25" stroke-linecap="round" opacity="0.42" filter="url(#glow)" />
+      <path d="M42 91V133M88 61V163M134 77V147M180 45V179" stroke="url(#aurora)" stroke-width="25" stroke-linecap="round" />
+      <path d="M34 87.5V98M80 56V77M126 72V87M172 40V66" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" opacity="0.32" />
+    </g>
+  </g>
+
+  <!-- Outer 1px Specular Highlight Border -->
+  <rect x="1" y="1" width="510" height="510" rx="111.64" stroke="url(#glass-border)" stroke-width="2" />
+</svg>
