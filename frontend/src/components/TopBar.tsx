@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Wordmark } from './Wordmark';
 import { SlidersHorizontal } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -10,7 +11,7 @@ interface TopBarProps {
   onTabChange?: (tab: 'discover' | 'transition') => void;
 }
 
-export function TopBar({
+export const TopBar = memo(function TopBar({
   status: _status,
   onOpenPreferences,
   activeTab = 'discover',
@@ -86,4 +87,4 @@ export function TopBar({
       </div>
     </header>
   );
-}
+});

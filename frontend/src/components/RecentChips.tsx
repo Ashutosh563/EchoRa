@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { History } from 'lucide-react';
 
 interface RecentChipsProps {
@@ -6,7 +7,7 @@ interface RecentChipsProps {
   disabled?: boolean;
 }
 
-export function RecentChips({ history, onSelect, disabled = false }: RecentChipsProps) {
+export const RecentChips = memo(function RecentChips({ history, onSelect, disabled = false }: RecentChipsProps) {
   if (!history || history.length === 0) return null;
 
   return (
@@ -31,5 +32,5 @@ export function RecentChips({ history, onSelect, disabled = false }: RecentChips
       ))}
     </div>
   );
-}
+});
 
