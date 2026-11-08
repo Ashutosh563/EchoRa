@@ -55,6 +55,26 @@ export const geminiRawResponseSchema = z.object({
       track_title: z.unknown().optional(),
       trackTitle: z.unknown().optional(),
       artist: z.unknown().optional(),
+      negative_constraints: z
+        .object({
+          excluded_artists: z.unknown().optional(),
+          excluded_genres: z.unknown().optional(),
+          negative_keywords: z.unknown().optional(),
+          excludedArtists: z.unknown().optional(),
+          excludedGenres: z.unknown().optional(),
+          negativeKeywords: z.unknown().optional(),
+        })
+        .optional(),
+      negativeConstraints: z
+        .object({
+          excluded_artists: z.unknown().optional(),
+          excluded_genres: z.unknown().optional(),
+          negative_keywords: z.unknown().optional(),
+          excludedArtists: z.unknown().optional(),
+          excludedGenres: z.unknown().optional(),
+          negativeKeywords: z.unknown().optional(),
+        })
+        .optional(),
     })
     .optional(),
   inferred: z
@@ -70,6 +90,26 @@ export const geminiRawResponseSchema = z.object({
       track_title: z.unknown().optional(),
       trackTitle: z.unknown().optional(),
       artist: z.unknown().optional(),
+      negative_constraints: z
+        .object({
+          excluded_artists: z.unknown().optional(),
+          excluded_genres: z.unknown().optional(),
+          negative_keywords: z.unknown().optional(),
+          excludedArtists: z.unknown().optional(),
+          excludedGenres: z.unknown().optional(),
+          negativeKeywords: z.unknown().optional(),
+        })
+        .optional(),
+      negativeConstraints: z
+        .object({
+          excluded_artists: z.unknown().optional(),
+          excluded_genres: z.unknown().optional(),
+          negative_keywords: z.unknown().optional(),
+          excludedArtists: z.unknown().optional(),
+          excludedGenres: z.unknown().optional(),
+          negativeKeywords: z.unknown().optional(),
+        })
+        .optional(),
     })
     .optional(),
   optional: z
@@ -114,6 +154,8 @@ export const geminiRawResponseSchema = z.object({
   track_title: z.unknown().optional(),
   trackTitle: z.unknown().optional(),
   artist: z.unknown().optional(),
+  negative_constraints: z.unknown().optional(),
+  negativeConstraints: z.unknown().optional(),
 });
 
 const SITUATION_TO_CANONICAL_MOOD: Record<string, { mood: string; activity?: string }> = {
@@ -241,17 +283,28 @@ export function buildPrioritizedIntent(raw: z.infer<typeof geminiRawResponseSche
   const finalArtist = cleanText(exp.artist ?? raw.artist);
 
   // 9. Multi Queries & Master Fallback
-  const rawQ = raw.queries;
+  const rawQ = raw.queries as Record<string, unknown> | undefined;
   const qMood = typeof rawQ?.moodQuery === "string" ? rawQ.moodQuery.trim() : null;
   const qGenre = typeof rawQ?.genreQuery === "string" ? rawQ.genreQuery.trim() : null;
   const qContext = typeof rawQ?.contextQuery === "string" ? rawQ.contextQuery.trim() : null;
   const qMaster = typeof rawQ?.masterQuery === "string" ? rawQ.masterQuery.trim() : undefined;
+  const qCurator = typeof rawQ?.curatorQuery === "string" ? rawQ.curatorQuery.trim() : undefined;
+  const seedArtists = Array.isArray(rawQ?.seedArtists)
+    ? (rawQ!.seedArtists as unknown[]).filter((a): a is string => typeof a === "string" && a.trim().length > 0).map((a) => a.trim()).slice(0, 6)
+    : undefined;
+  const subgenres = Array.isArray(rawQ?.subgenres)
+    ? (rawQ!.subgenres as unknown[]).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => s.trim()).slice(0, 5)
+    : undefined;
+
   const multiQueries = qMood && qGenre && qContext
     ? {
         moodQuery: qMood,
         genreQuery: qGenre,
         contextQuery: qContext,
         masterQuery: qMaster,
+        curatorQuery: qCurator,
+        seedArtists,
+        subgenres,
       }
     : undefined;
 
@@ -303,6 +356,39 @@ export function buildPrioritizedIntent(raw: z.infer<typeof geminiRawResponseSche
       }
     : undefined;
 
+  // 11. Natural Language Negative Constraints Parsing
+  const rawNeg = (exp.negative_constraints ?? exp.negativeConstraints ?? raw.negative_constraints ?? raw.negativeConstraints) as Record<string, unknown> | undefined;
+  function cleanStringArray(val: unknown): string[] {
+    if (!Array.isArray(val)) return [];
+    return val
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      .map((v) => v.toLowerCase().trim());
+  }
+
+  const excludedArtists = cleanStringArray(rawNeg?.excluded_artists ?? rawNeg?.excludedArtists);
+  const excludedGenres = cleanStringArray(rawNeg?.excluded_genres ?? rawNeg?.excludedGenres);
+  const negativeKeywords = cleanStringArray(rawNeg?.negative_keywords ?? rawNeg?.negativeKeywords);
+
+  // Append any excluded genres or keywords to forbiddenVibes
+  for (const eg of excludedGenres) {
+    if (!forbiddenVibes.some((v) => v.toLowerCase().includes(eg))) {
+      forbiddenVibes.push(eg);
+    }
+  }
+  for (const nk of negativeKeywords) {
+    if (!forbiddenVibes.some((v) => v.toLowerCase().includes(nk))) {
+      forbiddenVibes.push(nk);
+    }
+  }
+
+  const negativeConstraints = (excludedArtists.length > 0 || excludedGenres.length > 0 || negativeKeywords.length > 0)
+    ? {
+        excludedArtists: excludedArtists.length > 0 ? excludedArtists : undefined,
+        excludedGenres: excludedGenres.length > 0 ? excludedGenres : undefined,
+        negativeKeywords: negativeKeywords.length > 0 ? negativeKeywords : undefined,
+      }
+    : undefined;
+
   return {
     mood: finalMood,
     activity: finalActivity,
@@ -316,7 +402,10 @@ export function buildPrioritizedIntent(raw: z.infer<typeof geminiRawResponseSche
     trackTitle: finalTrackTitle,
     artist: finalArtist,
     sonicProfile,
+    negativeConstraints,
     multiQueries,
+    seedArtists: seedArtists && seedArtists.length > 0 ? seedArtists : undefined,
+    subgenres: subgenres && subgenres.length > 0 ? subgenres : undefined,
     breakdown: {
       mood: moodBreakdown,
       activity: activityBreakdown,
@@ -351,6 +440,14 @@ export const MUSIC_INTENT_JSON_SCHEMA = {
         era: { type: ["string", "null"], description: "Explicit era/decade, e.g. '1990s', '80s', '2000s', or null" },
         track_title: { type: ["string", "null"], description: "Specific song title if named in prompt (e.g. 'Tum Hi Ho', 'Kesariya'), or null" },
         artist: { type: ["string", "null"], description: "Specific artist if named in prompt (e.g. 'Arijit Singh', 'Coldplay'), or null" },
+        negative_constraints: {
+          type: "object",
+          properties: {
+            excluded_artists: { type: "array", items: { type: "string" }, description: "Artists explicitly excluded by user (e.g. ['arijit singh'])" },
+            excluded_genres: { type: "array", items: { type: "string" }, description: "Genres explicitly excluded by user (e.g. ['rap', 'hip hop'])" },
+            negative_keywords: { type: "array", items: { type: "string" }, description: "Negative attributes explicitly excluded (e.g. ['heavy drums', 'autotune'])" },
+          },
+        },
       },
       required: ["mood", "activity", "energy", "tempo", "genre", "vocals", "time_context", "language", "era", "track_title", "artist"],
     },
@@ -387,6 +484,19 @@ export const MUSIC_INTENT_JSON_SCHEMA = {
         genreQuery: { type: "string", description: "Query with micro-genre and year:YYYY-YYYY operators, with language if stated" },
         contextQuery: { type: "string", description: "Query capturing curator phrasing and atmosphere, with language if stated" },
         masterQuery: { type: "string", description: "Concise rock-solid fallback query combining core genre, era, and language" },
+        curatorQuery: { type: "string", description: "Curator query targeting underground or aesthetic scene tags, with language if stated" },
+        seedArtists: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 6,
+          description: "4-6 diverse exemplar artists defining different corners of this aesthetic",
+        },
+        subgenres: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 5,
+          description: "2-4 micro-genre or scene tags for deep exploration",
+        },
       },
       required: ["moodQuery", "genreQuery", "contextQuery", "masterQuery"],
     },

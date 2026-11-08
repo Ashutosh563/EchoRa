@@ -7,7 +7,7 @@ import {
 import { logger } from "../../utils/logger.js";
 import type { CameraAnalysisResponse, VisionConfidence, VisionImageQuality } from "../../types/camera.js";
 
-export const VISION_SYSTEM_INSTRUCTION = `You are the vision analysis component of SONORA, an AI music discovery application.
+export const VISION_SYSTEM_INSTRUCTION = `You are the vision analysis component of ECHORA, an AI music discovery application.
 
 Your task:
 Analyze a single camera frame to interpret the VISIBLE FACIAL EXPRESSION of the person in the frame and suggest an appropriate music direction.

@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Music, ExternalLink } from 'lucide-react';
+import { Music, ExternalLink, Play, Pause, Loader2 } from 'lucide-react';
 import type { Track } from '../types';
 import { formatDuration } from '../lib/format';
 import { SpotifyIcon } from './ConnectSpotifyButton';
 import { PreviewButton } from './PreviewButton';
+import { useAudioPlayer } from '../context/AudioPlayerContext';
 
 interface TrackCardProps {
   track: Track;
+  playlist?: Track[];
   activePreviewId: string | null;
   previewProgress: number;
   onTogglePreview: (track: Track) => void;
@@ -16,6 +18,7 @@ interface TrackCardProps {
 
 export function TrackCard({
   track,
+  playlist,
   activePreviewId,
   previewProgress,
   onTogglePreview,
@@ -32,6 +35,24 @@ export function TrackCard({
   const isPreviewPlaying = activePreviewId === track.id;
   const durationText = formatDuration(track.durationMs);
   const artistText = track.artists?.join(', ') || 'Unknown Artist';
+
+  let isThisTrackPlaying = false;
+  let isThisTrackBuffering = false;
+  let handlePlayNative: ((track: Track) => void) | null = null;
+  try {
+    const player = useAudioPlayer();
+    isThisTrackPlaying = player.currentTrack?.id === track.id && player.isPlaying;
+    isThisTrackBuffering = player.currentTrack?.id === track.id && player.isBuffering;
+    handlePlayNative = (t) => {
+      if (player.currentTrack?.id === t.id) {
+        player.togglePlayPause();
+      } else {
+        void player.playTrack(t, playlist);
+      }
+    };
+  } catch {
+    // Graceful fallback if rendered outside provider
+  }
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (shouldReduceMotion) return;
@@ -155,38 +176,58 @@ export function TrackCard({
               {artistText}
             </p>
 
-            {/* Match Reason or Album Name */}
-            <p className="text-[11px] text-text-faint truncate mt-0.5" title={track.matchReason || track.album}>
-              {track.matchReason ? `✨ ${track.matchReason}` : track.album}
-            </p>
+            {/* Release Year & Duration */}
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-text-faint truncate mt-0.5">
+              <span>{track.releaseYear || track.album}</span>
+              {durationText && (
+                <>
+                  <span className="opacity-40">•</span>
+                  <span>{durationText}</span>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Bottom Actions: Release year & Duration badges & Open in Spotify link */}
-          <div className="flex items-center justify-between gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-1.5 overflow-hidden">
-              {track.releaseYear && (
-                <span className="font-mono text-[10px] text-text-faint bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-full shrink-0">
-                  {track.releaseYear}
-                </span>
+          {/* Bottom Actions: Play Here / Open in Spotify buttons */}
+          <div className="flex items-center justify-end gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {handlePlayNative && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePlayNative!(track);
+                  }}
+                  aria-label={isThisTrackPlaying ? `Pause "${track.name}"` : `Play "${track.name}" here`}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shadow-sm cursor-pointer ${
+                    isThisTrackPlaying
+                      ? 'bg-cyan text-ink border-cyan shadow-cyan/30'
+                      : 'bg-cyan/15 hover:bg-cyan/25 text-cyan border-cyan/30 hover:border-cyan/50 hover:scale-[1.03] active:scale-[0.98]'
+                  }`}
+                >
+                  {isThisTrackBuffering ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : isThisTrackPlaying ? (
+                    <Pause className="w-3 h-3 fill-current" />
+                  ) : (
+                    <Play className="w-3 h-3 fill-current ml-0.5" />
+                  )}
+                  <span>{isThisTrackPlaying ? 'Playing' : 'Play Here'}</span>
+                </button>
               )}
-              {durationText ? (
-                <span className="font-mono text-[10px] text-text-faint bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-full shrink-0">
-                  {durationText}
-                </span>
-              ) : null}
-            </div>
 
-            <a
-              href={track.spotifyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Open "${track.name}" on Spotify`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-spotify/15 hover:bg-spotify/25 text-spotify text-[11px] font-semibold transition-all border border-spotify/30 hover:border-spotify/50 hover:scale-[1.03] active:scale-[0.98] shadow-sm"
-            >
-              <SpotifyIcon className="w-3 h-3 text-spotify" />
-              <span>Spotify</span>
-              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-            </a>
+              <a
+                href={track.spotifyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open "${track.name}" on Spotify`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-spotify/15 hover:bg-spotify/25 text-spotify text-[11px] font-semibold transition-all border border-spotify/30 hover:border-spotify/50 hover:scale-[1.03] active:scale-[0.98] shadow-sm"
+              >
+                <SpotifyIcon className="w-3 h-3 text-spotify" />
+                <span>Spotify</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+              </a>
+            </div>
           </div>
         </div>
       </article>

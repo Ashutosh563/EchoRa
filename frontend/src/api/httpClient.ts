@@ -40,7 +40,7 @@ export function createHttpMusicClient(): FullMusicApi {
         }
         throw new MusicApiError(
           "NETWORK_ERROR",
-          "Could not reach the SONORA server. Make sure the backend is running.",
+          "Could not reach the ECHORA server. Make sure the backend is running.",
         );
       }
 

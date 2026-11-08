@@ -23,6 +23,11 @@ export interface MusicIntent {
   era?: string | null;
   trackTitle?: string | null;
   artist?: string | null;
+  negativeConstraints?: {
+    excludedArtists?: string[];
+    excludedGenres?: string[];
+    negativeKeywords?: string[];
+  };
   sonicProfile?: {
     instruments?: string[];
     production?: string | null;

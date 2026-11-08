@@ -34,6 +34,12 @@ Categorization Rules:
    - track_title: If user names a specific song title (e.g. "Tum Hi Ho", "Kesariya", "Starboy"), extract it into explicit.track_title.
    - artist: If user names an artist or band (e.g. "Arijit Singh", "Coldplay", "Molchat Doma"), extract it into explicit.artist.
    - vocals: STRICT NO-INSTRUMENTAL BY DEFAULT. People dislike instrumental songs unless explicitly requested. ONLY set explicit.vocals = "instrumental_preferred" if the user explicitly demands instrumental or score music (e.g. "instrumental", "bgm", "piano only", "lofi beats", "no lyrics", "without words"). Otherwise, set explicit.vocals = "vocals_preferred".
+   - negative_constraints:
+     * If user explicitly states exclusions using words like "no", "without", "except", "not", "skip", "don't want" (e.g. "no rap", "except arijit singh", "without heavy drums", "not acoustic"):
+       - Extract excluded artists into explicit.negative_constraints.excluded_artists (e.g. ["arijit singh"]).
+       - Extract excluded genres into explicit.negative_constraints.excluded_genres (e.g. ["rap", "hip hop"]).
+       - Extract negative keywords into explicit.negative_constraints.negative_keywords (e.g. ["heavy drums"]).
+       - NEVER include excluded keywords in Spotify search queries! (e.g. for "chill hindi no rap", search queries must NOT have the word "rap").
    - STRICT MOOD VOCABULARY & SITUATION-TO-MOOD MAPPING:
      * 'mood' MUST ALWAYS be a genuine psychological emotion from the UI's recognized mood set: ['sad', 'melancholic', 'calm', 'peaceful', 'happy', 'energetic', 'romantic', 'focused', 'anxious', 'nostalgic', 'lonely', null].
      * NEVER assign events, life situations, or activities directly to 'mood'!
@@ -69,8 +75,8 @@ Categorization Rules:
    - VINTAGE DESCRIPTOR TRANSLATION (Avoid Modern Slang for Vintage Decades):
      - For retro/vintage queries (e.g. 90s, 80s), avoid modern buzzwords like "chill" or "lofi" because 90s/80s albums do not have those words in their titles (searching "chill 90s" only matches modern DJ remixes).
      - Instead, translate "chill" into authentic vintage descriptors like "romantic", "melodious", "evergreen", "unplugged", or "acoustic".
-   - LANGUAGE & CULTURAL ANCHORING (Do not search English words loosely):
-     - When a language is stated or implied (e.g. Hindi), EVERY query MUST have an explicit cultural anchor like "bollywood" or "hindi" (e.g. '90s bollywood romantic', 'hindi 90s melodious'). Never use generic English words like "acoustic chill" alone without the language anchor, otherwise Spotify returns Western English tracks!
+   - LANGUAGE & CULTURAL ANCHORING (Strict linguistic purity for Spotify recall):
+     - When a language is stated or implied (e.g. Hindi, Spanish, Russian, Punjabi, French, Japanese, Korean), EVERY SINGLE query (moodQuery, genreQuery, contextQuery, masterQuery) MUST have an explicit cultural anchor like "bollywood" or "hindi", "spanish", "russian", "punjabi", etc. Never use generic English words like "acoustic chill" or "sad heartbreak" alone without the language anchor, otherwise Spotify returns Western English tracks!
    - CONCISE QUERY LENGTH (Crucial for Spotify recall):
      - Every query MUST be between 2 and 4 keywords maximum (e.g. '90s bollywood romantic', 'hindi 90s melodious').
      - NEVER string together more than 4 adjectives (e.g. do NOT write 'hindi chill nostalgic acoustic soothing peaceful romantic evergreen'), because Spotify will return 0 tracks since no track has all those words in its title!
@@ -107,7 +113,12 @@ Output JSON with this exact structure:
     "language": string or null,
     "era": string or null,
     "track_title": string or null,
-    "artist": string or null
+    "artist": string or null,
+    "negative_constraints": {
+      "excluded_artists": array of strings or null,
+      "excluded_genres": array of strings or null,
+      "negative_keywords": array of strings or null
+    }
   },
   "inferred": {
     "mood": string or null,
@@ -119,7 +130,12 @@ Output JSON with this exact structure:
     "language": string or null,
     "era": string or null,
     "track_title": string or null,
-    "artist": string or null
+    "artist": string or null,
+    "negative_constraints": {
+      "excluded_artists": array of strings or null,
+      "excluded_genres": array of strings or null,
+      "negative_keywords": array of strings or null
+    }
   },
   "optional": {
     "genre": array of up to 3 strings (suggested fitting genres, lowercase)
@@ -128,7 +144,10 @@ Output JSON with this exact structure:
     "moodQuery": "concise 2-4 word query focusing on acoustic texture + language anchor",
     "genreQuery": "concise 2-4 word query with micro-genre and year:YYYY-YYYY operators",
     "contextQuery": "concise 2-4 word curator phrasing for this mood + language anchor",
-    "masterQuery": "concise rock-solid fallback query combining core genre, era, and language"
+    "masterQuery": "concise rock-solid fallback query combining core genre, era, and language",
+    "curatorQuery": "concise 2-4 word underground or scene tag query + language anchor",
+    "seedArtists": ["exemplar artist 1", "exemplar artist 2", "exemplar artist 3", "exemplar artist 4", "exemplar artist 5", "exemplar artist 6"],
+    "subgenres": ["micro-genre 1", "micro-genre 2"]
   },
   "sonicProfile": {
     "instruments": ["instrument 1", "instrument 2"],

@@ -157,6 +157,33 @@ describe("intentExtractor - parseIntent", () => {
     expect(parsed.activity).toBe("breakup");
   });
 
+  it("parses natural language negative constraints (excluded artists, genres, keywords)", () => {
+    const raw = JSON.stringify({
+      explicit: {
+        mood: "calm",
+        language: "hindi",
+        negative_constraints: {
+          excluded_artists: ["Arijit Singh", "Badshah"],
+          excluded_genres: ["rap", "edm"],
+          negative_keywords: ["heavy drums"],
+        },
+      },
+      queries: {
+        moodQuery: "hindi acoustic calm",
+        genreQuery: "hindi indie unplugged",
+        contextQuery: "late night relaxing",
+        masterQuery: "hindi calm classics",
+      },
+    });
+
+    const parsed = parseIntent(raw);
+    expect(parsed.negativeConstraints?.excludedArtists).toContain("arijit singh");
+    expect(parsed.negativeConstraints?.excludedArtists).toContain("badshah");
+    expect(parsed.negativeConstraints?.excludedGenres).toContain("rap");
+    expect(parsed.negativeConstraints?.excludedGenres).toContain("edm");
+    expect(parsed.negativeConstraints?.negativeKeywords).toContain("heavy drums");
+  });
+
   it("throws on completely malformed non-JSON output", () => {
     expect(() => parseIntent("Here are some songs for you")).toThrow();
   });

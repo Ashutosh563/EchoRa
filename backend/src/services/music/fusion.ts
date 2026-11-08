@@ -8,6 +8,16 @@ export interface FusionOptions {
 }
 
 /**
+ * Generates a canonical song signature to detect duplicates across different releases
+ * (e.g., standard album vs. soundtrack vs. compilation album vs. deluxe edition).
+ */
+export function getSongSignature(track: Track): string {
+  const normTitle = normalizeSongTitle(track.name) || track.name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20);
+  const primaryArtist = (track.artists?.[0] || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return `${normTitle}::${primaryArtist}`;
+}
+
+/**
  * Normalizes a song title by stripping movie tags, parentheticals, and remaster suffixes.
  * E.g., 'Tum Hi Ho (From "Aashiqui 2")' and 'Tum Hi Ho' both normalize to 'tumhiho'.
  */

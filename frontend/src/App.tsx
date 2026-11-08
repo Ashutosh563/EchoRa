@@ -7,22 +7,26 @@ import { ThinkingState } from './components/ThinkingState';
 import { IntentPanel } from './components/IntentPanel';
 import { NoticeBanner } from './components/NoticeBanner';
 import { TrackGrid } from './components/TrackGrid';
+import { VibeRefinementBar } from './components/VibeRefinementBar';
 import { ErrorCard } from './components/ErrorCard';
 import { RecentChips } from './components/RecentChips';
 import { Toasts } from './components/Toasts';
 import { CameraModal } from './components/CameraModal';
 import { PreferencesModal } from './components/PreferencesModal';
 import { MoodTransitionPage } from './components/transition/MoodTransitionPage';
+import { AudioPlayerProvider, useAudioPlayer } from './context/AudioPlayerContext';
+import { BottomPlayerBar } from './components/BottomPlayerBar';
 import { useStatus } from './hooks/useStatus';
 import { useSearch } from './hooks/useSearch';
 import { useMoodTheme } from './hooks/useMoodTheme';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+import { loadMoreMusic, refineVibeMusic } from './api/client';
 import {
   getStoredProfile,
   setDiscoveryMode,
   subscribeToProfile,
 } from './services/preferenceStorage';
-import type { ToastInfo } from './types';
+import type { ToastInfo, Track } from './types';
 import type { CameraAnalysisResponse } from './types/camera';
 import type { DiscoveryMode, StoredProfile } from './types/discovery';
 
@@ -32,12 +36,13 @@ interface AppProps {
   };
 }
 
-export default function App({ api }: AppProps = {}) {
+function AppContent({ api }: AppProps = {}) {
   const { status } = useStatus();
   const { status: searchStatus, data, error, lastPrompt, search } = useSearch(
     api ? { searchFn: (p, s) => api.search(p, s) } : undefined
   );
   const [profile, setProfile] = useState<StoredProfile>(getStoredProfile);
+  const { closePlayer, appendQueue } = useAudioPlayer();
   const [prompt, setPrompt] = useState('');
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -46,12 +51,35 @@ export default function App({ api }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<'discover' | 'transition'>('discover');
   const [transitionMood, setTransitionMood] = useState<string | undefined>();
 
+  // Continuous discovery pagination state
+  const [cumulativeTracks, setCumulativeTracks] = useState<Track[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMorePages, setHasMorePages] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isRefiningVibe, setIsRefiningVibe] = useState(false);
+
+  // Sync cumulative tracks whenever a fresh search succeeds
+  useEffect(() => {
+    if (data?.tracks) {
+      setCumulativeTracks(data.tracks);
+      setCurrentPage(1);
+      setHasMorePages(true);
+    }
+  }, [data]);
+
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Subscribe to storage changes
   useEffect(() => {
     return subscribeToProfile((updated) => setProfile(updated));
   }, []);
+
+  // Stop native player if user navigates to Mood Transition tab
+  useEffect(() => {
+    if (activeTab === 'transition') {
+      closePlayer();
+    }
+  }, [activeTab, closePlayer]);
 
   // Aurora mood theme retints smoothly based on intent
   const theme = useMoodTheme(data?.intent, activeTab === 'transition' ? transitionMood : undefined);
@@ -102,6 +130,81 @@ export default function App({ api }: AppProps = {}) {
     });
 
     await search(trimmed);
+  };
+
+  const handleLoadMore = async () => {
+    if (!data?.intent || isLoadingMore || cumulativeTracks.length >= 25) return;
+    setIsLoadingMore(true);
+
+    try {
+      const counts: Record<string, number> = {};
+      for (const t of cumulativeTracks) {
+        const primary = (t.artists[0] || '').toLowerCase().trim();
+        counts[primary] = (counts[primary] || 0) + 1;
+      }
+
+      const nextPage = currentPage + 1;
+      const res = await loadMoreMusic({
+        prompt: lastPrompt || prompt,
+        intent: data.intent,
+        page: nextPage,
+        excludeTrackIds: cumulativeTracks.map((t) => t.id),
+        cumulativeArtistCounts: counts,
+        discoveryMode: profile.discoveryMode,
+      });
+
+      if (res && res.tracks && res.tracks.length > 0) {
+        let totalCount = cumulativeTracks.length;
+        setCumulativeTracks((prev) => {
+          const existingIds = new Set(prev.map((t) => t.id));
+          const fresh = res.tracks.filter((t) => !existingIds.has(t.id));
+          const updated = [...prev, ...fresh];
+          totalCount = updated.length;
+          return updated;
+        });
+        appendQueue(res.tracks);
+        setCurrentPage(nextPage);
+
+        // Continue allowing Load More until at least 25 tracks are assembled
+        const hasReachedLimit = totalCount >= 25;
+        setHasMorePages(!hasReachedLimit && res.tracks.length > 0);
+      } else {
+        setHasMorePages(false);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not load more tracks';
+      addToast(msg, 'error');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const handleRefineVibe = async (type: string, label: string, delta: string) => {
+    if (!data?.intent || isRefiningVibe || isLoadingMore) return;
+    setIsRefiningVibe(true);
+
+    try {
+      const res = await refineVibeMusic({
+        prompt: lastPrompt || prompt,
+        intent: data.intent,
+        refinement: {
+          type,
+          label,
+          delta,
+        },
+        discoveryMode: profile.discoveryMode,
+      });
+
+      if (res && res.tracks && res.tracks.length > 0) {
+        setCumulativeTracks(res.tracks);
+        appendQueue(res.tracks);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not refine vibe';
+      addToast(msg, 'error');
+    } finally {
+      setIsRefiningVibe(false);
+    }
   };
 
   const handleModeChange = (newMode: DiscoveryMode) => {
@@ -202,12 +305,27 @@ export default function App({ api }: AppProps = {}) {
                   {/* Intent Breakdown Panel */}
                   <IntentPanel
                     data={data}
-                    userPrompt={lastPrompt}
+                    userPrompt={lastPrompt.replace(/\s*[\(\[].*?[\)\]]/gi, '').replace(/\s*,\s*(acoustic|melancholic|driving|calm|vintage).*$/gi, '').trim()}
                     onCopyNotice={() => addToast('Search query copied to clipboard!', 'success')}
                   />
 
-                  {/* Tracks Grid */}
-                  <TrackGrid tracks={data.tracks} />
+                  {/* Vibe Refinement Bar (Interactive on Page 1, Locked on continuous expansion) */}
+                  <VibeRefinementBar
+                    page={currentPage}
+                    totalTracks={cumulativeTracks.length}
+                    activeMood={data.intent.mood}
+                    onRefine={handleRefineVibe}
+                    disabled={isLoadingMore || isRefiningVibe}
+                  />
+
+                  {/* Tracks Grid with Continuous Discovery */}
+                  <TrackGrid
+                    tracks={cumulativeTracks}
+                    page={currentPage}
+                    hasMore={hasMorePages}
+                    isLoadingMore={isLoadingMore}
+                    onLoadMore={handleLoadMore}
+                  />
 
                   {/* Search History Chips */}
                   <RecentChips
@@ -247,6 +365,17 @@ export default function App({ api }: AppProps = {}) {
 
       {/* Floating Toast Stack */}
       <Toasts toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Native In-App Audio Player: Discover Mode Only */}
+      {activeTab === 'discover' && <BottomPlayerBar />}
     </div>
+  );
+}
+
+export default function App(props: AppProps = {}) {
+  return (
+    <AudioPlayerProvider>
+      <AppContent {...props} />
+    </AudioPlayerProvider>
   );
 }

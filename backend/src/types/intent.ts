@@ -29,6 +29,15 @@ export interface AntiSonicAura {
   forbiddenVibes?: string[];
 }
 
+export interface NegativeConstraints {
+  /** Specific artists explicitly excluded by user, e.g. ["arijit singh", "coldplay"] */
+  excludedArtists?: string[];
+  /** Specific genres or musical styles excluded, e.g. ["rap", "edm", "metal"] */
+  excludedGenres?: string[];
+  /** Specific texture or keyword phrases excluded, e.g. ["heavy drums", "autotune"] */
+  negativeKeywords?: string[];
+}
+
 export interface SonicProfile {
   /** Target instruments or acoustic textures, e.g. ["nylon guitar", "felt piano"] */
   instruments?: string[];
@@ -51,6 +60,9 @@ export interface MultiQueries {
   genreQuery: string;
   contextQuery: string;
   masterQuery?: string;
+  curatorQuery?: string;
+  seedArtists?: string[];
+  subgenres?: string[];
 }
 
 /**
@@ -82,8 +94,17 @@ export interface MusicIntent {
   /** Acoustic and emotional sonic profile for semantic depth reranking */
   sonicProfile?: SonicProfile;
 
+  /** Natural language negative constraints (exclusions) stated by user */
+  negativeConstraints?: NegativeConstraints;
+
   /** Multi-facet Spotify queries authored directly by the semantic engine */
   multiQueries?: MultiQueries;
+
+  /** Exemplar artists defining this aesthetic across deep continuous discovery */
+  seedArtists?: string[];
+
+  /** Micro-subgenre tags for deep catalog exploration */
+  subgenres?: string[];
 
   /** Detailed classification & prioritization breakdown (internal & intelligence engine) */
   breakdown?: {

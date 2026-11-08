@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Sparkles, Music } from 'lucide-react';
+import { Sparkles, Music, Loader2 } from 'lucide-react';
 import type { Track } from '../types';
 import { TrackCard } from './TrackCard';
 import { SpotifyIcon } from './ConnectSpotifyButton';
@@ -8,9 +8,18 @@ import { SongDetailsDialog } from './SongDetailsDialog';
 
 interface TrackGridProps {
   tracks: Track[];
+  page?: number;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-export function TrackGrid({ tracks }: TrackGridProps) {
+export function TrackGrid({
+  tracks,
+  hasMore = true,
+  isLoadingMore = false,
+  onLoadMore,
+}: TrackGridProps) {
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
   const [previewProgress, setPreviewProgress] = useState(0);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
@@ -117,6 +126,7 @@ export function TrackGrid({ tracks }: TrackGridProps) {
           <TrackCard
             key={track.id || index}
             track={track}
+            playlist={tracks}
             activePreviewId={activePreviewId}
             previewProgress={previewProgress}
             onTogglePreview={handleTogglePreview}
@@ -124,6 +134,30 @@ export function TrackGrid({ tracks }: TrackGridProps) {
           />
         ))}
       </motion.div>
+
+      {/* Continuous Discovery "Load More" Action: completely removed once 25+ tracks are assembled */}
+      {onLoadMore && hasMore && tracks.length < 25 && (
+        <div className="mt-8 flex flex-col items-center justify-center">
+          <button
+            type="button"
+            disabled={isLoadingMore}
+            onClick={onLoadMore}
+            className="group relative inline-flex items-center justify-center gap-2.5 px-7 py-3 rounded-2xl font-medium text-sm text-text bg-gradient-to-r from-cyan/20 via-magenta/15 to-purple-500/20 hover:from-cyan/30 hover:via-magenta/25 hover:to-purple-500/30 border border-cyan/40 hover:border-cyan shadow-[0_0_20px_rgba(6,182,212,0.15)] hover:shadow-[0_0_30px_rgba(6,182,212,0.3)] transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoadingMore ? (
+              <>
+                <Loader2 className="w-4 h-4 text-cyan animate-spin" />
+                <span className="font-mono text-cyan">Mining next tracks...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-cyan group-hover:rotate-12 transition-transform duration-300" />
+                <span>Load More Tracks</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Attribution Footer */}
       <div className="mt-8 flex items-center justify-center gap-2 text-xs text-text-faint">

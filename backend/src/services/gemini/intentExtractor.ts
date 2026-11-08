@@ -66,7 +66,35 @@ export function createIntentExtractor(client: GeminiClient, hooks: IntentExtract
           signal,
         });
         hooks.onKeyValidity?.(true);
-        return parseIntent(raw);
+        const parsed = parseIntent(raw);
+
+        // Safety fallback: ensure direct exclusion keywords from prompt are captured in negativeConstraints
+        const pLower = prompt.toLowerCase();
+        const neg = parsed.negativeConstraints || {};
+        const exArtists = [...(neg.excludedArtists || [])];
+        const exGenres = [...(neg.excludedGenres || [])];
+
+        const exceptMatch = pLower.match(/\bexcept\s+([a-z0-9\s]+?)(?:,|$|\.|\band\b)/i);
+        if (exceptMatch?.[1]) {
+          const item = exceptMatch[1].trim();
+          if (item && !exArtists.includes(item)) exArtists.push(item);
+        }
+
+        const noMatch = pLower.match(/\b(?:no|without)\s+(rap|hip hop|edm|metal|pop|rock|drill|phonk|autotune)\b/i);
+        if (noMatch?.[1]) {
+          const genre = noMatch[1].trim();
+          if (genre && !exGenres.includes(genre)) exGenres.push(genre);
+        }
+
+        if (exArtists.length > 0 || exGenres.length > 0) {
+          parsed.negativeConstraints = {
+            ...neg,
+            excludedArtists: exArtists.length > 0 ? exArtists : undefined,
+            excludedGenres: exGenres.length > 0 ? exGenres : undefined,
+          };
+        }
+
+        return parsed;
       } catch (err) {
         const appError = err instanceof AppError ? err : new AppError("INTERNAL_ERROR", { cause: err });
         if (appError.code === "GEMINI_AUTH_FAILED") hooks.onKeyValidity?.(false);
