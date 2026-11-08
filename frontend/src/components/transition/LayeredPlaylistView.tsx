@@ -1,5 +1,7 @@
 import {
   Play,
+  Pause,
+  Loader2,
   RotateCcw,
   ExternalLink,
   Music,
@@ -8,6 +10,8 @@ import { motion } from "framer-motion";
 import type { TransitionJourneyResponse } from "../../types/transition";
 import { formatDuration } from "../../lib/format";
 import { getMoodTheme } from "../../lib/moodTheme";
+import { SpotifyIcon } from "../ConnectSpotifyButton";
+import { useAudioPlayer } from "../../context/AudioPlayerContext";
 import type { CSSProperties } from "react";
 
 interface LayeredPlaylistViewProps {
@@ -16,6 +20,14 @@ interface LayeredPlaylistViewProps {
 }
 
 export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewProps) {
+  let player: ReturnType<typeof useAudioPlayer> | null = null;
+  try {
+    player = useAudioPlayer();
+  } catch {
+    player = null;
+  }
+
+  const allJourneyTracks = journey.stages.flatMap((s) => s.tracks);
   const stageTitles: Record<number, string> = {
     1: "Starting Mood",
     2: "First Transition",
@@ -186,7 +198,7 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                         </div>
                       </div>
 
-                      {/* Bottom Row: Duration & Play on Spotify Button */}
+                      {/* Bottom Row: Duration & Player + Spotify Buttons */}
                       <div className="relative z-10 flex items-center justify-between pt-2.5 border-t border-white/[0.06] mt-auto">
                         {track.durationMs ? (
                           <span className="text-[11px] font-mono text-text-faint">
@@ -196,18 +208,64 @@ export function LayeredPlaylistView({ journey, onReset }: LayeredPlaylistViewPro
                           <span />
                         )}
 
-                        <a
-                          href={track.spotifyUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`Play ${track.name} on Spotify`}
-                          title="Play on Spotify"
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer group-hover/track:scale-105"
-                        >
-                          <Play className="w-3 h-3 fill-current ml-0.5" />
-                          <span>Spotify</span>
-                          <ExternalLink className="w-3 h-3 opacity-70" />
-                        </a>
+                        <div className="flex items-center gap-2">
+                          {/* In-App Player Button (Just Left of Open on Spotify) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!player) return;
+                              if (player.currentTrack?.id === track.id) {
+                                player.togglePlayPause();
+                              } else {
+                                void player.playTrack(track, allJourneyTracks, { loopAtEnd: false });
+                              }
+                            }}
+                            aria-label={
+                              player?.currentTrack?.id === track.id && player?.isPlaying
+                                ? `Pause ${track.name}`
+                                : `Play ${track.name}`
+                            }
+                            title={
+                              player?.currentTrack?.id === track.id && player?.isPlaying
+                                ? "Pause"
+                                : "Play"
+                            }
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                              player?.currentTrack?.id === track.id && player?.isPlaying
+                                ? "bg-cyan/25 text-cyan border border-cyan/40 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                                : "bg-white/[0.06] hover:bg-white/[0.12] text-text border border-white/10 hover:border-white/20"
+                            }`}
+                          >
+                            {player?.currentTrack?.id === track.id && player?.isBuffering ? (
+                              <Loader2 className="w-3 h-3 text-cyan animate-spin" />
+                            ) : player?.currentTrack?.id === track.id && player?.isPlaying ? (
+                              <Pause className="w-3 h-3 fill-current" />
+                            ) : (
+                              <Play className="w-3 h-3 fill-current ml-0.5" />
+                            )}
+                            <span>
+                              {player?.currentTrack?.id === track.id && player?.isBuffering
+                                ? "Loading"
+                                : player?.currentTrack?.id === track.id && player?.isPlaying
+                                ? "Pause"
+                                : "Play"}
+                            </span>
+                          </button>
+
+                          {/* Spotify External Link */}
+                          <a
+                            href={track.spotifyUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Play ${track.name} on Spotify`}
+                            title="Play on Spotify"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer group-hover/track:scale-105"
+                          >
+                            <SpotifyIcon className="w-3 h-3" />
+                            <span>Spotify</span>
+                            <ExternalLink className="w-3 h-3 opacity-70" />
+                          </a>
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -21,6 +21,7 @@ import { createGeminiVisionService, type GeminiVisionService } from "./services/
 import { createTransitionPlanner } from "./services/transition/transitionPlanner.js";
 import { createStageIntentGenerator } from "./services/transition/stageIntentGenerator.js";
 import { createPlaylistAssembler } from "./services/transition/playlistAssembler.js";
+import { createTransitionReranker } from "./services/transition/transitionReranker.js";
 import { createTransitionController } from "./controllers/transition.controller.js";
 import { createTransitionRouter } from "./routes/transition.routes.js";
 import { createMusicRouter } from "./routes/music.routes.js";
@@ -112,7 +113,8 @@ export function createApp(deps: AppDependencies = {}): Express {
 
   const transitionPlanner = createTransitionPlanner(geminiClient);
   const stageIntentGenerator = createStageIntentGenerator(geminiClient);
-  const playlistAssembler = createPlaylistAssembler(spotifySearch);
+  const transitionReranker = createTransitionReranker(geminiClient);
+  const playlistAssembler = createPlaylistAssembler(spotifySearch, transitionReranker);
   const transitionController = createTransitionController(
     transitionPlanner,
     stageIntentGenerator,

@@ -366,8 +366,8 @@ function AppContent({ api }: AppProps = {}) {
       {/* Floating Toast Stack */}
       <Toasts toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Native In-App Audio Player: Discover Mode Only */}
-      {activeTab === 'discover' && <BottomPlayerBar />}
+      {/* Native In-App Audio Player */}
+      <BottomPlayerBar />
     </div>
   );
 }

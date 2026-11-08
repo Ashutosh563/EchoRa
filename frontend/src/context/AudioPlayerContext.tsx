@@ -18,7 +18,7 @@ interface AudioPlayerContextType {
   isMuted: boolean;
   queue: Track[];
   queueIndex: number;
-  playTrack: (track: Track, newQueue?: Track[]) => Promise<void>;
+  playTrack: (track: Track, newQueue?: Track[], options?: { loopAtEnd?: boolean }) => Promise<void>;
   togglePlayPause: () => void;
   seekTo: (seconds: number) => void;
   setVolume: (vol: number) => void;
@@ -50,6 +50,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const queueRef = useRef<Track[]>([]);
   const currentTrackRef = useRef<Track | null>(null);
   const currentTimeRef = useRef<number>(0);
+  const loopAtEndRef = useRef<boolean>(true);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -162,7 +163,13 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
+  const playTrack = useCallback(async (track: Track, newQueue?: Track[], options?: { loopAtEnd?: boolean }) => {
+    if (options?.loopAtEnd !== undefined) {
+      loopAtEndRef.current = options.loopAtEnd;
+    } else if (newQueue) {
+      loopAtEndRef.current = true;
+    }
+
     setCurrentTrack(track);
     currentTrackRef.current = track;
     setIsBuffering(true);
@@ -265,9 +272,21 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     if (currentIndex !== -1 && currentIndex + 1 < activeQueue.length) {
       // Advance to next song in playlist
       void playTrack(activeQueue[currentIndex + 1]);
-    } else if (activeQueue.length > 0) {
+    } else if (loopAtEndRef.current && activeQueue.length > 0) {
       // Reached the end: loop back to the start and play playlist again!
       void playTrack(activeQueue[0]);
+    } else {
+      // Reached the end with loopAtEnd === false (e.g., Transition Mode 20th song): stop playback
+      setIsPlaying(false);
+      setIsBuffering(false);
+      stopProgressTimer();
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === 'function') {
+        try {
+          ytPlayerRef.current.pauseVideo();
+        } catch {
+          // ignore
+        }
+      }
     }
   }, [playTrack]);
 

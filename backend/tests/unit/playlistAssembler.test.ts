@@ -19,11 +19,11 @@ describe("PlaylistAssembler", () => {
     { stage: 4, query: "happy upbeat songs" },
   ];
 
-  function makeTrack(id: string, name: string): Track {
+  function makeTrack(id: string, name: string, artist?: string): Track {
     return {
       id,
       name,
-      artists: ["Artist"],
+      artists: [artist || `Artist-${id}`],
       album: "Album",
       albumArtUrl: null,
       durationMs: 180000,
@@ -36,9 +36,9 @@ describe("PlaylistAssembler", () => {
     const mockSpotifySearch: SpotifySearch = {
       searchTracks: vi.fn().mockImplementation((query: string) => {
         return Promise.resolve([
-          makeTrack(`${query}-1`, "Track 1"),
-          makeTrack(`${query}-2`, "Track 2"),
-          makeTrack(`${query}-3`, "Track 3"),
+          makeTrack(`${query}-1`, `${query} Track 1`, `${query} Artist 1`),
+          makeTrack(`${query}-2`, `${query} Track 2`, `${query} Artist 2`),
+          makeTrack(`${query}-3`, `${query} Track 3`, `${query} Artist 3`),
         ]);
       }),
     };
@@ -96,7 +96,7 @@ describe("PlaylistAssembler", () => {
         if (query.includes("reflective")) {
           return Promise.reject(new Error("Spotify network failure"));
         }
-        return Promise.resolve([makeTrack(`${query}-1`, "Track 1")]);
+        return Promise.resolve([makeTrack(`${query}-1`, `${query} Track 1`)]);
       }),
     };
 
