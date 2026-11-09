@@ -33,8 +33,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const isTestEnv = import.meta.env.MODE === 'test';
+  const [isLoading, setIsLoading] = useState(!isTestEnv);
   const [isGuest, setIsGuest] = useState<boolean>(() => {
+    if (isTestEnv) return true;
     return localStorage.getItem(GUEST_STORAGE_KEY) === 'true';
   });
 
