@@ -26,6 +26,9 @@ import {
   setDiscoveryMode,
   subscribeToProfile,
 } from './services/preferenceStorage';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthLandingView } from './components/auth/AuthLandingView';
+import { Wordmark } from './components/Wordmark';
 import type { ToastInfo, Track } from './types';
 import type { CameraAnalysisResponse } from './types/camera';
 import type { DiscoveryMode, StoredProfile } from './types/discovery';
@@ -37,6 +40,8 @@ interface AppProps {
 }
 
 function AppContent({ api }: AppProps = {}) {
+  const { user, isGuest, isLoading: isAuthLoading } = useAuth();
+  const [forceShowAuth, setForceShowAuth] = useState(false);
   const { status } = useStatus();
   const { status: searchStatus, data, error, lastPrompt, search } = useSearch(
     api ? { searchFn: (p, s) => api.search(p, s) } : undefined
@@ -227,6 +232,21 @@ function AppContent({ api }: AppProps = {}) {
 
   const hasSearched = searchStatus === 'success' || searchStatus === 'loading' || Boolean(data);
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-ink">
+        <div className="flex flex-col items-center gap-4">
+          <Wordmark />
+          <div className="text-xs text-text-dim animate-pulse">Connecting to Echora...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if ((!user && !isGuest) || forceShowAuth) {
+    return <AuthLandingView />;
+  }
+
   return (
     <div
       className="mood-shell relative min-h-screen flex flex-col font-sans selection:bg-magenta/30 selection:text-text"
@@ -242,6 +262,7 @@ function AppContent({ api }: AppProps = {}) {
         onOpenPreferences={activeTab === 'discover' ? () => setIsPreferencesOpen(true) : undefined}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        onOpenSignIn={() => setForceShowAuth(true)}
       />
 
       {/* Main Content Area with Fluid Tab Switching Animation */}
@@ -374,8 +395,10 @@ function AppContent({ api }: AppProps = {}) {
 
 export default function App(props: AppProps = {}) {
   return (
-    <AudioPlayerProvider>
-      <AppContent {...props} />
-    </AudioPlayerProvider>
+    <AuthProvider>
+      <AudioPlayerProvider>
+        <AppContent {...props} />
+      </AudioPlayerProvider>
+    </AuthProvider>
   );
 }
