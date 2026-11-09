@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 180" width="680" height="180" fill="none" aria-label="ECHORA Horizontal Lockup">
+  <defs>
+    <linearGradient id="glass-surface" x1="28" y1="26" x2="148" y2="154" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.11" />
+      <stop offset="43%" stop-color="#FFFFFF" stop-opacity="0.02" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0" />
+    </linearGradient>
+    <linearGradient id="glass-border" x1="88" y1="26" x2="88" y2="154" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.14" />
+    </linearGradient>
+    <radialGradient id="ambient-violet" cx="24%" cy="26%" r="45%">
+      <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="ambient-cyan" cx="78%" cy="73%" r="45%">
+      <stop offset="0%" stop-color="#22D3EE" stop-opacity="0.24" />
+      <stop offset="100%" stop-color="#22D3EE" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="aurora" x1="25" y1="29" x2="200" y2="197" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6" />
+      <stop offset="0.47" stop-color="#EC4899" />
+      <stop offset="0.76" stop-color="#22D3EE" />
+      <stop offset="1" stop-color="#22D3EE" />
+    </linearGradient>
+    <linearGradient id="wordmark-grad" x1="184" y1="90" x2="640" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="5%" stop-color="#F4F3FA" />
+      <stop offset="44%" stop-color="#F4F3FA" />
+      <stop offset="100%" stop-color="#A7A5B8" />
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Liquid Glass App Icon (128x128, rx=28.16) -->
+  <g transform="translate(24, 26)">
+    <rect width="128" height="128" rx="28.16" fill="#100F1B" fill-opacity="0.88" />
+    <rect width="128" height="128" rx="28.16" fill="url(#glass-surface)" />
+    <rect x="10" y="10" width="108" height="108" rx="32" fill="url(#ambient-violet)" />
+    <rect x="10" y="10" width="108" height="108" rx="32" fill="url(#ambient-cyan)" />
+    <rect x="0.75" y="0.75" width="126.5" height="126.5" rx="27.4" stroke="url(#glass-border)" stroke-width="1.5" />
+    <g transform="translate(23, 23) scale(0.366)">
+      <ellipse cx="164" cy="174" rx="35" ry="20" fill="#F59E0B" opacity="0.24" filter="url(#glow)" />
+      <path d="M42 91V133M88 61V163M134 77V147M180 45V179" stroke="url(#aurora)" stroke-width="25" stroke-linecap="round" opacity="0.38" filter="url(#glow)" />
+      <path d="M42 91V133M88 61V163M134 77V147M180 45V179" stroke="url(#aurora)" stroke-width="25" stroke-linecap="round" />
+      <path d="M34 87.5V98M80 56V77M126 72V87M172 40V66" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" opacity="0.32" />
+    </g>
+  </g>
+
+  <!-- ECHORA Wordmark -->
+  <text x="184" y="123" fill="url(#wordmark-grad)" font-family="'Sora', 'Inter', system-ui, -apple-system, sans-serif" font-weight="800" font-size="96" letter-spacing="-0.055em">ECHORA</text>
+</svg>

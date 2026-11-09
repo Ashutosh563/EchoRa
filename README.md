@@ -2,7 +2,8 @@
 
 <div align="center">
 
-![ECHORA Banner](https://raw.githubusercontent.com/Echo-Ra/EchoRa/main/frontend/public/banner.png)
+<img src="./assets/echora-banner.svg" alt="ECHORA Banner" width="620" />
+<br/><br/>
 
 **AI-Native Mood & Psychophysiological Music Intelligence Engine**
 
