@@ -136,17 +136,15 @@ export const TrackCard = memo(function TrackCard({
       onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className={`relative group${shouldReduceMotion ? '' : ' tilt-card'}${
-        isPreviewPlaying ? ' conic-active' : ''
-      }`}
+      className={`relative group${shouldReduceMotion ? '' : ' tilt-card'}${isPreviewPlaying ? ' conic-active' : ''
+        }`}
     >
       {/* Rotating Conic Aurora Glow Behind Card on Hover / Playing (Paused when idle) */}
       <div
-        className={`absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none transition-all duration-500 group-hover:-translate-y-1 ${
-          isPreviewPlaying
-            ? 'opacity-50'
-            : 'opacity-0 group-hover:opacity-40'
-        }`}
+        className={`absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none transition-all duration-500 group-hover:-translate-y-1 ${isPreviewPlaying
+          ? 'opacity-50'
+          : 'opacity-0 group-hover:opacity-40'
+          }`}
       >
         <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" />
       </div>
@@ -167,11 +165,10 @@ export const TrackCard = memo(function TrackCard({
       >
         {/* Soft Moving Mood-Responsive Aurora Animation in Card Background on Hover / Playing */}
         <div
-          className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[20px] transition-opacity duration-500 ${
-            isPreviewPlaying
-              ? 'opacity-30'
-              : 'opacity-0 group-hover:opacity-25'
-          }`}
+          className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[20px] transition-opacity duration-500 ${isPreviewPlaying
+            ? 'opacity-30'
+            : 'opacity-0 group-hover:opacity-25'
+            }`}
         >
           <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[16px]" />
         </div>
@@ -189,9 +186,8 @@ export const TrackCard = memo(function TrackCard({
               decoding="async"
               onLoad={() => setArtLoaded(true)}
               onError={() => setArtFailed(true)}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${
-                artLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`w-full h-full object-cover transition-opacity duration-300 ${artLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-tr from-violet/30 to-cyan/30 flex items-center justify-center">
@@ -248,11 +244,10 @@ export const TrackCard = memo(function TrackCard({
                     handlePlayNative!(track);
                   }}
                   aria-label={isThisTrackPlaying ? `Pause "${track.name}"` : `Play "${track.name}" here`}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shadow-sm cursor-pointer ${
-                    isThisTrackPlaying
-                      ? 'bg-cyan text-ink border-cyan shadow-cyan/30'
-                      : 'bg-cyan/15 hover:bg-cyan/25 text-cyan border-cyan/30 hover:border-cyan/50 hover:scale-[1.03] active:scale-[0.98]'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shadow-sm cursor-pointer ${isThisTrackPlaying
+                    ? 'bg-cyan text-ink border-cyan shadow-cyan/30'
+                    : 'bg-cyan/15 hover:bg-cyan/25 text-cyan border-cyan/30 hover:border-cyan/50 hover:scale-[1.03] active:scale-[0.98]'
+                    }`}
                 >
                   {isThisTrackBuffering ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
