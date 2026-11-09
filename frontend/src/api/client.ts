@@ -1,4 +1,4 @@
-import type { SearchResponse, StatusResponse } from '../types';
+import type { SearchResponse, StatusResponse, Track } from '../types';
 import type { CameraAnalysisResponse } from '../types/camera';
 import type { SearchOptions } from './musicApi';
 
@@ -74,6 +74,81 @@ export async function searchMusic(
       signal,
     });
     return await handleResponse<SearchResponse>(res);
+  } catch (err: unknown) {
+    if (err instanceof AppApiError) throw err;
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    throw new AppApiError('NETWORK_ERROR', "Can't reach the ECHORA server (127.0.0.1:4000)");
+  }
+}
+
+export interface LoadMoreRequestParams {
+  prompt: string;
+  intent: any;
+  page: number;
+  excludeTrackIds: string[];
+  excludeSongSignatures?: string[];
+  cumulativeArtistCounts?: Record<string, number>;
+  discoveryMode?: string;
+}
+
+export interface LoadMoreResult {
+  page: number;
+  tracks: Track[];
+  hasMore: boolean;
+  queriesUsed: string[];
+}
+
+export async function loadMoreMusic(
+  params: LoadMoreRequestParams,
+  signal?: AbortSignal,
+): Promise<LoadMoreResult> {
+  try {
+    const res = await fetch('/api/music/load-more', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+      signal,
+    });
+    return await handleResponse<LoadMoreResult>(res);
+  } catch (err: unknown) {
+    if (err instanceof AppApiError) throw err;
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    throw new AppApiError('NETWORK_ERROR', "Can't reach the ECHORA server (127.0.0.1:4000)");
+  }
+}
+
+export interface RefineVibeRequestParams {
+  prompt: string;
+  intent: any;
+  refinement: {
+    type: string;
+    label: string;
+    delta?: string;
+  };
+  discoveryMode?: string;
+}
+
+export interface RefineVibeResult {
+  intent: any;
+  tracks: Track[];
+}
+
+export async function refineVibeMusic(
+  params: RefineVibeRequestParams,
+  signal?: AbortSignal,
+): Promise<RefineVibeResult> {
+  try {
+    const res = await fetch('/api/music/refine-vibe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+      signal,
+    });
+    return await handleResponse<RefineVibeResult>(res);
   } catch (err: unknown) {
     if (err instanceof AppApiError) throw err;
     if (err instanceof DOMException && err.name === 'AbortError') throw err;

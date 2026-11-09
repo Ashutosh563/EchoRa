@@ -142,6 +142,8 @@ export const IntentPanel = memo(function IntentPanel({ data, userPrompt, onCopyN
           {intent.mood || 'Open'}
         </span>
         {intent.activity && <span className="text-xs text-text-dim">for {intent.activity}</span>}
+        {intent.language && <span className="text-xs text-cyan font-medium capitalize">· {intent.language}</span>}
+        {intent.era && <span className="text-xs text-amber font-medium">· {intent.era}</span>}
         {intent.time_context && intent.time_context !== 'any' && (
           <span className="text-xs text-text-dim">· {intent.time_context.replace('_', ' ')}</span>
         )}
