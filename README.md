@@ -320,13 +320,6 @@ npm run build
 
 ---
 
-## 👥 Credits & Contributors
-
-- **Backend Architecture, Search Pipeline & Audio Services:** [@Ashutosh563](https://github.com/Ashutosh563) (Author of the continuous discovery engine, multi-facet query generator, audio stream resolver, and transition reranker).
-- **UI Performance Architecture & Systems Integration:** Built with zero-rerender CSS variable tilt, component memoization boundaries, performance metrics telemetry, and conflict synthesis.
-
----
-
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
