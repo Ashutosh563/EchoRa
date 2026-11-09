@@ -13,6 +13,7 @@ import { parseIntent } from "./services/gemini/intentExtractor.js";
 import { INTENT_SYSTEM_INSTRUCTION } from "./services/gemini/prompt.js";
 import { MUSIC_INTENT_JSON_SCHEMA } from "./services/gemini/intentSchema.js";
 import { createMusicController } from "./controllers/music.controller.js";
+import { createSemanticReranker } from "./services/gemini/reranker.js";
 import { createSpotifyController } from "./controllers/spotify.controller.js";
 import { createStatusController } from "./controllers/status.controller.js";
 import { createCameraController } from "./controllers/camera.controller.js";
@@ -20,6 +21,7 @@ import { createGeminiVisionService, type GeminiVisionService } from "./services/
 import { createTransitionPlanner } from "./services/transition/transitionPlanner.js";
 import { createStageIntentGenerator } from "./services/transition/stageIntentGenerator.js";
 import { createPlaylistAssembler } from "./services/transition/playlistAssembler.js";
+import { createTransitionReranker } from "./services/transition/transitionReranker.js";
 import { createTransitionController } from "./controllers/transition.controller.js";
 import { createTransitionRouter } from "./routes/transition.routes.js";
 import { createMusicRouter } from "./routes/music.routes.js";
@@ -111,7 +113,8 @@ export function createApp(deps: AppDependencies = {}): Express {
 
   const transitionPlanner = createTransitionPlanner(geminiClient);
   const stageIntentGenerator = createStageIntentGenerator(geminiClient);
-  const playlistAssembler = createPlaylistAssembler(spotifySearch);
+  const transitionReranker = createTransitionReranker(geminiClient);
+  const playlistAssembler = createPlaylistAssembler(spotifySearch, transitionReranker);
   const transitionController = createTransitionController(
     transitionPlanner,
     stageIntentGenerator,
@@ -121,6 +124,7 @@ export function createApp(deps: AppDependencies = {}): Express {
   const musicController = createMusicController(config, credState, spotifyAuth, {
     intentExtractor,
     spotifySearch,
+    reranker: createSemanticReranker(geminiClient),
   });
   const spotifyController = createSpotifyController(config, spotifyAuth);
   const statusController = createStatusController(config, credState, spotifyAuth);

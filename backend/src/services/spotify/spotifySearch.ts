@@ -27,7 +27,7 @@ export interface SpotifySearchOptions {
 
 export interface SpotifySearch {
   /** Searches tracks for one query, paging with offset until `maxResults` are collected. */
-  searchTracks(query: string, maxResults: number, signal?: AbortSignal): Promise<Track[]>;
+  searchTracks(query: string, maxResults: number, signal?: AbortSignal, startOffset?: number): Promise<Track[]>;
 }
 
 function parseRetryAfter(header: string | null): number {
@@ -106,12 +106,12 @@ export function createSpotifySearch({ auth, fetchFn = fetch, sleep = defaultSlee
   }
 
   return {
-    async searchTracks(query, maxResults, signal) {
+    async searchTracks(query, maxResults, signal, startOffset = 0) {
       const results: Track[] = [];
       const seen = new Set<string>();
 
       for (let page = 0; page < MAX_PAGES_PER_QUERY && results.length < maxResults; page++) {
-        const data = await fetchPage(query, page * SEARCH_PAGE_LIMIT, signal);
+        const data = await fetchPage(query, startOffset + page * SEARCH_PAGE_LIMIT, signal);
         const items = data.tracks?.items ?? [];
 
         for (const item of items) {

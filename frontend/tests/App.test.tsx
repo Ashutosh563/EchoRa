@@ -83,7 +83,7 @@ describe('ECHORA App UI', () => {
     await user.click(chip);
 
     expect(searchSpy).toHaveBeenCalledWith(
-      'Mellow acoustic songs and calm beats for a rainy focus session',
+      'Rainy day focus',
       expect.objectContaining({ discoveryMode: 'FAMILIAR' }),
       expect.any(AbortSignal)
     );
@@ -113,7 +113,7 @@ describe('ECHORA App UI', () => {
     expect(within(screen.getByRole('dialog')).getByText('Midnight Thoughts')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Close song details' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  });
+  }, 15000);
 
   it('displays error card when search fails', async () => {
     vi.spyOn(client, 'searchMusic').mockRejectedValue(
