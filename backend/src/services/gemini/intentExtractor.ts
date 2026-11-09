@@ -1,9 +1,10 @@
 import type { MusicIntent } from "../../types/intent.js";
+import type { DiscoveryContext } from "../../types/discovery.js";
 import { AppError } from "../../utils/AppError.js";
 import { logger } from "../../utils/logger.js";
 import type { GeminiClient } from "./geminiClient.js";
 import { MUSIC_INTENT_JSON_SCHEMA, musicIntentSchema } from "./intentSchema.js";
-import { INTENT_SYSTEM_INSTRUCTION } from "./prompt.js";
+import { INTENT_SYSTEM_INSTRUCTION, buildIntentSystemInstruction } from "./prompt.js";
 
 const MAX_ATTEMPTS = 2;
 
@@ -39,26 +40,61 @@ export interface IntentExtractorHooks {
   onKeyValidity?: (valid: boolean) => void;
 }
 
-export type IntentExtractor = (prompt: string, signal?: AbortSignal) => Promise<MusicIntent>;
+export type IntentExtractor = (
+  prompt: string,
+  signal?: AbortSignal,
+  discoveryContext?: DiscoveryContext,
+) => Promise<MusicIntent>;
 
 /**
- * Creates the intent extractor. Input is the user's prompt only.
+ * Creates the intent extractor. Input is the user's prompt and optional discovery context.
  * Retries once on malformed output or transient unavailability.
  */
 export function createIntentExtractor(client: GeminiClient, hooks: IntentExtractorHooks = {}): IntentExtractor {
-  return async (prompt, signal) => {
+  return async (prompt, signal, discoveryContext) => {
     let lastError: AppError | undefined;
+    const systemInstruction = discoveryContext?.discoveryMode
+      ? buildIntentSystemInstruction(discoveryContext.discoveryMode)
+      : INTENT_SYSTEM_INSTRUCTION;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         const raw = await client.generateJson({
           userText: prompt,
-          systemInstruction: INTENT_SYSTEM_INSTRUCTION,
+          systemInstruction,
           jsonSchema: MUSIC_INTENT_JSON_SCHEMA,
           signal,
         });
         hooks.onKeyValidity?.(true);
-        return parseIntent(raw);
+        const parsed = parseIntent(raw);
+
+        // Safety fallback: ensure direct exclusion keywords from prompt are captured in negativeConstraints
+        const pLower = prompt.toLowerCase();
+        const neg = parsed.negativeConstraints || {};
+        const exArtists = [...(neg.excludedArtists || [])];
+        const exGenres = [...(neg.excludedGenres || [])];
+
+        const exceptMatch = pLower.match(/\bexcept\s+([a-z0-9\s]+?)(?:,|$|\.|\band\b)/i);
+        if (exceptMatch?.[1]) {
+          const item = exceptMatch[1].trim();
+          if (item && !exArtists.includes(item)) exArtists.push(item);
+        }
+
+        const noMatch = pLower.match(/\b(?:no|without)\s+(rap|hip hop|edm|metal|pop|rock|drill|phonk|autotune)\b/i);
+        if (noMatch?.[1]) {
+          const genre = noMatch[1].trim();
+          if (genre && !exGenres.includes(genre)) exGenres.push(genre);
+        }
+
+        if (exArtists.length > 0 || exGenres.length > 0) {
+          parsed.negativeConstraints = {
+            ...neg,
+            excludedArtists: exArtists.length > 0 ? exArtists : undefined,
+            excludedGenres: exGenres.length > 0 ? exGenres : undefined,
+          };
+        }
+
+        return parsed;
       } catch (err) {
         const appError = err instanceof AppError ? err : new AppError("INTERNAL_ERROR", { cause: err });
         if (appError.code === "GEMINI_AUTH_FAILED") hooks.onKeyValidity?.(false);

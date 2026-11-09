@@ -55,5 +55,70 @@ export function createMusicController(
         next(err);
       }
     },
+
+    async loadMore(req: Request, res: Response, next: NextFunction) {
+      try {
+        const {
+          prompt,
+          intent,
+          page,
+          excludeTrackIds,
+          excludeSongSignatures,
+          cumulativeArtistCounts,
+          discoveryMode,
+          preferences,
+          historySignals,
+        } = req.body;
+
+        const resolution = resolveAppMode(config, credState, spotifyAuth);
+        const discoveryContext: DiscoveryContext = {
+          discoveryMode,
+          preferences,
+          historySignals,
+          rawPrompt: prompt || "",
+        };
+
+        const result = await pipeline.loadMore({
+          prompt: prompt || "",
+          intent,
+          page: Number(page) || 2,
+          excludeTrackIds: Array.isArray(excludeTrackIds) ? excludeTrackIds : [],
+          excludeSongSignatures: Array.isArray(excludeSongSignatures) ? excludeSongSignatures : [],
+          cumulativeArtistCounts:
+            cumulativeArtistCounts && typeof cumulativeArtistCounts === "object" ? cumulativeArtistCounts : {},
+          mode: resolution.searchMode,
+          discoveryContext,
+        });
+
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+
+    async refineVibe(req: Request, res: Response, next: NextFunction) {
+      try {
+        const { prompt, intent, refinement, discoveryMode, preferences, historySignals } = req.body;
+        const resolution = resolveAppMode(config, credState, spotifyAuth);
+        const discoveryContext: DiscoveryContext = {
+          discoveryMode,
+          preferences,
+          historySignals,
+          rawPrompt: prompt || "",
+        };
+
+        const result = await pipeline.refineVibe({
+          prompt: prompt || "",
+          intent,
+          refinement: refinement || { type: "custom", label: "Custom" },
+          mode: resolution.searchMode,
+          discoveryContext,
+        });
+
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
   };
 }
