@@ -24,6 +24,12 @@ export function cleanSpotifyQuery(q: string, lang?: string | null): string {
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
   if (!lang) return cleaned;
+
+  // Never prepend language or generic keywords if query is already an explicit Spotify fielded filter (artist: or track:)
+  if (/^(?:artist:|track:)/i.test(cleaned)) {
+    return cleaned;
+  }
+
   const normalizedLang = lang.toLowerCase().trim();
 
   if (normalizedLang === "spanish" || normalizedLang === "latin") {
@@ -228,7 +234,7 @@ export function createSearchPipeline({
         }
       } else if (targetArtists.length === 1) {
         const artistQuery = `artist:"${targetArtists[0]}"`;
-        if (!queryList.some((q) => q.toLowerCase().includes(targetArtists[0].toLowerCase()))) {
+        if (!queryList.includes(artistQuery)) {
           queryList.unshift(artistQuery);
         }
       }

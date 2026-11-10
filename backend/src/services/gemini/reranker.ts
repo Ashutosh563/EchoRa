@@ -120,6 +120,37 @@ export function parseTargetArtists(artistStr?: string | null): string[] {
 }
 
 /**
+ * Normalizes an artist or track name by lowercasing and stripping non-alphanumeric characters.
+ * Allows "dilraaz" to match "Dil Raaz", "krsna" to match "KR$NA", and "cold mess" to match "cold/mess".
+ */
+export function normalizeEntityName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\$/g, "s")
+    .replace(/@/g, "a")
+    .replace(/0/g, "o")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Checks whether a track artist matches a target artist query with space, punctuation, and symbol tolerance.
+ */
+export function isArtistMatch(trackArtist: string, targetArtist: string): boolean {
+  const tLower = targetArtist.toLowerCase().trim();
+  const aLower = trackArtist.toLowerCase().trim();
+  if (aLower.includes(tLower) || tLower.includes(aLower)) return true;
+
+  const tNorm = normalizeEntityName(targetArtist);
+  const aNorm = normalizeEntityName(trackArtist);
+  if (tNorm.length >= 3 && aNorm.length >= 3) {
+    if (aNorm === tNorm || aNorm.includes(tNorm) || tNorm.includes(aNorm)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Checks whether a track violates the user's natural language negative constraints
  * (e.g. excluded artists, excluded genres, or negative keyword phrases).
  */
@@ -442,11 +473,7 @@ export function isLanguageMatch(
   if (userExplicitArtist) {
     const explicitArtists = parseTargetArtists(userExplicitArtist);
     const isExplicitMatch = explicitArtists.some((target) => {
-      const targetLower = target.toLowerCase();
-      return track.artists.some((a) => {
-        const art = a.toLowerCase().trim();
-        return art.includes(targetLower) || targetLower.includes(art);
-      });
+      return track.artists.some((a) => isArtistMatch(a, target));
     });
 
     if (isExplicitMatch) {
@@ -537,6 +564,7 @@ export interface BalanceOptions {
   excludeTrackIds?: Set<string>;
   excludeSignatures?: Set<string>;
   maxPerArtist?: number;
+  isExclusive?: boolean;
 }
 
 export function balanceTracks(
@@ -599,21 +627,18 @@ export function balanceTracks(
   const combined = [...targetEraTracks, ...otherEraTracks];
   if (negativeIntent?.artist) {
     const targetArtists = parseTargetArtists(negativeIntent.artist);
-    const isExcl = Boolean(/\b(only|just|pure|exclusively|all)\b/i.test(negativeIntent.artist));
+    const isExcl = Boolean(
+      options?.isExclusive ||
+      (/\b(only|just|pure|exclusively|all)\b/i.test(negativeIntent.artist))
+    );
     const artistMatches = combined.filter((t) =>
-      targetArtists.some((ta) => {
-        const tl = ta.toLowerCase();
-        return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
-      })
+      targetArtists.some((ta) => t.artists.some((a) => isArtistMatch(a, ta)))
     );
     if (isExcl) {
       return artistMatches.slice(0, 10);
     }
     const companionMatches = combined.filter((t) =>
-      !targetArtists.some((ta) => {
-        const tl = ta.toLowerCase();
-        return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
-      })
+      !targetArtists.some((ta) => t.artists.some((a) => isArtistMatch(a, ta)))
     );
     const targetQuota = targetArtists.length > 1 ? 6 : 5;
     return [...artistMatches.slice(0, targetQuota), ...companionMatches.slice(0, 10 - targetQuota)].slice(0, 10);
@@ -732,14 +757,20 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
     ): Promise<Track[]> {
       if (!candidates || candidates.length === 0) return [];
       const allowInstrumental = userWantsInstrumental(prompt, intent);
+      const isExclusive = Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
       const hasExplicitArtist = Boolean(intent.artist && intent.artist.trim().length > 0);
       const maxPerArtist = balanceOptions?.maxPerArtist ?? (hasExplicitArtist ? 10 : 2);
       const maxCumulativeArtist = balanceOptions?.maxCumulativePerArtist ?? 6;
       const promptWantsMashup = prompt.toLowerCase().includes("mashup") || prompt.toLowerCase().includes("mix");
       const MAX_MASHUPS = promptWantsMashup ? 10 : 2;
 
+      const effectiveOptions: BalanceOptions = {
+        ...balanceOptions,
+        isExclusive: balanceOptions?.isExclusive ?? isExclusive,
+      };
+
       if (!geminiClient || candidates.length <= 1) {
-        const balanced = balanceTracks(candidates, MAX_MASHUPS, intent.era, intent.language, allowInstrumental, maxPerArtist, intent, balanceOptions);
+        const balanced = balanceTracks(candidates, MAX_MASHUPS, intent.era, intent.language, allowInstrumental, maxPerArtist, intent, effectiveOptions);
         return balanced.map((t) => ({
           ...t,
           matchReason: t.matchReason || `Matches ${intent.mood || "selected"} mood and acoustic style.`,
@@ -764,14 +795,12 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
             if (b.name.toLowerCase().includes(targetTitleLower)) bScore += 20;
           }
           if (targetArtists.length > 0) {
-            const aMatches = targetArtists.filter((ta) => {
-              const tl = ta.toLowerCase();
-              return a.artists.some((art) => art.toLowerCase().includes(tl) || tl.includes(art.toLowerCase()));
-            }).length;
-            const bMatches = targetArtists.filter((ta) => {
-              const tl = ta.toLowerCase();
-              return b.artists.some((art) => art.toLowerCase().includes(tl) || tl.includes(art.toLowerCase()));
-            }).length;
+            const aMatches = targetArtists.filter((ta) =>
+              a.artists.some((art) => isArtistMatch(art, ta))
+            ).length;
+            const bMatches = targetArtists.filter((ta) =>
+              b.artists.some((art) => isArtistMatch(art, ta))
+            ).length;
 
             if (aMatches > 1) aScore += 15;
             else if (aMatches === 1) aScore += 6;
@@ -842,7 +871,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
 
         if (!Array.isArray(rankedIds) || rankedIds.length === 0) {
           logger.warn("[Reranker] Received empty rankedTracks from model. Preserving candidate order.");
-          const balanced = balanceTracks(candidates, MAX_MASHUPS, intent.era, intent.language, allowInstrumental, maxPerArtist, intent, balanceOptions);
+          const balanced = balanceTracks(candidates, MAX_MASHUPS, intent.era, intent.language, allowInstrumental, maxPerArtist, intent, effectiveOptions);
           return balanced.map((t) => ({
             ...t,
             matchReason: t.matchReason || `Selected for ${intent.mood || "acoustic"} profile.`,
@@ -946,10 +975,9 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           const seen = new Set<string>();
 
           for (const t of rerankedList) {
-            const matches = targetArtists.some((ta) => {
-              const tl = ta.toLowerCase();
-              return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
-            });
+            const matches = targetArtists.some((ta) =>
+              t.artists.some((a) => isArtistMatch(a, ta))
+            );
             if (matches && !seen.has(t.id)) {
               exclusiveMatches.push(t);
               seen.add(t.id);
@@ -961,10 +989,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
               !seen.has(t.id) &&
               isLanguageMatch(t, intent.language, intent) &&
               !matchesNegativeConstraints(t, intent) &&
-              targetArtists.some((ta) => {
-                const tl = ta.toLowerCase();
-                return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
-              })
+              targetArtists.some((ta) => t.artists.some((a) => isArtistMatch(a, ta)))
             );
             for (const t of moreArtistTracks) {
               seen.add(t.id);
@@ -991,10 +1016,9 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           const seen = new Set<string>();
 
           for (const t of rerankedList) {
-            const isMatch = targetArtists.some((ta) => {
-              const tl = ta.toLowerCase();
-              return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
-            });
+            const isMatch = targetArtists.some((ta) =>
+              t.artists.some((a) => isArtistMatch(a, ta))
+            );
             if (isMatch) {
               artistPool.push(t);
             } else {
@@ -1011,10 +1035,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
               !seen.has(t.id) &&
               isLanguageMatch(t, intent.language, intent) &&
               !matchesNegativeConstraints(t, intent) &&
-              targetArtists.some((ta) => {
-                const tl = ta.toLowerCase();
-                return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
-              })
+              targetArtists.some((ta) => t.artists.some((a) => isArtistMatch(a, ta)))
             );
             for (const t of moreArtistTracks) {
               artistPool.push(t);
@@ -1032,10 +1053,9 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
 
             // First add mutual duets/collaborations
             for (const t of artistPool) {
-              const matchesCount = targetArtists.filter((ta) => {
-                const tl = ta.toLowerCase();
-                return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
-              }).length;
+              const matchesCount = targetArtists.filter((ta) =>
+                t.artists.some((a) => isArtistMatch(a, ta))
+              ).length;
               if (matchesCount > 1 && balanced.length < targetQuota) {
                 balanced.push(t);
               }
@@ -1044,10 +1064,9 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
             // Next fill each artist up to their sub-quota
             for (const t of artistPool) {
               if (balanced.some((b) => b.id === t.id)) continue;
-              const matchedArtist = targetArtists.find((ta) => {
-                const tl = ta.toLowerCase();
-                return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
-              });
+              const matchedArtist = targetArtists.find((ta) =>
+                t.artists.some((a) => isArtistMatch(a, ta))
+              );
               if (!matchedArtist) continue;
               const cnt = subCounts.get(matchedArtist) || 0;
               if (cnt < maxPerSubArtist && balanced.length < targetQuota) {
@@ -1090,7 +1109,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn(`[Reranker] Semantic reranker skipped or timed out (${errorMsg}). Using balanced candidate ranking.`);
-        const balanced = balanceTracks(candidates, MAX_MASHUPS, intent.era, intent.language, allowInstrumental, maxPerArtist, intent, balanceOptions);
+        const balanced = balanceTracks(candidates, MAX_MASHUPS, intent.era, intent.language, allowInstrumental, maxPerArtist, intent, effectiveOptions);
         return balanced.map((t) => ({
           ...t,
           matchReason: t.matchReason || `Matches ${intent.mood || "selected"} mood and acoustic style.`,

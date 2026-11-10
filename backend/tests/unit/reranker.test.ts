@@ -692,7 +692,7 @@ describe("Semantic Reranker (reranker.ts)", () => {
         ...mockIntent,
         artist: "Karma",
         language: "hindi",
-        genre: "hip hop",
+        genre: ["hip hop"],
       };
 
       const result = await reranker.rerank("hindi hip hop songs by Karma", intent, candidates);
@@ -736,6 +736,78 @@ describe("Semantic Reranker (reranker.ts)", () => {
       expect(result.length).toBe(3);
       expect(result.every((t) => t.artists.includes("Underground Indie Artist"))).toBe(true);
       expect(result[0].matchReason).toContain("complete discography");
+    });
+
+    it("matches lowercase and punctuation-variant indie artists (e.g. 'dilraaz' -> 'Dil Raaz', 'krsna' -> 'KR$NA')", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("dr1", "Dil Ki Baat"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr2", "Tanhai"), artists: ["Dil Raaz"] },
+        { ...makeTrack("kr1", "Vyanjan"), artists: ["KR$NA"] },
+        { ...makeTrack("c1", "Peer Track"), artists: ["Papon"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Fit" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+
+      // Test 1: "dilraaz" lowercase without space matches "Dil Raaz"
+      const resultDilraaz = await reranker.rerank(
+        "songs by dilraaz",
+        { ...mockIntent, artist: "dilraaz" },
+        candidates,
+      );
+      expect(resultDilraaz[0].artists[0]).toBe("Dil Raaz");
+
+      // Test 2: "krsna" without dollar symbol matches "KR$NA"
+      const resultKrsna = await reranker.rerank(
+        "songs by krsna",
+        { ...mockIntent, artist: "krsna" },
+        candidates,
+      );
+      expect(resultKrsna[0].artists[0]).toBe("KR$NA");
+    });
+
+    it("preserves strict general mood diversity when no artist is searched (e.g. 'chill songs by the ocean')", async () => {
+      // 5 tracks from one artist, 4 from others
+      const candidates: Track[] = [
+        { ...makeTrack("a1", "Ocean Breeze 1"), artists: ["The Waves"] },
+        { ...makeTrack("a2", "Ocean Breeze 2"), artists: ["The Waves"] },
+        { ...makeTrack("a3", "Ocean Breeze 3"), artists: ["The Waves"] },
+        { ...makeTrack("a4", "Ocean Breeze 4"), artists: ["The Waves"] },
+        { ...makeTrack("b1", "Tide Song"), artists: ["Sea Spray"] },
+        { ...makeTrack("b2", "Coastline"), artists: ["Sea Spray"] },
+        { ...makeTrack("c1", "Seaside"), artists: ["Coastal Acoustic"] },
+        { ...makeTrack("c2", "Dunes"), artists: ["Coastal Acoustic"] },
+        { ...makeTrack("d1", "Shore"), artists: ["Pacific Calm"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Ocean chill vibe" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const generalIntent: MusicIntent = {
+        ...mockIntent,
+        mood: "calm",
+        artist: undefined, // No artist! General mood search
+      };
+
+      const result = await reranker.rerank("chill songs by the ocean", generalIntent, candidates);
+
+      // Must strictly cap "The Waves" to maximum 2 tracks (preserving general mood multi-artist diversity)
+      const wavesTracks = result.filter((t) => t.artists.includes("The Waves"));
+      expect(wavesTracks.length).toBeLessThanOrEqual(2);
+      expect(result.length).toBeGreaterThanOrEqual(7);
     });
   });
 });
