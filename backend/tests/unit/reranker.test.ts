@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createSemanticReranker } from "../../src/services/gemini/reranker.js";
+import { createSemanticReranker, isLanguageMatch } from "../../src/services/gemini/reranker.js";
 import type { GeminiClient } from "../../src/services/gemini/geminiClient.js";
 import type { MusicIntent } from "../../src/types/intent.js";
 import type { Track } from "../../src/types/track.js";
@@ -808,6 +808,48 @@ describe("Semantic Reranker (reranker.ts)", () => {
       const wavesTracks = result.filter((t) => t.artists.includes("The Waves"));
       expect(wavesTracks.length).toBeLessThanOrEqual(2);
       expect(result.length).toBeGreaterThanOrEqual(7);
+    });
+
+    it("Edge Case E: preserves regional indie tracks with English titles under Hindi context (code-switching)", () => {
+      // 1. Regional indie artists with English or alphanumeric titles must PASS under Hindi context
+      const krsnaTrack: Track = {
+        ...makeTrack("k1", "Say My Name"),
+        artists: ["KR$NA"],
+      };
+      const tabaTrack: Track = {
+        ...makeTrack("t1", "Walk With Me"),
+        artists: ["Taba Chake"],
+      };
+      const dilRaazTrack: Track = {
+        ...makeTrack("d1", "Still In Love"),
+        artists: ["Dil Raaz", "Skyd 6ix"],
+      };
+      const seedheMautTrack: Track = {
+        ...makeTrack("s1", "101"),
+        artists: ["Seedhe Maut"],
+      };
+
+      expect(isLanguageMatch(krsnaTrack, "hindi")).toBe(true);
+      expect(isLanguageMatch(tabaTrack, "hindi")).toBe(true);
+      expect(isLanguageMatch(dilRaazTrack, "hindi")).toBe(true);
+      expect(isLanguageMatch(seedheMautTrack, "hindi")).toBe(true);
+
+      // 2. Pure Western artists must still be blocked under Hindi context
+      const drakeTrack: Track = {
+        ...makeTrack("w1", "God's Plan"),
+        artists: ["Drake"],
+      };
+      expect(isLanguageMatch(drakeTrack, "hindi")).toBe(false);
+
+      // 3. Regional indie artists must NOT leak into foreign language queries (e.g. Spanish)
+      expect(isLanguageMatch(krsnaTrack, "spanish")).toBe(false);
+
+      // 4. English queries accept English indie tracks freely
+      const clairoTrack: Track = {
+        ...makeTrack("c1", "Sofia"),
+        artists: ["Clairo"],
+      };
+      expect(isLanguageMatch(clairoTrack, "english")).toBe(true);
     });
   });
 });

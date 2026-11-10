@@ -293,6 +293,23 @@ const DESI_MAINSTREAM_ARTISTS = [
   "lucky thakur", "mahi jangid", "khush romana", "pravesh lion"
 ];
 
+/**
+ * Modern Regional Indie, Desi Hip-Hop (DHH), and Alternative Indian artists.
+ * Used for Edge Case E (Code-Switching recognition): guarantees regional indie tracks
+ * with English/Romanized titles are never rejected under regional context.
+ */
+export const REGIONAL_INDIE_ARTISTS = [
+  "krsna", "kr$na", "seedhe maut", "encore abj", "calm", "divine", "prabh deep",
+  "chaar diwaari", "yashraj", "rawal", "bharg", "talha anjum", "talhah yunus",
+  "young stunners", "mc stan", "emiway bantai", "paradox", "dhanji", "siyaahi",
+  "karan kanchan", "sez on the beat", "bella", "badkidz", "taba chake", "dil raaz",
+  "aditya rikhari", "the local train", "when chai met toast", "the yellow diary",
+  "parvaaz", "indian ocean", "lifafa", "peter cat recording co", "pcrc", "raghu dixit",
+  "swarathma", "oaff", "savera", "ashwin adwani", "sanjeeta bhattacharya", "kamakshi khanna",
+  "fooled by april", "achint", "twin strings", "anand bhaskar collective", "aswekeepsearching",
+  "bloodywood", "drishyam", "arunaja", "shirley setia", "jonita gandhi", "sanah moidutty"
+];
+
 const TITLE_TRAPS: Record<string, RegExp[]> = {
   spanish: [
     /\b(in spanish|spanish ballad|spanish ballads|spanish romance|spanish eyes|spanish guitar|spanish guitars|spanish flea|spanish moss|spanish harlem|spanish train|spanish rose|spanish armada|spanish boots|spanish song|spanish songs|sad spanish automotivo)\b/i,
@@ -350,6 +367,14 @@ function hasHindiAffinity(track: Track): boolean {
   const indianArtistRegex =
     /\b(singh|kumar|nigam|sharma|verma|khan|ali|kapoor|sen|roy|das|ghoshal|chauhan|kakkar|badshah|pritam|rahman|atif|aslam|arijit|sonu|shreya|sunidhi|mohit|kk|jubin|darshan|prateek|anuv|amit|trivedi|sachin|jigar|vishal|shekhar|shankar|ehsaan|loy|udit|narayan|alka|yagnik|kavita|anuradha|sadhana|jagjit|pankaj|manna|lata|mangeshkar|kishore|rafi|mukesh|neeti|monali|armaan|amaal|tanishk|bagchi|jasleen|royal|b praak|jaani|zaeden|steve|mithoon|rochak|payal|dev|dhvani|tulsi|akull|king|papon|shaan|himesh|reshammiya|sidhu|dhillon|aujla|shubh)\b/i;
   if (indianArtistRegex.test(artists)) return true;
+
+  // Edge Case E: Modern Indian Indie & Desi Hip-Hop (DHH) code-switching recognition.
+  // Preserves regional indie tracks with English or alphanumeric song titles (e.g. Kr$na "Say My Name", Taba Chake "Walk With Me", Dil Raaz "Still In Love", Seedhe Maut "101")
+  for (const trackArtist of track.artists) {
+    if (REGIONAL_INDIE_ARTISTS.some((target) => isArtistMatch(trackArtist, target))) {
+      return true;
+    }
+  }
 
   return false;
 }
@@ -463,6 +488,11 @@ export function isLanguageMatch(
   ) {
     for (const desi of DESI_MAINSTREAM_ARTISTS) {
       if (track.artists.some((a) => a.toLowerCase().includes(desi)) && !isUserExplicitArtist(desi)) {
+        return false;
+      }
+    }
+    for (const indie of REGIONAL_INDIE_ARTISTS) {
+      if (track.artists.some((a) => isArtistMatch(a, indie)) && !isUserExplicitArtist(indie)) {
         return false;
       }
     }
