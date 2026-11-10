@@ -8,6 +8,25 @@ import type { SpotifyAuth } from "../services/spotify/spotifyAuth.js";
 import type { DiscoveryContext } from "../types/discovery.js";
 import { resolveAppMode } from "../services/music/modeResolver.js";
 
+function extractDiscoveryContext(body: {
+  discoveryMode?: any;
+  preferences?: any;
+  historySignals?: any;
+  prompt?: string;
+}): DiscoveryContext {
+  return {
+    discoveryMode: body.discoveryMode || "FAMILIAR",
+    preferences: {
+      favoriteGenres: body.preferences?.favoriteGenres || [],
+      favoriteArtists: body.preferences?.favoriteArtists || [],
+      dislikedGenres: body.preferences?.dislikedGenres || [],
+      dislikedArtists: body.preferences?.dislikedArtists || [],
+    },
+    historySignals: body.historySignals,
+    rawPrompt: body.prompt || "",
+  };
+}
+
 export function createMusicController(
   config: AppConfig,
   credState: CredentialState,
@@ -19,14 +38,9 @@ export function createMusicController(
   return {
     async interpret(req: Request<unknown, unknown, MusicPromptBody>, res: Response, next: NextFunction) {
       try {
-        const { prompt, discoveryMode, preferences, historySignals } = req.body;
+        const { prompt } = req.body;
         const resolution = resolveAppMode(config, credState, spotifyAuth);
-        const discoveryContext: DiscoveryContext = {
-          discoveryMode,
-          preferences,
-          historySignals,
-          rawPrompt: prompt,
-        };
+        const discoveryContext = extractDiscoveryContext(req.body);
         const result = await pipeline.interpret(prompt, resolution.interpretMode, discoveryContext);
         res.json(result);
       } catch (err) {
@@ -36,14 +50,9 @@ export function createMusicController(
 
     async search(req: Request<unknown, unknown, MusicPromptBody>, res: Response, next: NextFunction) {
       try {
-        const { prompt, discoveryMode, preferences, historySignals } = req.body;
+        const { prompt } = req.body;
         const resolution = resolveAppMode(config, credState, spotifyAuth);
-        const discoveryContext: DiscoveryContext = {
-          discoveryMode,
-          preferences,
-          historySignals,
-          rawPrompt: prompt,
-        };
+        const discoveryContext = extractDiscoveryContext(req.body);
         const result = await pipeline.search(
           prompt,
           resolution.searchMode,
@@ -65,18 +74,10 @@ export function createMusicController(
           excludeTrackIds,
           excludeSongSignatures,
           cumulativeArtistCounts,
-          discoveryMode,
-          preferences,
-          historySignals,
         } = req.body;
 
         const resolution = resolveAppMode(config, credState, spotifyAuth);
-        const discoveryContext: DiscoveryContext = {
-          discoveryMode,
-          preferences,
-          historySignals,
-          rawPrompt: prompt || "",
-        };
+        const discoveryContext = extractDiscoveryContext(req.body);
 
         const result = await pipeline.loadMore({
           prompt: prompt || "",

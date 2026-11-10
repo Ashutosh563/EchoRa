@@ -17,6 +17,20 @@ export interface SearchPipelineOptions {
   reranker?: SemanticReranker | null;
 }
 
+function normalizeDiscoveryContext(context?: DiscoveryContext, prompt: string = ""): DiscoveryContext {
+  return {
+    discoveryMode: context?.discoveryMode ?? "FAMILIAR",
+    preferences: {
+      favoriteGenres: context?.preferences?.favoriteGenres ?? [],
+      favoriteArtists: context?.preferences?.favoriteArtists ?? [],
+      dislikedGenres: context?.preferences?.dislikedGenres ?? [],
+      dislikedArtists: context?.preferences?.dislikedArtists ?? [],
+    },
+    rawPrompt: context?.rawPrompt || prompt,
+    historySignals: context?.historySignals,
+  };
+}
+
 function discoveryQueries(
   intent: MusicIntent,
   result: ReturnType<typeof defaultDiscoveryProcessor.process>,
@@ -35,15 +49,15 @@ function discoveryQueries(
       : [...contextTerms, result.injectedGenre!].join(" "));
   }
 
-  const prompt = context.rawPrompt.toLowerCase();
+  const prompt = (context.rawPrompt || "").toLowerCase();
   const hasExplicitGenre = intent.breakdown?.genre?.source === "explicit" ||
     intent.genre.some((genre) => Boolean(genre.trim()) && prompt.includes(genre.toLowerCase()));
-  const favoriteGenre = context.preferences.favoriteGenres[0];
+  const favoriteGenre = context.preferences?.favoriteGenres?.[0];
   if (result.mode === "BALANCED" && favoriteGenre && !hasExplicitGenre && favoriteGenre.toLowerCase() !== result.injectedGenre?.toLowerCase()) {
     queries.push([...contextTerms, favoriteGenre].join(" "));
   }
 
-  const favoriteArtist = context.preferences.favoriteArtists[0];
+  const favoriteArtist = context.preferences?.favoriteArtists?.[0];
   if ((result.mode === "FAMILIAR" || result.mode === "BALANCED") && favoriteArtist && !intent.artist && !intent.trackTitle) {
     queries.push([`artist:"${favoriteArtist}"`, ...contextTerms].join(" "));
   }
@@ -56,10 +70,10 @@ function rerankerPreferences(
   result: ReturnType<typeof defaultDiscoveryProcessor.process>,
 ): PreferenceProfile {
   return {
-    favoriteGenres: context.preferences.favoriteGenres,
-    favoriteArtists: context.preferences.favoriteArtists,
-    dislikedGenres: result.excludedGenres,
-    dislikedArtists: result.excludedArtists,
+    favoriteGenres: context.preferences?.favoriteGenres ?? [],
+    favoriteArtists: context.preferences?.favoriteArtists ?? [],
+    dislikedGenres: result.excludedGenres ?? [],
+    dislikedArtists: result.excludedArtists ?? [],
   };
 }
 
@@ -181,11 +195,7 @@ export function createSearchPipeline({
       discoveryContext?: DiscoveryContext,
       signal?: AbortSignal,
     ): Promise<{ mode: "mock" | "live"; intent: MusicIntent; notice?: string }> {
-      const fallbackContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const fallbackContext: DiscoveryContext = normalizeDiscoveryContext(discoveryContext, prompt);
 
       if (mode === "mock" || !intentExtractor) {
         const rawIntent = getMockIntent(prompt);
@@ -211,11 +221,7 @@ export function createSearchPipeline({
       discoveryContext?: DiscoveryContext,
       signal?: AbortSignal,
     ): Promise<SearchResponse> {
-      const fallbackContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const fallbackContext: DiscoveryContext = normalizeDiscoveryContext(discoveryContext, prompt);
 
       if (mode === "mock" || !intentExtractor || !spotifySearch) {
         const rawIntent = getMockIntent(prompt);
@@ -401,11 +407,7 @@ export function createSearchPipeline({
       const excludeIdSet = new Set(excludeTrackIds);
       const excludeSigSet = new Set(excludeSongSignatures);
 
-      const activeContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const activeContext: DiscoveryContext = normalizeDiscoveryContext(discoveryContext, prompt);
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, intent);
       const activeIntent = discoveryResult.adjustedIntent;
 
@@ -710,11 +712,7 @@ export function createSearchPipeline({
         }
       }
 
-      const activeContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const activeContext: DiscoveryContext = normalizeDiscoveryContext(discoveryContext, prompt);
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, refinedIntent);
       refinedIntent = discoveryResult.adjustedIntent;
 
