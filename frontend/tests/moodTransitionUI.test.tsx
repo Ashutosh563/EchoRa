@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import App from "../src/App";
 import * as transitionApi from "../src/api/transitionApi";
 import type {
+  TransitionIntentResponse,
   TransitionJourneyResponse,
   TransitionPlanResponse,
 } from "../src/types/transition";
@@ -126,6 +127,44 @@ describe("Mood Transition UI Integration", () => {
     await user.click(happyDestPill);
 
     expect(generateBtn).not.toBeDisabled();
+  });
+
+  it("interprets a natural language transition, lets the user edit endpoints, and continues to the journey review", async () => {
+    const interpreted: TransitionIntentResponse = {
+      status: "ready",
+      startingMood: "Overwhelmed",
+      destinationMood: "Calm and focused",
+      interpretation: "A shift from post-work overwhelm toward calm focus.",
+    };
+    vi.spyOn(transitionApi, "interpretTransition").mockResolvedValue(interpreted);
+    vi.spyOn(transitionApi, "planTransition").mockResolvedValue({
+      stages: mockPlan.stages.map((stage, index) => ({
+        ...stage,
+        stage: index + 1,
+        mood: index === 0 ? "Overwhelmed" : index === 3 ? "Calm and focused" : stage.mood,
+      })),
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("tab", { name: /mood transition/i }));
+
+    await user.type(
+      screen.getByRole("textbox", { name: /describe how you feel now/i }),
+      "I feel overwhelmed after work and want to feel calm and focused",
+    );
+    await user.click(screen.getByRole("button", { name: /interpret mood transition/i }));
+
+    expect(await screen.findByText("A shift from post-work overwhelm toward calm focus.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/starting mood/i)).toHaveValue("Overwhelmed");
+    expect(screen.getByLabelText(/destination mood/i)).toHaveValue("Calm and focused");
+
+    await user.clear(screen.getByLabelText(/starting mood/i));
+    await user.type(screen.getByLabelText(/starting mood/i), "Tense");
+    await user.click(screen.getByRole("button", { name: /generate journey/i }));
+
+    await waitFor(() => expect(screen.getByText(/review your journey/i)).toBeInTheDocument());
+    expect(transitionApi.planTransition).toHaveBeenCalledWith("Tense", "Calm and focused");
   });
 
   it("plans a 4-stage journey, allows intermediate mood editing, and approves to display 4 playlist sections", async () => {

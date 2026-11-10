@@ -14,6 +14,9 @@ export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: str
     stages,
     journey,
     error,
+    interpretation,
+    needsClarification,
+    interpretPrompt,
     selectStartingMood,
     selectDestinationMood,
     generatePlan,
@@ -39,6 +42,15 @@ export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: str
         <p className="text-xs text-text-dim pt-4">
           Composing an emotional 4-stage bridge from {startingMood} to {destinationMood}...
         </p>
+      </div>
+    );
+  }
+
+  if (status === "interpreting") {
+    return (
+      <div className="py-20 flex flex-col items-center" role="status" aria-live="polite">
+        <ThinkingState />
+        <p className="text-xs text-text-dim pt-4">Reading your mood description and finding the emotional endpoints…</p>
       </div>
     );
   }
@@ -103,6 +115,9 @@ export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: str
       onGenerate={generatePlan}
       isLoading={false}
       error={error}
+      onInterpretPrompt={interpretPrompt}
+      interpretation={interpretation}
+      needsClarification={needsClarification}
     />
   );
 }

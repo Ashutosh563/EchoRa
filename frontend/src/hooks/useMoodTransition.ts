@@ -1,10 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { MoodStage, TransitionJourneyResponse } from "../types/transition";
-import { planTransition, generateTransitionMusic } from "../api/transitionApi";
+import { planTransition, generateTransitionMusic, interpretTransition } from "../api/transitionApi";
 
 export type TransitionStatus =
   | "select"
   | "planning"
+  | "interpreting"
   | "review"
   | "generating"
   | "playlist"
@@ -17,15 +18,47 @@ export function useMoodTransition() {
   const [stages, setStages] = useState<MoodStage[]>([]);
   const [journey, setJourney] = useState<TransitionJourneyResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [interpretation, setInterpretation] = useState("");
+  const [needsClarification, setNeedsClarification] = useState(false);
+  const interpretationAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => interpretationAbortRef.current?.abort(), []);
+
+  const interpretPrompt = useCallback(async (prompt: string) => {
+    interpretationAbortRef.current?.abort();
+    const controller = new AbortController();
+    interpretationAbortRef.current = controller;
+    setStatus("interpreting");
+    setError(null);
+    setInterpretation("");
+    setNeedsClarification(false);
+    try {
+      const response = await interpretTransition(prompt, controller.signal);
+      setStartingMood(response.startingMood ?? "");
+      setDestinationMood(response.destinationMood ?? "");
+      setInterpretation(response.interpretation);
+      setNeedsClarification(response.status === "clarification_needed");
+      setStatus("select");
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      const msg = err instanceof Error ? err.message : "Could not interpret that mood transition.";
+      setError(msg);
+      setStatus("select");
+    } finally {
+      if (interpretationAbortRef.current === controller) interpretationAbortRef.current = null;
+    }
+  }, []);
 
   const selectStartingMood = useCallback((mood: string) => {
     setStartingMood(mood);
     setError(null);
+    setNeedsClarification(false);
   }, []);
 
   const selectDestinationMood = useCallback((mood: string) => {
     setDestinationMood(mood);
     setError(null);
+    setNeedsClarification(false);
   }, []);
 
   const generatePlan = useCallback(async () => {
@@ -119,6 +152,8 @@ export function useMoodTransition() {
     setStages([]);
     setJourney(null);
     setError(null);
+    setInterpretation("");
+    setNeedsClarification(false);
   }, []);
 
   return {
@@ -128,6 +163,9 @@ export function useMoodTransition() {
     stages,
     journey,
     error,
+    interpretation,
+    needsClarification,
+    interpretPrompt,
     selectStartingMood,
     selectDestinationMood,
     generatePlan,

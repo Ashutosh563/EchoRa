@@ -1,6 +1,6 @@
-import { Sparkles, ArrowRight } from "lucide-react";
+import { Sparkles, ArrowRight, WandSparkles } from "lucide-react";
 import { motion } from "framer-motion";
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { getMoodTheme } from "../../lib/moodTheme";
 
 export const PRESET_MOODS = [
@@ -26,6 +26,9 @@ interface MoodSelectorSectionProps {
   onGenerate: () => void;
   isLoading: boolean;
   error: string | null;
+  onInterpretPrompt: (prompt: string) => void;
+  interpretation: string;
+  needsClarification: boolean;
 }
 
 export function MoodSelectorSection({
@@ -36,7 +39,12 @@ export function MoodSelectorSection({
   onGenerate,
   isLoading,
   error,
+  onInterpretPrompt,
+  interpretation,
+  needsClarification,
 }: MoodSelectorSectionProps) {
+  const [prompt, setPrompt] = useState("");
+  const [isPromptFocused, setIsPromptFocused] = useState(false);
   const isSame =
     Boolean(startingMood) &&
     Boolean(destinationMood) &&
@@ -59,6 +67,75 @@ export function MoodSelectorSection({
           Choose where your heart is right now and where you want the music to guide you.
         </p>
       </div>
+
+      {/* Natural language composer styled to match Discover's glass composer */}
+      <section className="w-full max-w-[760px] mx-auto" aria-label="Describe your mood transition">
+        <div className="text-center mb-4">
+          <h2 className="font-display font-bold text-lg text-text">Or describe the shift you want</h2>
+          <p className="text-xs sm:text-sm text-text-dim mt-1">Tell us how you feel now and how you’d like to feel.</p>
+        </div>
+        <div className={`relative rounded-[22px] ${isPromptFocused ? "conic-active" : ""}`}>
+          {isPromptFocused && <div className="absolute -inset-[2px] rounded-[22px] overflow-hidden -z-10 pointer-events-none opacity-70"><div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" /></div>}
+          <div className={`glass-panel p-4 sm:p-5 transition-colors duration-300 relative ${isPromptFocused ? "border-white/25 bg-surface-strong shadow-glass-elevated" : "border-white/10 hover:border-white/15"}`}>
+            <label htmlFor="transition-prompt" className="sr-only">Describe how you feel now and how you want to feel</label>
+            <textarea
+              id="transition-prompt"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value.slice(0, 500))}
+              onFocus={() => setIsPromptFocused(true)}
+              onBlur={() => setIsPromptFocused(false)}
+              onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (prompt.trim()) onInterpretPrompt(prompt); } }}
+              placeholder="e.g. I feel overwhelmed after work and want to feel calm, clear, and focused…"
+              rows={2}
+              className="w-full min-h-[60px] bg-transparent resize-y border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-white placeholder:text-white/60 text-base leading-relaxed font-medium"
+              aria-describedby="transition-prompt-hint"
+              maxLength={500}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 mt-1 border-t border-white/[0.08]">
+              <p id="transition-prompt-hint" className="text-xs text-text-dim">Press Enter to interpret · Shift+Enter for a new line</p>
+              <div className="flex items-center gap-3 ml-auto">
+                <span className="text-xs font-mono text-white/60" aria-live="polite">{prompt.length}<span className="opacity-60">/500</span></span>
+                <div className="relative group/btn">
+                  <div className="absolute -inset-2 rounded-full mood-gradient blur-lg opacity-20 group-hover/btn:opacity-45 transition-opacity pointer-events-none" />
+                  <motion.button
+                    type="button"
+                    onClick={() => onInterpretPrompt(prompt)}
+                    disabled={!prompt.trim()}
+                    whileTap={prompt.trim() ? { scale: 0.96 } : undefined}
+                    className={`relative z-10 px-5 py-2.5 rounded-full font-display font-bold text-sm tracking-wide flex items-center gap-2 mood-discover-btn text-white/90 border ${prompt.trim() ? "cursor-pointer" : "opacity-45 cursor-not-allowed"}`}
+                    aria-label="Interpret mood transition"
+                  >
+                    <WandSparkles className="w-4 h-4" />
+                    <span>Find my moods</span>
+                  </motion.button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {interpretation && (
+          <div className="glass-panel mt-3 p-4 rounded-2xl border border-white/10 shadow-glass" role="status" aria-live="polite">
+            <div className="flex items-start gap-3">
+              <span className="w-8 h-8 shrink-0 rounded-xl bg-violet/15 border border-violet/25 flex items-center justify-center text-violet"><Sparkles className="w-4 h-4" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-text">{needsClarification ? "A little more detail will help" : "Here’s the transition I heard"}</p>
+                <p className="text-xs sm:text-sm text-text-dim mt-1">{interpretation}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                  <label className="text-[11px] font-semibold text-violet">
+                    Starting mood
+                    <input value={startingMood} onChange={(event) => onSelectStarting(event.target.value.slice(0, 50))} maxLength={50} placeholder="How you feel now" className="mt-1 w-full px-3 py-2 rounded-xl bg-white/[0.045] border border-white/10 text-sm font-medium text-text placeholder:text-text-faint focus:border-violet/50" />
+                  </label>
+                  <label className="text-[11px] font-semibold text-cyan">
+                    Destination mood
+                    <input value={destinationMood} onChange={(event) => onSelectDestination(event.target.value.slice(0, 50))} maxLength={50} placeholder="How you want to feel" className="mt-1 w-full px-3 py-2 rounded-xl bg-white/[0.045] border border-white/10 text-sm font-medium text-text placeholder:text-text-faint focus:border-cyan/50" />
+                  </label>
+                </div>
+                <p className="text-[11px] text-text-faint mt-2">You can also choose a preset below before building your journey.</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Grid of Two Questions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

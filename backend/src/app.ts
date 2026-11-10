@@ -19,6 +19,7 @@ import { createStatusController } from "./controllers/status.controller.js";
 import { createCameraController } from "./controllers/camera.controller.js";
 import { createGeminiVisionService, type GeminiVisionService } from "./services/gemini/geminiVision.js";
 import { createTransitionPlanner } from "./services/transition/transitionPlanner.js";
+import { createTransitionIntentExtractor } from "./services/transition/transitionIntentExtractor.js";
 import { createStageIntentGenerator } from "./services/transition/stageIntentGenerator.js";
 import { createPlaylistAssembler } from "./services/transition/playlistAssembler.js";
 import { createTransitionReranker } from "./services/transition/transitionReranker.js";
@@ -112,6 +113,7 @@ export function createApp(deps: AppDependencies = {}): Express {
   }
 
   const transitionPlanner = createTransitionPlanner(geminiClient);
+  const transitionIntentExtractor = createTransitionIntentExtractor(geminiClient, openaiClient);
   const stageIntentGenerator = createStageIntentGenerator(geminiClient);
   const transitionReranker = createTransitionReranker(geminiClient);
   const playlistAssembler = createPlaylistAssembler(spotifySearch, transitionReranker);
@@ -119,6 +121,7 @@ export function createApp(deps: AppDependencies = {}): Express {
     transitionPlanner,
     stageIntentGenerator,
     playlistAssembler,
+    transitionIntentExtractor,
   );
 
   const musicController = createMusicController(config, credState, spotifyAuth, {
