@@ -41,7 +41,7 @@ export function AuthLandingView() {
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-md mx-auto p-8 sm:p-10 rounded-3xl bg-white/[0.04] border border-white/[0.12] backdrop-blur-2xl shadow-2xl shadow-black/50 relative overflow-hidden"
+        className="glass-panel w-full max-w-md mx-auto p-8 sm:p-10 rounded-3xl shadow-2xl shadow-black/50 relative overflow-hidden"
       >
         {/* Subtle Top Gradient Highlight */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-violet/50 to-transparent" />

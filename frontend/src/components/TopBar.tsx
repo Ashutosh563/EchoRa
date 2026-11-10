@@ -55,7 +55,7 @@ export const TopBar = memo(function TopBar({
           <nav
             role="tablist"
             aria-label="Navigation"
-            className="flex items-center gap-1 p-1 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md relative"
+            className="glass-pill flex items-center gap-1 p-1 relative"
           >
             <button
               type="button"
@@ -107,7 +107,7 @@ export const TopBar = memo(function TopBar({
                 aria-label="Open account menu"
                 aria-haspopup="true"
                 aria-expanded={isMenuOpen}
-                className="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 hover:border-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_4px_16px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-all cursor-pointer"
+                className="glass-pill flex items-center gap-2 p-1 pl-1.5 pr-2 transition-all cursor-pointer hover:border-white/35 hover:brightness-110"
                 title={profile?.display_name || user?.email || 'Account'}
               >
                 {user && profile?.avatar_url ? (

@@ -57,7 +57,7 @@ export function VibeRefinementBar({
   }
 
   return (
-    <div className="w-full flex flex-col gap-2.5 px-4 py-3 rounded-2xl bg-slate-900/50 border border-white/[0.08] backdrop-blur-md mb-4">
+    <div className="glass-panel w-full flex flex-col gap-2.5 px-4 py-3 rounded-2xl mb-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs font-semibold text-text uppercase tracking-wider font-mono">
           <SlidersHorizontal className="w-3.5 h-3.5 text-cyan" />

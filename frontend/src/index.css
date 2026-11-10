@@ -47,6 +47,10 @@
   --mood-secondary: #22D3EE;
   --mood-accent: #EC4899;
   --mood-accent-2: #F59E0B;
+  --liquid-fill: rgba(255, 255, 255, 0.055);
+  --liquid-fill-strong: rgba(255, 255, 255, 0.10);
+  --liquid-edge: rgba(255, 255, 255, 0.20);
+  --liquid-highlight: rgba(255, 255, 255, 0.30);
 }
 
 body {
@@ -59,17 +63,22 @@ body {
   transition: background-color 1600ms ease, color 1600ms ease;
 }
 
-/* Glass panel style - tuned blur radius for compositor efficiency */
+/* Liquid Glass material: translucent surfaces with a bright upper lens and a
+   quiet lower edge, keeping the content underneath present and legible. */
 .glass-panel {
   background:
-    linear-gradient(145deg, color-mix(in srgb, var(--mood-primary) 5%, transparent), transparent 48%),
-    var(--surface);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 16px 40px rgba(0, 0, 0, 0.08);
+    radial-gradient(120% 90% at 8% -18%, rgba(255, 255, 255, 0.13), transparent 62%),
+    linear-gradient(145deg, color-mix(in srgb, var(--mood-primary) 6%, transparent), transparent 54%),
+    var(--liquid-fill);
+  backdrop-filter: blur(22px) saturate(1.55) contrast(1.035);
+  -webkit-backdrop-filter: blur(22px) saturate(1.55) contrast(1.035);
+  border: 1px solid var(--liquid-edge);
+  box-shadow:
+    inset 0 1px 0 var(--liquid-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.045),
+    0 18px 44px rgba(0, 0, 0, 0.18);
   border-radius: 20px;
-  transition: border-color 1500ms ease, box-shadow 1500ms ease;
+  transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
 }
 
 /* Mood-responsive liquid surfaces. The dark base stays stable while accents
@@ -88,14 +97,14 @@ body {
   isolation: isolate;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--mood-primary) 8%, rgba(7, 7, 13, 0.88)),
-    rgba(7, 7, 13, 0.72)
+    color-mix(in srgb, var(--mood-primary) 8%, rgba(7, 7, 13, 0.80)),
+    rgba(7, 7, 13, 0.66)
   );
-  border-bottom-color: color-mix(in srgb, var(--mood-secondary) 16%, rgba(255, 255, 255, 0.10));
-  -webkit-backdrop-filter: blur(24px) saturate(145%);
-  backdrop-filter: blur(24px) saturate(145%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 34px rgba(0, 0, 0, 0.16);
-  transition: background 1800ms ease, border-color 1800ms ease, box-shadow 1800ms ease;
+  border-bottom-color: color-mix(in srgb, var(--mood-secondary) 20%, rgba(255, 255, 255, 0.14));
+  -webkit-backdrop-filter: blur(28px) saturate(1.55) contrast(1.04);
+  backdrop-filter: blur(28px) saturate(1.55) contrast(1.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 12px 34px rgba(0, 0, 0, 0.18);
+  transition: background 700ms ease, border-color 700ms ease, box-shadow 700ms ease;
 }
 
 /* Floating account controls use a stronger Liquid Glass surface over the aurora. */
@@ -103,15 +112,16 @@ body {
   overflow: hidden;
   isolation: isolate;
   background:
-    linear-gradient(145deg, rgba(32, 26, 51, 0.76), rgba(10, 12, 24, 0.72) 58%, rgba(15, 31, 43, 0.72));
-  -webkit-backdrop-filter: blur(32px) saturate(1.85) contrast(1.08);
-  backdrop-filter: blur(32px) saturate(1.85) contrast(1.08);
-  border: 1px solid rgba(255, 255, 255, 0.23);
+    radial-gradient(130% 90% at 8% -12%, rgba(255, 255, 255, 0.23), transparent 60%),
+    linear-gradient(145deg, rgba(39, 34, 58, 0.70), rgba(12, 14, 27, 0.68) 58%, rgba(15, 31, 43, 0.68));
+  -webkit-backdrop-filter: blur(36px) saturate(1.7) contrast(1.04);
+  backdrop-filter: blur(36px) saturate(1.7) contrast(1.04);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   box-shadow:
-    0 26px 72px rgba(0, 0, 0, 0.52),
-    0 8px 24px rgba(11, 9, 25, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.30),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+    0 26px 72px rgba(0, 0, 0, 0.42),
+    0 8px 24px rgba(11, 9, 25, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .liquid-account-menu::before {
@@ -239,31 +249,43 @@ body {
 
 .mood-stage-card {
   border-color: color-mix(in srgb, var(--tile-mood) 28%, rgba(255,255,255,.12));
-  background-image: linear-gradient(135deg, color-mix(in srgb, var(--tile-mood) 10%, transparent), color-mix(in srgb, var(--tile-secondary) 6%, transparent) 55%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.11), 0 16px 36px color-mix(in srgb, var(--tile-mood) 8%, transparent);
-  transition: border-color 700ms ease, box-shadow 700ms ease;
+  background-image:
+    radial-gradient(120% 90% at 8% -18%, rgba(255,255,255,.12), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--tile-mood) 10%, transparent), color-mix(in srgb, var(--tile-secondary) 6%, transparent) 55%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(255,255,255,.04), 0 16px 36px color-mix(in srgb, var(--tile-mood) 8%, transparent);
+  transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
 }
 
 .glass-panel-strong {
-  background: var(--surface-strong);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(120% 90% at 8% -14%, rgba(255, 255, 255, 0.15), transparent 62%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent 58%),
+    var(--liquid-fill-strong);
+  backdrop-filter: blur(26px) saturate(1.65) contrast(1.04);
+  -webkit-backdrop-filter: blur(26px) saturate(1.65) contrast(1.04);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 20px 44px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* Apple Liquid Glass Track Card styling - matches chatbox (.glass-panel) clear translucent glass so background aurora flows through on scroll */
 .apple-glass-card {
   position: relative;
   background:
-    linear-gradient(145deg, color-mix(in srgb, var(--mood-primary) 5%, transparent), transparent 48%),
-    var(--surface);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--border);
+    radial-gradient(120% 90% at 8% -18%, rgba(255, 255, 255, 0.13), transparent 62%),
+    linear-gradient(145deg, color-mix(in srgb, var(--mood-primary) 6%, transparent), transparent 54%),
+    var(--liquid-fill);
+  backdrop-filter: blur(22px) saturate(1.55) contrast(1.035);
+  -webkit-backdrop-filter: blur(22px) saturate(1.55) contrast(1.035);
+  border: 1px solid var(--liquid-edge);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    0 16px 40px rgba(0, 0, 0, 0.08);
+    inset 0 1px 0 var(--liquid-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.045),
+    0 18px 44px rgba(0, 0, 0, 0.18);
   border-radius: 20px;
   transition:
     transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -274,12 +296,14 @@ body {
 
 .apple-glass-card:hover {
   background:
-    linear-gradient(145deg, color-mix(in srgb, var(--mood-primary) 8%, transparent), transparent 48%),
-    var(--surface-strong);
-  border-color: rgba(255, 255, 255, 0.25);
+    radial-gradient(120% 90% at 8% -18%, rgba(255, 255, 255, 0.19), transparent 62%),
+    linear-gradient(145deg, color-mix(in srgb, var(--mood-primary) 8%, transparent), transparent 54%),
+    rgba(255, 255, 255, 0.085);
+  border-color: rgba(255, 255, 255, 0.31);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 20px 44px -8px rgba(0, 0, 0, 0.25);
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+    0 22px 48px -8px rgba(0, 0, 0, 0.30);
 }
 
 /* 3D card tilt via CSS custom properties - only active on hover so at rest transform is none and backdrop-filter is never isolated */
@@ -332,12 +356,41 @@ body {
 .eq-bar-3 { height: 16px; transform-origin: bottom; animation: eq-pulse-3 0.65s ease-in-out infinite 0.3s; }
 
 .glass-pill {
-  background: var(--surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.025)),
+    var(--liquid-fill);
+  backdrop-filter: blur(20px) saturate(1.6) contrast(1.04);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6) contrast(1.04);
+  border: 1px solid var(--liquid-edge);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 4px 14px rgba(0, 0, 0, 0.12);
   border-radius: 9999px;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-panel,
+  .glass-panel-strong,
+  .glass-pill,
+  .apple-glass-card,
+  .liquid-account-menu,
+  .site-topbar {
+    background-color: rgba(20, 21, 34, 0.94);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel,
+  .glass-panel-strong,
+  .glass-pill,
+  .apple-glass-card,
+  .liquid-account-menu,
+  .site-topbar {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: rgba(20, 21, 34, 0.94);
+  }
 }
 
 /* Aurora animated gradient text */
