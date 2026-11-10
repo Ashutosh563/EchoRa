@@ -78,6 +78,7 @@ export interface SearchResponse {
   };
   tracks: Track[];
   notice?: string;
+  hasMore?: boolean;
 }
 
 export interface StatusResponse {

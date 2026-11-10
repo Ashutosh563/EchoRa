@@ -76,6 +76,7 @@ export interface SearchResponse {
   tracks: Track[];
   /** Optional human-readable notice, e.g. why the app is in mock mode. */
   notice?: string;
+  hasMore?: boolean;
 }
 
 export interface StatusResponse {

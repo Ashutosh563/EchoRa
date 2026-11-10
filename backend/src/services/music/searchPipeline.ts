@@ -8,7 +8,7 @@ import { generateQueries } from "./queryGenerator.js";
 import { defaultDiscoveryProcessor } from "./discoveryProcessor.js";
 import { BACKEND_MOCK_TRACKS, getMockIntent } from "./mockMusic.js";
 import { fuseTrackLists, getSongSignature } from "./fusion.js";
-import { createSemanticReranker, type SemanticReranker } from "../gemini/reranker.js";
+import { createSemanticReranker, parseTargetArtists, type SemanticReranker } from "../gemini/reranker.js";
 import { logger } from "../../utils/logger.js";
 
 export interface SearchPipelineOptions {
@@ -213,10 +213,22 @@ export function createSearchPipeline({
         }
       }
 
-      // If user specifically requested an artist, ensure dedicated artist query is prioritized
-      if (activeIntent.artist) {
-        const artistQuery = `artist:"${activeIntent.artist}"`;
-        if (!queryList.some((q) => q.toLowerCase().includes(activeIntent.artist!.toLowerCase()))) {
+      // If user specifically requested artist(s), ensure dedicated artist queries are prioritized
+      const targetArtists = parseTargetArtists(activeIntent.artist);
+      if (targetArtists.length > 1) {
+        for (const art of targetArtists) {
+          const artQuery = `artist:"${art}"`;
+          if (!queryList.includes(artQuery)) {
+            queryList.unshift(artQuery);
+          }
+        }
+        const jointQuery = targetArtists.map((a) => `"${a}"`).join(" ");
+        if (!queryList.includes(jointQuery)) {
+          queryList.unshift(jointQuery);
+        }
+      } else if (targetArtists.length === 1) {
+        const artistQuery = `artist:"${targetArtists[0]}"`;
+        if (!queryList.some((q) => q.toLowerCase().includes(targetArtists[0].toLowerCase()))) {
           queryList.unshift(artistQuery);
         }
       }
@@ -273,6 +285,9 @@ export function createSearchPipeline({
         signal,
       );
 
+      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+      const hasMoreInitial = isExclusiveArtist ? finalTracks.length >= 10 : finalTracks.length > 0;
+
       return {
         mode: "live",
         discoveryMode: discoveryResult.mode,
@@ -282,6 +297,7 @@ export function createSearchPipeline({
           alternatives: finalizedQueries,
         },
         tracks: finalTracks,
+        hasMore: hasMoreInitial,
       };
     },
 
@@ -332,11 +348,14 @@ export function createSearchPipeline({
 
       // Live mode: 4-Tier Page Candidate Mining
       const queryList: { query: string; offset: number }[] = [];
-      const isExclusiveArtist = Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+      const targetArtists = parseTargetArtists(intent.artist);
+      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
 
-      if (isExclusiveArtist && intent.artist) {
-        queryList.push({ query: `artist:"${intent.artist}"`, offset: (page - 1) * 10 });
-        queryList.push({ query: intent.artist, offset: (page - 1) * 10 });
+      if (isExclusiveArtist && targetArtists.length > 0) {
+        for (const art of targetArtists) {
+          queryList.push({ query: `artist:"${art}"`, offset: (page - 1) * 10 });
+          queryList.push({ query: art, offset: (page - 1) * 10 });
+        }
       } else if (page === 2) {
         // Tier 2: Mood context, curator nuance, and genre offset
         if (intent.multiQueries?.contextQuery) {
@@ -470,6 +489,17 @@ export function createSearchPipeline({
       const candidatesToRerank = rawCandidates.filter(
         (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
       );
+
+      // Edge Case C: If exclusive artist catalog is exhausted, exit gracefully immediately
+      if (isExclusiveArtist && candidatesToRerank.length === 0) {
+        logger.info(`[LoadMore] Exclusive catalog for "${intent.artist}" exhausted at page ${page}. Returning empty batch with hasMore: false.`);
+        return {
+          page,
+          tracks: [],
+          hasMore: false,
+          queriesUsed: finalizedQueries.map((q) => q.query),
+        };
+      }
 
       // Re-evaluate artist density on deduplicated candidates
       const rerankUniqueArtists = new Set<string>();

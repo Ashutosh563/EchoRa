@@ -69,7 +69,7 @@ function AppContent({ api }: AppProps = {}) {
     if (data?.tracks) {
       setCumulativeTracks(data.tracks);
       setCurrentPage(1);
-      setHasMorePages(true);
+      setHasMorePages(data.hasMore !== undefined ? data.hasMore : data.tracks.length >= 10);
     }
   }, [data]);
 

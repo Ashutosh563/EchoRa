@@ -620,6 +620,123 @@ describe("Semantic Reranker (reranker.ts)", () => {
       expect(result[0]?.name).toBe("Mulaqat (Special Acoustic)");
       expect(result[0]?.artists[0]).toBe("Dil Raaz");
     });
+
+    it("allocates tracks between multiple requested artists and prioritizes mutual duets (Edge Case A)", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("collab1", "Challa (Collab)"), artists: ["Diljit Dosanjh", "Karan Aujla"] },
+        { ...makeTrack("d1", "G.O.A.T."), artists: ["Diljit Dosanjh"] },
+        { ...makeTrack("d2", "Lover"), artists: ["Diljit Dosanjh"] },
+        { ...makeTrack("d3", "Born to Shine"), artists: ["Diljit Dosanjh"] },
+        { ...makeTrack("k1", "Softly"), artists: ["Karan Aujla"] },
+        { ...makeTrack("k2", "White Brown Black"), artists: ["Karan Aujla"] },
+        { ...makeTrack("k3", "Admirin' You"), artists: ["Karan Aujla"] },
+        { ...makeTrack("c1", "Companion 1"), artists: ["Sidhu Moose Wala"] },
+        { ...makeTrack("c2", "Companion 2"), artists: ["AP Dhillon"] },
+        { ...makeTrack("c3", "Companion 3"), artists: ["Shubh"] },
+        { ...makeTrack("c4", "Companion 4"), artists: ["Gurinder Gill"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Fit" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        artist: "Diljit Dosanjh and Karan Aujla",
+        language: "punjabi",
+      };
+
+      const result = await reranker.rerank("songs by Diljit Dosanjh and Karan Aujla", intent, candidates);
+
+      expect(result.length).toBe(10);
+      // Joint collaboration should be ranked first
+      expect(result[0].id).toBe("collab1");
+
+      const diljitTracks = result.filter((t) => t.artists.includes("Diljit Dosanjh"));
+      const karanTracks = result.filter((t) => t.artists.includes("Karan Aujla"));
+      expect(diljitTracks.length).toBeGreaterThanOrEqual(3);
+      expect(karanTracks.length).toBeGreaterThanOrEqual(3);
+
+      // Remaining tracks come from companion peers
+      const companionTracks = result.filter(
+        (t) => !t.artists.includes("Diljit Dosanjh") && !t.artists.includes("Karan Aujla"),
+      );
+      expect(companionTracks.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("rejects foreign homonym tracks sharing the same artist name on regional queries (Edge Case B)", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("in1", "1 Se 23"), artists: ["Karma"] },
+        { ...makeTrack("in2", "Fateh"), artists: ["Karma", "Raftaar"] },
+        { ...makeTrack("fi1", "Hyvää Päivää"), artists: ["Karma"], album: "Finnish Rock Classics" },
+        { ...makeTrack("fi2", "Helsinki Nights"), artists: ["Karma"], album: "Suomi Pop Hits" },
+        { ...makeTrack("c1", "Aathma Raama"), artists: ["Brodha V"] },
+        { ...makeTrack("c2", "Kohinoor"), artists: ["DIVINE"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Hip hop match" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        artist: "Karma",
+        language: "hindi",
+        genre: "hip hop",
+      };
+
+      const result = await reranker.rerank("hindi hip hop songs by Karma", intent, candidates);
+      const resultIds = result.map((t) => t.id);
+
+      // Indian Karma tracks accepted
+      expect(resultIds).toContain("in1");
+      expect(resultIds).toContain("in2");
+
+      // Finnish Karma tracks rejected by disambiguation guard
+      expect(resultIds).not.toContain("fi1");
+      expect(resultIds).not.toContain("fi2");
+    });
+
+    it("strictly returns small discography without pulling unwanted artists on 'only' prompt (Edge Case C)", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("indie1", "First Song"), artists: ["Underground Indie Artist"] },
+        { ...makeTrack("indie2", "Second Song"), artists: ["Underground Indie Artist"] },
+        { ...makeTrack("indie3", "Third Song"), artists: ["Underground Indie Artist"] },
+        { ...makeTrack("other1", "Popular Song 1"), artists: ["Arijit Singh"] },
+        { ...makeTrack("other2", "Popular Song 2"), artists: ["Pritam"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Fit" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        artist: "Underground Indie Artist",
+      };
+
+      const result = await reranker.rerank("only Underground Indie Artist", intent, candidates);
+
+      // Should return strictly the 3 songs that exist, never pulling Arijit Singh or Pritam
+      expect(result.length).toBe(3);
+      expect(result.every((t) => t.artists.includes("Underground Indie Artist"))).toBe(true);
+      expect(result[0].matchReason).toContain("complete discography");
+    });
   });
 });
 

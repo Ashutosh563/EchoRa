@@ -107,6 +107,19 @@ export function getPrimaryArtistKey(track: Track): string {
 }
 
 /**
+ * Splits multi-artist query strings (e.g. "Diljit Dosanjh and Karan Aujla", "Arijit Singh & Shreya Ghoshal")
+ * into distinct artist names.
+ */
+export function parseTargetArtists(artistStr?: string | null): string[] {
+  if (!artistStr) return [];
+  const parts = artistStr
+    .split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bfeaturing\b|\bx\b|\bvs\.?\b)\s*/i)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  return parts.length > 0 ? parts : [artistStr.trim()];
+}
+
+/**
  * Checks whether a track violates the user's natural language negative constraints
  * (e.g. excluded artists, excluded genres, or negative keyword phrases).
  */
@@ -425,12 +438,39 @@ export function isLanguageMatch(
   }
 
   // If track artist matches the artist explicitly requested by the user, bypass generic cultural regex
+  // with Contextual Disambiguation Guard against foreign homonyms (Edge Case B)
   if (userExplicitArtist) {
-    const isExplicitMatch = track.artists.some((a) => {
-      const art = a.toLowerCase().trim();
-      return art.includes(userExplicitArtist) || userExplicitArtist.includes(art);
+    const explicitArtists = parseTargetArtists(userExplicitArtist);
+    const isExplicitMatch = explicitArtists.some((target) => {
+      const targetLower = target.toLowerCase();
+      return track.artists.some((a) => {
+        const art = a.toLowerCase().trim();
+        return art.includes(targetLower) || targetLower.includes(art);
+      });
     });
+
     if (isExplicitMatch) {
+      // Disambiguation check for Homonymous Artists (Edge Case B):
+      // If intent specifies a target regional language (e.g. Hindi, Punjabi, Spanish, Russian),
+      // we must NOT allow a foreign namesake track if it triggers that language's title traps
+      // or foreign country markers.
+      if (normalizedKey && traps) {
+        for (const trap of traps) {
+          if (trap.test(title)) {
+            return false;
+          }
+        }
+      }
+      if (normalizedKey === "hindi" || normalizedKey === "punjabi" || normalizedKey === "bollywood") {
+        const foreignLeak =
+          fullText.includes("finnish") ||
+          fullText.includes("helsinki") ||
+          fullText.includes("suomi") ||
+          fullText.includes("sweden") ||
+          fullText.includes("deutschland") ||
+          fullText.includes("french pop");
+        if (foreignLeak) return false;
+      }
       return true;
     }
   }
@@ -558,18 +598,25 @@ export function balanceTracks(
 
   const combined = [...targetEraTracks, ...otherEraTracks];
   if (negativeIntent?.artist) {
-    const target = negativeIntent.artist.toLowerCase().trim();
+    const targetArtists = parseTargetArtists(negativeIntent.artist);
     const isExcl = Boolean(/\b(only|just|pure|exclusively|all)\b/i.test(negativeIntent.artist));
     const artistMatches = combined.filter((t) =>
-      t.artists.some((a) => a.toLowerCase().includes(target) || target.includes(a.toLowerCase()))
+      targetArtists.some((ta) => {
+        const tl = ta.toLowerCase();
+        return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
+      })
     );
     if (isExcl) {
       return artistMatches.slice(0, 10);
     }
     const companionMatches = combined.filter((t) =>
-      !t.artists.some((a) => a.toLowerCase().includes(target) || target.includes(a.toLowerCase()))
+      !targetArtists.some((ta) => {
+        const tl = ta.toLowerCase();
+        return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
+      })
     );
-    return [...artistMatches.slice(0, 5), ...companionMatches.slice(0, 5)].slice(0, 10);
+    const targetQuota = targetArtists.length > 1 ? 6 : 5;
+    return [...artistMatches.slice(0, targetQuota), ...companionMatches.slice(0, 10 - targetQuota)].slice(0, 10);
   }
   return combined.slice(0, 10);
 }
@@ -705,20 +752,32 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
 
       // Prioritize exact song title and artist matches at top of candidate list
       let sortedCandidates = [...candidates];
-      const targetArtistLower = intent.artist?.toLowerCase().trim();
+      const targetArtists = parseTargetArtists(intent.artist);
       const targetTitleLower = intent.trackTitle?.toLowerCase().trim();
 
-      if (targetTitleLower || targetArtistLower) {
+      if (targetTitleLower || targetArtists.length > 0) {
         sortedCandidates.sort((a, b) => {
           let aScore = 0;
           let bScore = 0;
           if (targetTitleLower) {
-            if (a.name.toLowerCase().includes(targetTitleLower)) aScore += 10;
-            if (b.name.toLowerCase().includes(targetTitleLower)) bScore += 10;
+            if (a.name.toLowerCase().includes(targetTitleLower)) aScore += 20;
+            if (b.name.toLowerCase().includes(targetTitleLower)) bScore += 20;
           }
-          if (targetArtistLower) {
-            if (a.artists.some((art) => art.toLowerCase().includes(targetArtistLower) || targetArtistLower.includes(art.toLowerCase()))) aScore += 5;
-            if (b.artists.some((art) => art.toLowerCase().includes(targetArtistLower) || targetArtistLower.includes(art.toLowerCase()))) bScore += 5;
+          if (targetArtists.length > 0) {
+            const aMatches = targetArtists.filter((ta) => {
+              const tl = ta.toLowerCase();
+              return a.artists.some((art) => art.toLowerCase().includes(tl) || tl.includes(art.toLowerCase()));
+            }).length;
+            const bMatches = targetArtists.filter((ta) => {
+              const tl = ta.toLowerCase();
+              return b.artists.some((art) => art.toLowerCase().includes(tl) || tl.includes(art.toLowerCase()));
+            }).length;
+
+            if (aMatches > 1) aScore += 15;
+            else if (aMatches === 1) aScore += 6;
+
+            if (bMatches > 1) bScore += 15;
+            else if (bMatches === 1) bScore += 6;
           }
           return bScore - aScore;
         });
@@ -879,79 +938,147 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
         }
 
         const isExclusive = Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
-        const targetArtistName = intent.artist?.toLowerCase().trim();
+        const targetArtists = parseTargetArtists(intent.artist);
 
-        if (targetArtistName && isExclusive) {
-          // "ONLY" Case: Return 100% tracks by this artist
-          const exclusiveMatches = rerankedList.filter((t) =>
-            t.artists.some((a) => a.toLowerCase().includes(targetArtistName) || targetArtistName.includes(a.toLowerCase()))
-          );
+        if (targetArtists.length > 0 && isExclusive) {
+          // "ONLY" Case: Return 100% tracks by the requested artist(s)
+          const exclusiveMatches: Track[] = [];
+          const seen = new Set<string>();
+
+          for (const t of rerankedList) {
+            const matches = targetArtists.some((ta) => {
+              const tl = ta.toLowerCase();
+              return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
+            });
+            if (matches && !seen.has(t.id)) {
+              exclusiveMatches.push(t);
+              seen.add(t.id);
+            }
+          }
+
           if (exclusiveMatches.length < 10) {
             const moreArtistTracks = candidates.filter((t) =>
-              !exclusiveMatches.some((m) => m.id === t.id) &&
-              t.artists.some((a) => a.toLowerCase().includes(targetArtistName) || targetArtistName.includes(a.toLowerCase()))
+              !seen.has(t.id) &&
+              isLanguageMatch(t, intent.language, intent) &&
+              !matchesNegativeConstraints(t, intent) &&
+              targetArtists.some((ta) => {
+                const tl = ta.toLowerCase();
+                return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
+              })
             );
             for (const t of moreArtistTracks) {
-              exclusiveMatches.push({
-                ...t,
-                matchReason: t.matchReason || `Featured track from ${intent.artist}'s catalog.`,
-              });
+              seen.add(t.id);
+              exclusiveMatches.push(t);
               if (exclusiveMatches.length >= 10) break;
             }
           }
-          return exclusiveMatches.slice(0, 10);
+
+          // Edge Case C (Option 1): If discography is small (< 10 tracks total), return all available tracks
+          const catalogNotice = exclusiveMatches.length < 10
+            ? `Official release by ${intent.artist} (complete discography on Spotify).`
+            : `Featured track from ${intent.artist}'s catalog.`;
+
+          return exclusiveMatches.slice(0, 10).map((t) => ({
+            ...t,
+            matchReason: exclusiveMatches.length < 10 ? catalogNotice : (t.matchReason || catalogNotice),
+          }));
         }
 
-        if (targetArtistName && !isExclusive) {
-          // Cases 1, 2, 3: Up to 5 tracks from the requested artist + remaining from vibe companions
+        if (targetArtists.length > 0 && !isExclusive) {
+          // Cases 1, 2, 3: Up to 5 (or 6 for multi-artist) tracks from the requested artists + remaining from vibe companions
           const artistPool: Track[] = [];
           const companionPool: Track[] = [];
+          const seen = new Set<string>();
 
           for (const t of rerankedList) {
-            const isMatch = t.artists.some((a) => a.toLowerCase().includes(targetArtistName) || targetArtistName.includes(a.toLowerCase()));
+            const isMatch = targetArtists.some((ta) => {
+              const tl = ta.toLowerCase();
+              return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
+            });
             if (isMatch) {
               artistPool.push(t);
             } else {
               companionPool.push(t);
             }
+            seen.add(t.id);
           }
 
-          // If fewer than 5 from the requested artist in rerankedList, backfill from original candidates
-          if (artistPool.length < 5) {
+          const targetQuota = targetArtists.length > 1 ? 6 : 5;
+
+          // Backfill targetPool from original candidates if needed
+          if (artistPool.length < targetQuota) {
             const moreArtistTracks = candidates.filter((t) =>
-              !artistPool.some((m) => m.id === t.id) &&
-              t.artists.some((a) => a.toLowerCase().includes(targetArtistName) || targetArtistName.includes(a.toLowerCase()))
+              !seen.has(t.id) &&
+              isLanguageMatch(t, intent.language, intent) &&
+              !matchesNegativeConstraints(t, intent) &&
+              targetArtists.some((ta) => {
+                const tl = ta.toLowerCase();
+                return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
+              })
             );
             for (const t of moreArtistTracks) {
-              artistPool.push({
-                ...t,
-                matchReason: t.matchReason || `Featured track by ${intent.artist}.`,
-              });
-              if (artistPool.length >= 5) break;
+              artistPool.push(t);
+              seen.add(t.id);
+              if (artistPool.length >= targetQuota) break;
             }
+          }
+
+          let finalArtistSection: Track[] = artistPool;
+          if (targetArtists.length > 1) {
+            // Balance across multi-artists
+            const maxPerSubArtist = Math.ceil(targetQuota / targetArtists.length);
+            const subCounts = new Map<string, number>();
+            const balanced: Track[] = [];
+
+            // First add mutual duets/collaborations
+            for (const t of artistPool) {
+              const matchesCount = targetArtists.filter((ta) => {
+                const tl = ta.toLowerCase();
+                return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
+              }).length;
+              if (matchesCount > 1 && balanced.length < targetQuota) {
+                balanced.push(t);
+              }
+            }
+
+            // Next fill each artist up to their sub-quota
+            for (const t of artistPool) {
+              if (balanced.some((b) => b.id === t.id)) continue;
+              const matchedArtist = targetArtists.find((ta) => {
+                const tl = ta.toLowerCase();
+                return t.artists.some((a) => a.toLowerCase().includes(tl) || tl.includes(a.toLowerCase()));
+              });
+              if (!matchedArtist) continue;
+              const cnt = subCounts.get(matchedArtist) || 0;
+              if (cnt < maxPerSubArtist && balanced.length < targetQuota) {
+                balanced.push(t);
+                subCounts.set(matchedArtist, cnt + 1);
+              }
+            }
+            finalArtistSection = balanced;
           }
 
           // If user searched for a specific song title, ensure exact title match is at Rank #1
           if (intent.trackTitle) {
             const titleLower = intent.trackTitle.toLowerCase();
-            const exactIdx = artistPool.findIndex((t) => t.name.toLowerCase().includes(titleLower));
+            const exactIdx = finalArtistSection.findIndex((t) => t.name.toLowerCase().includes(titleLower));
             if (exactIdx > 0) {
-              const [exact] = artistPool.splice(exactIdx, 1);
-              artistPool.unshift(exact);
+              const [exact] = finalArtistSection.splice(exactIdx, 1);
+              finalArtistSection.unshift(exact);
             }
           }
 
-          const topArtistSection = artistPool.slice(0, 5);
+          const topArtistSection = finalArtistSection.slice(0, targetQuota);
           const neededCompanions = Math.max(0, 10 - topArtistSection.length);
           const topCompanionSection = companionPool.slice(0, neededCompanions);
 
           const assembled = [...topArtistSection, ...topCompanionSection];
           if (assembled.length < 10) {
-            const seen = new Set(assembled.map((t) => t.id));
+            const assembledIds = new Set(assembled.map((t) => t.id));
             for (const t of rerankedList) {
-              if (!seen.has(t.id)) {
+              if (!assembledIds.has(t.id)) {
                 assembled.push(t);
-                seen.add(t.id);
+                assembledIds.add(t.id);
               }
               if (assembled.length >= 10) break;
             }
