@@ -424,6 +424,17 @@ export function isLanguageMatch(
     }
   }
 
+  // If track artist matches the artist explicitly requested by the user, bypass generic cultural regex
+  if (userExplicitArtist) {
+    const isExplicitMatch = track.artists.some((a) => {
+      const art = a.toLowerCase().trim();
+      return art.includes(userExplicitArtist) || userExplicitArtist.includes(art);
+    });
+    if (isExplicitMatch) {
+      return true;
+    }
+  }
+
   // 5. Positive Cultural Affinity Verification (Zero Tolerance for False-Match Western English tracks)
   if (normalizedKey === "spanish") {
     if (!hasSpanishAffinity(track)) return false;
@@ -546,6 +557,20 @@ export function balanceTracks(
   }
 
   const combined = [...targetEraTracks, ...otherEraTracks];
+  if (negativeIntent?.artist) {
+    const target = negativeIntent.artist.toLowerCase().trim();
+    const isExcl = Boolean(/\b(only|just|pure|exclusively|all)\b/i.test(negativeIntent.artist));
+    const artistMatches = combined.filter((t) =>
+      t.artists.some((a) => a.toLowerCase().includes(target) || target.includes(a.toLowerCase()))
+    );
+    if (isExcl) {
+      return artistMatches.slice(0, 10);
+    }
+    const companionMatches = combined.filter((t) =>
+      !t.artists.some((a) => a.toLowerCase().includes(target) || target.includes(a.toLowerCase()))
+    );
+    return [...artistMatches.slice(0, 5), ...companionMatches.slice(0, 5)].slice(0, 10);
+  }
   return combined.slice(0, 10);
 }
 
@@ -678,14 +703,24 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
       const timeout = AbortSignal.timeout(RERANKER_TIMEOUT_MS);
       const abortSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
 
-      // Prioritize exact song title matches at top of candidate list if user searched for a specific song
+      // Prioritize exact song title and artist matches at top of candidate list
       let sortedCandidates = [...candidates];
-      if (intent.trackTitle) {
-        const titleLower = intent.trackTitle.toLowerCase();
+      const targetArtistLower = intent.artist?.toLowerCase().trim();
+      const targetTitleLower = intent.trackTitle?.toLowerCase().trim();
+
+      if (targetTitleLower || targetArtistLower) {
         sortedCandidates.sort((a, b) => {
-          const aMatch = a.name.toLowerCase().includes(titleLower) ? 1 : 0;
-          const bMatch = b.name.toLowerCase().includes(titleLower) ? 1 : 0;
-          return bMatch - aMatch;
+          let aScore = 0;
+          let bScore = 0;
+          if (targetTitleLower) {
+            if (a.name.toLowerCase().includes(targetTitleLower)) aScore += 10;
+            if (b.name.toLowerCase().includes(targetTitleLower)) bScore += 10;
+          }
+          if (targetArtistLower) {
+            if (a.artists.some((art) => art.toLowerCase().includes(targetArtistLower) || targetArtistLower.includes(art.toLowerCase()))) aScore += 5;
+            if (b.artists.some((art) => art.toLowerCase().includes(targetArtistLower) || targetArtistLower.includes(art.toLowerCase()))) bScore += 5;
+          }
+          return bScore - aScore;
         });
       }
 
@@ -841,6 +876,87 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
             });
             if (rerankedList.length >= 10) break;
           }
+        }
+
+        const isExclusive = Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+        const targetArtistName = intent.artist?.toLowerCase().trim();
+
+        if (targetArtistName && isExclusive) {
+          // "ONLY" Case: Return 100% tracks by this artist
+          const exclusiveMatches = rerankedList.filter((t) =>
+            t.artists.some((a) => a.toLowerCase().includes(targetArtistName) || targetArtistName.includes(a.toLowerCase()))
+          );
+          if (exclusiveMatches.length < 10) {
+            const moreArtistTracks = candidates.filter((t) =>
+              !exclusiveMatches.some((m) => m.id === t.id) &&
+              t.artists.some((a) => a.toLowerCase().includes(targetArtistName) || targetArtistName.includes(a.toLowerCase()))
+            );
+            for (const t of moreArtistTracks) {
+              exclusiveMatches.push({
+                ...t,
+                matchReason: t.matchReason || `Featured track from ${intent.artist}'s catalog.`,
+              });
+              if (exclusiveMatches.length >= 10) break;
+            }
+          }
+          return exclusiveMatches.slice(0, 10);
+        }
+
+        if (targetArtistName && !isExclusive) {
+          // Cases 1, 2, 3: Up to 5 tracks from the requested artist + remaining from vibe companions
+          const artistPool: Track[] = [];
+          const companionPool: Track[] = [];
+
+          for (const t of rerankedList) {
+            const isMatch = t.artists.some((a) => a.toLowerCase().includes(targetArtistName) || targetArtistName.includes(a.toLowerCase()));
+            if (isMatch) {
+              artistPool.push(t);
+            } else {
+              companionPool.push(t);
+            }
+          }
+
+          // If fewer than 5 from the requested artist in rerankedList, backfill from original candidates
+          if (artistPool.length < 5) {
+            const moreArtistTracks = candidates.filter((t) =>
+              !artistPool.some((m) => m.id === t.id) &&
+              t.artists.some((a) => a.toLowerCase().includes(targetArtistName) || targetArtistName.includes(a.toLowerCase()))
+            );
+            for (const t of moreArtistTracks) {
+              artistPool.push({
+                ...t,
+                matchReason: t.matchReason || `Featured track by ${intent.artist}.`,
+              });
+              if (artistPool.length >= 5) break;
+            }
+          }
+
+          // If user searched for a specific song title, ensure exact title match is at Rank #1
+          if (intent.trackTitle) {
+            const titleLower = intent.trackTitle.toLowerCase();
+            const exactIdx = artistPool.findIndex((t) => t.name.toLowerCase().includes(titleLower));
+            if (exactIdx > 0) {
+              const [exact] = artistPool.splice(exactIdx, 1);
+              artistPool.unshift(exact);
+            }
+          }
+
+          const topArtistSection = artistPool.slice(0, 5);
+          const neededCompanions = Math.max(0, 10 - topArtistSection.length);
+          const topCompanionSection = companionPool.slice(0, neededCompanions);
+
+          const assembled = [...topArtistSection, ...topCompanionSection];
+          if (assembled.length < 10) {
+            const seen = new Set(assembled.map((t) => t.id));
+            for (const t of rerankedList) {
+              if (!seen.has(t.id)) {
+                assembled.push(t);
+                seen.add(t.id);
+              }
+              if (assembled.length >= 10) break;
+            }
+          }
+          return assembled.slice(0, 10);
         }
 
         return rerankedList.slice(0, 10);

@@ -505,5 +505,121 @@ describe("Semantic Reranker (reranker.ts)", () => {
     expect(resultIds).not.toContain("t2"); // Red Velvet Russian Roulette
     expect(resultIds).not.toContain("t5"); // Sidhu Moose Wala
   });
+
+  describe("Explicit Artist & 'Dil Raaz' Curation Rules", () => {
+    it("allocates top 5 to requested artist (Dil Raaz) and remaining 5 to vibe companions", async () => {
+      const candidates: Track[] = [
+        // 6 tracks by Dil Raaz
+        { ...makeTrack("dr1", "Dil Deewane"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr2", "Tanhai Ke Lamhe"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr3", "Khushboo Teri"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr4", "Raste Juda"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr5", "Yaad Aayi"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr6", "Ek Ehsaas"), artists: ["Dil Raaz"] },
+        // Companion tracks in same vibe (Sachin-Jigar, Papon, Mohit Chauhan)
+        { ...makeTrack("c1", "Jeena Jeena"), artists: ["Sachin-Jigar"] },
+        { ...makeTrack("c2", "Moh Moh Ke Dhaage"), artists: ["Papon"] },
+        { ...makeTrack("c3", "Tum Ho"), artists: ["Mohit Chauhan"] },
+        { ...makeTrack("c4", "Saibo"), artists: ["Sachin-Jigar"] },
+        { ...makeTrack("c5", "Phir Se Ud Chala"), artists: ["Mohit Chauhan"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Matches emotional vibe." })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        mood: "romantic",
+        language: "hindi",
+        artist: "Dil Raaz",
+      };
+
+      const result = await reranker.rerank("songs by Dil Raaz", intent, candidates);
+
+      expect(result.length).toBe(10);
+      // Top 5 tracks must belong to Dil Raaz
+      const top5Artists = result.slice(0, 5).map((t) => t.artists[0]);
+      expect(top5Artists.every((a) => a === "Dil Raaz")).toBe(true);
+
+      // Remaining tracks must be companion tracks from vibe peers
+      const bottom5Artists = result.slice(5, 10).map((t) => t.artists[0]);
+      expect(bottom5Artists).toContain("Sachin-Jigar");
+      expect(bottom5Artists).toContain("Papon");
+      expect(bottom5Artists).toContain("Mohit Chauhan");
+    });
+
+    it("ensures 'only Dil Raaz' prompt fills 100% of the playlist with Dil Raaz", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("dr1", "Song 1"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr2", "Song 2"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr3", "Song 3"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr4", "Song 4"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr5", "Song 5"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr6", "Song 6"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr7", "Song 7"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr8", "Song 8"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr9", "Song 9"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr10", "Song 10"), artists: ["Dil Raaz"] },
+        { ...makeTrack("c1", "Peer Track"), artists: ["Papon"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Catalog match." })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        mood: "romantic",
+        language: "hindi",
+        artist: "Dil Raaz",
+      };
+
+      const result = await reranker.rerank("only songs by Dil Raaz", intent, candidates);
+
+      expect(result.length).toBe(10);
+      expect(result.every((t) => t.artists.includes("Dil Raaz"))).toBe(true);
+      expect(result.some((t) => t.artists.includes("Papon"))).toBe(false);
+    });
+
+    it("puts specific song title at Rank #1 when requested with artist", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("dr1", "Normal Dil Raaz Track"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr2", "Mulaqat (Special Acoustic)"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr3", "Another Track"), artists: ["Dil Raaz"] },
+        { ...makeTrack("c1", "Companion Song"), artists: ["Papon"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Fit" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        trackTitle: "Mulaqat",
+        artist: "Dil Raaz",
+      };
+
+      const result = await reranker.rerank("Mulaqat by Dil Raaz", intent, candidates);
+
+      expect(result[0]?.name).toBe("Mulaqat (Special Acoustic)");
+      expect(result[0]?.artists[0]).toBe("Dil Raaz");
+    });
+  });
 });
 

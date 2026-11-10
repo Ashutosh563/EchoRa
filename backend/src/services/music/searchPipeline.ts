@@ -213,6 +213,14 @@ export function createSearchPipeline({
         }
       }
 
+      // If user specifically requested an artist, ensure dedicated artist query is prioritized
+      if (activeIntent.artist) {
+        const artistQuery = `artist:"${activeIntent.artist}"`;
+        if (!queryList.some((q) => q.toLowerCase().includes(activeIntent.artist!.toLowerCase()))) {
+          queryList.unshift(artistQuery);
+        }
+      }
+
 
 
       const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, activeIntent.language));
@@ -324,8 +332,12 @@ export function createSearchPipeline({
 
       // Live mode: 4-Tier Page Candidate Mining
       const queryList: { query: string; offset: number }[] = [];
+      const isExclusiveArtist = Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
 
-      if (page === 2) {
+      if (isExclusiveArtist && intent.artist) {
+        queryList.push({ query: `artist:"${intent.artist}"`, offset: (page - 1) * 10 });
+        queryList.push({ query: intent.artist, offset: (page - 1) * 10 });
+      } else if (page === 2) {
         // Tier 2: Mood context, curator nuance, and genre offset
         if (intent.multiQueries?.contextQuery) {
           queryList.push({ query: intent.multiQueries.contextQuery, offset: 0 });
