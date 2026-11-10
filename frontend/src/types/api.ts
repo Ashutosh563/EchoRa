@@ -13,6 +13,7 @@ export type TimeContext = "morning" | "afternoon" | "evening" | "late_night" | "
 
 export interface MusicIntent {
   mood: string;
+  persona?: string | null;
   activity: string | null;
   energy: Energy;
   tempo: Tempo;

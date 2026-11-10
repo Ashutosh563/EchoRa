@@ -103,6 +103,10 @@ Categorization Rules:
      * forbiddenInstruments: 2-4 instruments strictly banned from this vibe (e.g. ["phonk cowbells", "trap 808s", "loud brass fanfare"]).
      * forbiddenVibes: 2-4 musical energies strictly banned. Unless user explicitly asked for instrumental music, ALWAYS include "pure instrumental", "karaoke", and "background movie score" in forbiddenVibes! (e.g. ["pure instrumental", "karaoke", "background score", "party dance track"]).
 
+6. BESPOKE MOOD PERSONA:
+   - persona: An evocative, poetic 2-4 word title capturing the exact emotional atmosphere of the user's prompt (e.g. "Warm Vinyl & Raindrops", "Neon Horizon Velocity", "Cathartic Bedroom Melancholy", "Stormy Chai Sanctuary").
+   - If the user only searched for an artist or song title without mood words (e.g. "only Dil Raaz", "tum hi ho"), use an authentic catalog title (e.g. "Essential Discography" or "Signature Sound").
+
 Schema Output Requirements:
 Output JSON with this exact structure:
 {
@@ -164,7 +168,8 @@ Output JSON with this exact structure:
       "forbiddenInstruments": ["banned instrument 1", "banned instrument 2"],
       "forbiddenVibes": ["banned vibe 1", "banned vibe 2"]
     }
-  }
+  },
+  "persona": "evocative 2-4 word mood persona title"
 }
 
 Do not recommend specific tracks or artists. Do not add commentary. Output valid JSON only.`;

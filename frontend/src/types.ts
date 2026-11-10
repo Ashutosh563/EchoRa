@@ -12,6 +12,7 @@ export interface CategorizedPreference<T> {
 
 export interface MusicIntent {
   mood: string;
+  persona?: string | null;
   activity: string | null;
   energy: Energy;
   tempo: Tempo;

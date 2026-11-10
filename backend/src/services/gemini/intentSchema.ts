@@ -44,6 +44,7 @@ export const geminiRawResponseSchema = z.object({
   explicit: z
     .object({
       mood: z.unknown().optional(),
+      persona: z.unknown().optional(),
       activity: z.unknown().optional(),
       energy: z.unknown().optional(),
       tempo: z.unknown().optional(),
@@ -143,6 +144,7 @@ export const geminiRawResponseSchema = z.object({
     .optional(),
   // Flat legacy fields fallback
   mood: z.unknown().optional(),
+  persona: z.unknown().optional(),
   activity: z.unknown().optional(),
   energy: z.unknown().optional(),
   tempo: z.unknown().optional(),
@@ -389,8 +391,11 @@ export function buildPrioritizedIntent(raw: z.infer<typeof geminiRawResponseSche
       }
     : undefined;
 
+  const rawPersona = cleanText((raw as Record<string, unknown>).persona ?? exp.persona, 60);
+
   return {
     mood: finalMood,
+    persona: rawPersona || undefined,
     activity: finalActivity,
     energy: finalEnergy,
     tempo: finalTempo,
@@ -551,7 +556,11 @@ export const MUSIC_INTENT_JSON_SCHEMA = {
       },
       required: ["instruments", "production", "tempoDescription", "emotionalSubtext", "harmonicMode", "vocalStyle", "antiSonicAura"],
     },
+    persona: {
+      type: ["string", "null"],
+      description: "An evocative, poetic 2-4 word mood persona capturing the prompt atmosphere (e.g. 'Warm Vinyl & Raindrops', 'Neon Horizon Velocity', 'Cathartic Bedroom Melancholy')",
+    },
   },
-  required: ["explicit", "inferred", "optional", "queries", "sonicProfile"],
+  required: ["explicit", "inferred", "optional", "queries", "sonicProfile", "persona"],
   additionalProperties: false,
 } as const;

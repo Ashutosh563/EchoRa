@@ -685,7 +685,7 @@ function buildRerankerSystemInstruction(discoveryMode: DiscoveryMode = "FAMILIAR
         : "Discovery Mode is FAMILIAR: Prioritize definitive, widely celebrated, and iconic staples of that mood and style.";
 
   return `You are ECHORA's Semantic Music Reranker.
-Given a user prompt, semantic listening intent (mood, energy, tempo, vocals preference, time context, language, era), sonic texture profile (instruments, production, tempo feel, emotional subtext), active discovery mode, and a candidate pool of tracks, select and rank the TOP 10 tracks that best embody the emotional and acoustic nuance.
+Given a user prompt, semantic listening intent (mood, persona, energy, tempo, vocals preference, time context, language, era), sonic texture profile (instruments, production, tempo feel, emotional subtext), active discovery mode, and a candidate pool of tracks, select and rank the TOP 10 tracks that best embody the emotional and acoustic nuance.
 
 ${modeContext}
 
@@ -872,6 +872,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           discoveryMode,
           intent: {
             mood: intent.mood,
+            persona: intent.persona,
             activity: intent.activity,
             energy: intent.energy,
             tempo: intent.tempo,
