@@ -410,18 +410,43 @@ export function createSearchPipeline({
         (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
       ).length;
 
+      // Detect if the candidate pool belongs to a tight niche micro-scene (< 12 unique artists)
+      const rawUniqueArtists = new Set<string>();
+      for (const t of rawCandidates) {
+        if (t.artists?.[0]) rawUniqueArtists.add(t.artists[0].toLowerCase().trim());
+      }
+      const isNicheScene = rawUniqueArtists.size > 0 && rawUniqueArtists.size < 12;
+
       if (filteredCount < 30) {
         try {
-          const fallbackQuery = cleanSpotifyQuery(
-            intent.multiQueries?.masterQuery || intent.multiQueries?.moodQuery || prompt,
-            intent.language,
-          );
-          logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}"`);
-          const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 30, signal, page * 10);
-          for (const t of cascadeTracks) {
-            if (!seenRawIds.has(t.id)) {
-              seenRawIds.add(t.id);
-              rawCandidates.push(t);
+          // If niche micro-scene has seed artists, query authentic scene artists first
+          if (isNicheScene && intent.seedArtists && intent.seedArtists.length >= 2) {
+            const seedQuery = intent.seedArtists.length >= 4 && page % 2 === 0
+              ? `artist:"${intent.seedArtists[2]}" OR artist:"${intent.seedArtists[3]}"`
+              : `artist:"${intent.seedArtists[0]}" OR artist:"${intent.seedArtists[1]}"`;
+            logger.info(`[LoadMore] Niche micro-scene sparse (${filteredCount} tracks, ${rawUniqueArtists.size} artists). Querying seed artist network: "${seedQuery}"`);
+            const seedTracks = await spotifySearch.searchTracks(seedQuery, 25, signal, 0);
+            for (const t of seedTracks) {
+              if (!seenRawIds.has(t.id)) {
+                seenRawIds.add(t.id);
+                rawCandidates.push(t);
+              }
+            }
+          }
+
+          // Fallback to master query if still low
+          if (rawCandidates.filter((t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t))).length < 25) {
+            const fallbackQuery = cleanSpotifyQuery(
+              intent.multiQueries?.masterQuery || intent.multiQueries?.moodQuery || prompt,
+              intent.language,
+            );
+            logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}"`);
+            const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 25, signal, page * 10);
+            for (const t of cascadeTracks) {
+              if (!seenRawIds.has(t.id)) {
+                seenRawIds.add(t.id);
+                rawCandidates.push(t);
+              }
             }
           }
         } catch (err) {
@@ -434,7 +459,16 @@ export function createSearchPipeline({
         (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
       );
 
-      // Gemini Call 2 Reranker with 2-batch / 6-cumulative artist limits
+      // Re-evaluate artist density on deduplicated candidates
+      const rerankUniqueArtists = new Set<string>();
+      for (const t of candidatesToRerank) {
+        if (t.artists?.[0]) rerankUniqueArtists.add(t.artists[0].toLowerCase().trim());
+      }
+      // For tight niche micro-scenes on deep pages (Page 3/4), gracefully adapt maxPerArtist from 2 to 3
+      // For popular/dense scenes (rerankUniqueArtists >= 12), artist cap stays strictly at 2 (100% untouched)
+      const dynamicMaxPerArtist = (rerankUniqueArtists.size > 0 && rerankUniqueArtists.size < 12 && page >= 3) ? 3 : 2;
+
+      // Gemini Call 2 Reranker with dynamic artist limits
       const rerankedTracks = await activeReranker.rerank(
         prompt,
         intent,
@@ -445,7 +479,7 @@ export function createSearchPipeline({
         {
           cumulativeArtistCounts,
           maxCumulativePerArtist: 6,
-          maxPerArtist: 2,
+          maxPerArtist: dynamicMaxPerArtist,
           excludeTrackIds: excludeIdSet,
           excludeSignatures: excludeSigSet,
         },
