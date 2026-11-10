@@ -8,8 +8,7 @@ import { generateQueries } from "./queryGenerator.js";
 import { defaultDiscoveryProcessor } from "./discoveryProcessor.js";
 import { BACKEND_MOCK_TRACKS, getMockIntent } from "./mockMusic.js";
 import { fuseTrackLists, getSongSignature } from "./fusion.js";
-import { createSemanticReranker, parseTargetArtists, type SemanticReranker } from "../gemini/reranker.js";
-import { createSemanticReranker, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
+import { createSemanticReranker, parseTargetArtists, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
 import { logger } from "../../utils/logger.js";
 
 export interface SearchPipelineOptions {
@@ -302,6 +301,7 @@ export function createSearchPipeline({
       );
 
       // 4. Parallel Spotify Retrieval across query facets (25 tracks per facet = up to 75 candidates)
+      const searchErrors: unknown[] = [];
       const searchPromises = finalizedQueries.map(async (q) => {
         try {
           const tracks = await spotifySearch.searchTracks(q, 25, signal);
