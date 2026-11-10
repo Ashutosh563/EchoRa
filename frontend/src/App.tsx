@@ -208,16 +208,18 @@ function AppContent({ api }: AppProps = {}) {
         setCumulativeTracks((prev) => {
           const existingIds = new Set(prev.map((t) => t.id));
           const fresh = res.tracks.filter((t) => !existingIds.has(t.id));
-          const updated = [...prev, ...fresh];
+          const remainingSlots = Math.max(0, 25 - prev.length);
+          const tracksToAdd = fresh.slice(0, remainingSlots);
+          const updated = [...prev, ...tracksToAdd];
           totalCount = updated.length;
           return updated;
         });
         appendQueue(res.tracks);
         setCurrentPage(nextPage);
 
-        // Continue allowing Load More until at least 25 tracks are assembled
+        // Stop Load More once 25 tracks are assembled
         const hasReachedLimit = totalCount >= 25;
-        setHasMorePages(!hasReachedLimit && res.tracks.length > 0);
+        setHasMorePages(!hasReachedLimit && res.hasMore);
       } else {
         setHasMorePages(false);
       }

@@ -221,10 +221,10 @@ export function createSearchPipeline({
         activeIntent.language,
       );
 
-      // 4. Parallel Spotify Retrieval across query facets (15 tracks per facet = 45 candidates)
+      // 4. Parallel Spotify Retrieval across query facets (25 tracks per facet = up to 75 candidates)
       const searchPromises = finalizedQueries.map(async (q) => {
         try {
-          const tracks = await spotifySearch.searchTracks(q, 15, signal);
+          const tracks = await spotifySearch.searchTracks(q, 25, signal);
           logger.info(`[SpotifySearch] Query "${q}" returned ${tracks.length} tracks. Top: ${tracks.slice(0, 3).map(t => t.name).join(", ")}`);
           return tracks;
         } catch (err) {
@@ -235,13 +235,13 @@ export function createSearchPipeline({
       const rawTrackLists = await Promise.all(searchPromises);
 
       // 5. In-Memory Reciprocal Rank Fusion (< 2ms)
-      let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 35 });
+      let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 50 });
 
-      // Safety fallback: if fused candidates are sparse (< 10), search master query
-      if (fusedCandidates.length < 10) {
+      // Safety fallback: if fused candidates are sparse (< 15), search master query
+      if (fusedCandidates.length < 15) {
         try {
           logger.info(`[SpotifySearch] Candidate pool sparse (${fusedCandidates.length}). Executing master fallback: "${masterQueryStr}"`);
-          const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 15, signal);
+          const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 25, signal);
           const seenIds = new Set(fusedCandidates.map((t) => t.id));
           for (const t of fallbackTracks) {
             if (!seenIds.has(t.id)) {
@@ -310,11 +310,14 @@ export function createSearchPipeline({
 
       if (mode === "mock" || !spotifySearch) {
         const available = BACKEND_MOCK_TRACKS.filter((t) => !excludeIdSet.has(t.id));
-        const nextBatch = available.slice(0, 10);
+        const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
+        const batchSize = Math.min(5, remainingSlots);
+        const nextBatch = available.slice(0, batchSize);
+        const totalAfter = excludeTrackIds.length + nextBatch.length;
         return {
           page,
           tracks: nextBatch,
-          hasMore: page < 4 && available.length > 10,
+          hasMore: totalAfter < 25 && available.length > batchSize,
           queriesUsed: ["mock-load-more"],
         };
       }
@@ -432,7 +435,7 @@ export function createSearchPipeline({
       );
 
       // Gemini Call 2 Reranker with 2-batch / 6-cumulative artist limits
-      const finalTracks = await activeReranker.rerank(
+      const rerankedTracks = await activeReranker.rerank(
         prompt,
         intent,
         candidatesToRerank,
@@ -448,10 +451,17 @@ export function createSearchPipeline({
         },
       );
 
+      // Enforce clean 5-track batch size and hard session ceiling of 25 tracks
+      const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
+      const batchSize = Math.min(5, remainingSlots);
+      const finalTracks = rerankedTracks.slice(0, batchSize);
+      const totalAfter = excludeTrackIds.length + finalTracks.length;
+      const hasMore = totalAfter < 25 && finalTracks.length > 0;
+
       return {
         page,
         tracks: finalTracks,
-        hasMore: finalTracks.length > 0,
+        hasMore,
         queriesUsed: finalizedQueries.map((q) => q.query),
       };
     },
@@ -555,7 +565,7 @@ export function createSearchPipeline({
 
       const searchPromises = finalizedQueries.map(async (q) => {
         try {
-          return await spotifySearch.searchTracks(q, 15, signal);
+          return await spotifySearch.searchTracks(q, 25, signal);
         } catch (err) {
           logger.warn(`[RefineVibe] Spotify search for "${q}" failed:`, err);
           return [] as Track[];
@@ -563,7 +573,7 @@ export function createSearchPipeline({
       });
 
       const trackLists = await Promise.all(searchPromises);
-      const fusedCandidates = fuseTrackLists(trackLists, { maxCandidates: 35 });
+      const fusedCandidates = fuseTrackLists(trackLists, { maxCandidates: 50 });
       const candidatesToUse = fusedCandidates.length > 0 ? fusedCandidates : BACKEND_MOCK_TRACKS.slice(0, 10);
 
       // 4. Gemini Call 2 Reranker scores candidate tracks against the refined sonic coordinates

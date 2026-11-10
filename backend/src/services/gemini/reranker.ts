@@ -169,18 +169,37 @@ export function matchesNegativeConstraints(track: Track, intent: MusicIntent): b
 export function isTargetEra(track: Track, era: string | null | undefined): boolean {
   if (!era) return true;
   if (!track.releaseYear) return true; // keep if year unknown
+
+  const text = `${track.name} ${track.album || ""}`.toLowerCase();
+  const isRemasterOrReissue =
+    text.includes("remaster") ||
+    text.includes("anniversary") ||
+    text.includes("reissue") ||
+    text.includes("deluxe") ||
+    text.includes("edition") ||
+    text.includes("live at") ||
+    text.includes("greatest hits");
+
   const e = era.toLowerCase();
   if (e.includes("90") || e.includes("1990")) {
-    return track.releaseYear >= 1989 && track.releaseYear <= 2001;
+    if (track.releaseYear >= 1989 && track.releaseYear <= 2001) return true;
+    if (isRemasterOrReissue) return true;
+    return false;
   }
   if (e.includes("80") || e.includes("1980")) {
-    return track.releaseYear >= 1979 && track.releaseYear <= 1991;
+    if (track.releaseYear >= 1979 && track.releaseYear <= 1991) return true;
+    if (isRemasterOrReissue) return true;
+    return false;
   }
   if (e.includes("70") || e.includes("1970")) {
-    return track.releaseYear >= 1969 && track.releaseYear <= 1981;
+    if (track.releaseYear >= 1969 && track.releaseYear <= 1981) return true;
+    if (isRemasterOrReissue) return true;
+    return false;
   }
   if (e.includes("2000") || e.includes("00s")) {
-    return track.releaseYear >= 1999 && track.releaseYear <= 2011;
+    if (track.releaseYear >= 1999 && track.releaseYear <= 2011) return true;
+    if (isRemasterOrReissue) return true;
+    return false;
   }
   return true;
 }
@@ -686,7 +705,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
       }
 
       try {
-        const candidatePayload = eligibleCandidates.slice(0, 20).map((t, idx) => ({
+        const candidatePayload = eligibleCandidates.slice(0, 30).map((t, idx) => ({
           id: t.id,
           title: t.name,
           artists: t.artists.join(", "),
