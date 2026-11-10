@@ -137,7 +137,7 @@ export const TopBar = memo(function TopBar({
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 6 }}
                     transition={{ duration: 0.15 }}
-                    className="liquid-account-menu absolute right-0 mt-3 w-[min(18rem,calc(100vw-2rem))] rounded-[24px] p-2.5 z-50 origin-top-right"
+                    className="liquid-glass-prominent liquid-account-menu absolute right-0 mt-3 w-[min(18rem,calc(100vw-2rem))] rounded-[24px] p-2.5 z-50 origin-top-right"
                   >
                     <div className="liquid-account-menu-content relative z-10">
                       <div className="px-3 py-2.5 border-b border-white/[0.12] mb-1.5">
