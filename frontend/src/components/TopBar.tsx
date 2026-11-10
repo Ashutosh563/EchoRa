@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useEffect } from 'react';
 import { Wordmark } from './Wordmark';
-import { SlidersHorizontal, LogOut, LogIn } from 'lucide-react';
+import { SlidersHorizontal, LogOut, LogIn, UserRound, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import type { StatusResponse } from '../types';
@@ -31,17 +31,22 @@ export const TopBar = memo(function TopBar({
         setIsMenuOpen(false);
       }
     }
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setIsMenuOpen(false);
+    }
     if (isMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
     };
   }, [isMenuOpen]);
 
   return (
-    <header className="sticky top-0 z-40 w-full h-16 border-b border-white/[0.08] bg-ink/70 backdrop-blur-xl transition-colors">
-      <div className="max-w-6xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between">
+    <header className="site-topbar sticky top-0 z-40 w-full h-16 border-b transition-colors">
+      <div className="site-topbar-content max-w-6xl mx-auto h-full px-4 sm:px-6 grid grid-cols-[1fr_auto_1fr] items-center">
         {/* Left: Brand */}
         <Wordmark />
 
@@ -73,6 +78,7 @@ export const TopBar = memo(function TopBar({
             <button
               type="button"
               role="tab"
+              aria-label="Mood Transition"
               aria-selected={activeTab === 'transition'}
               onClick={() => onTabChange('transition')}
               className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
@@ -86,49 +92,41 @@ export const TopBar = memo(function TopBar({
                   transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
                 />
               )}
-              <span className="relative z-10">Mood Transition</span>
+              <span className="relative z-10"><span className="sm:hidden">Transition</span><span className="hidden sm:inline">Mood Transition</span></span>
             </button>
           </nav>
         )}
 
-        {/* Right: Preferences & User Identity */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-[32px] sm:min-w-[140px] justify-end">
-          {activeTab === 'discover' && onOpenPreferences && (
-            <button
-              type="button"
-              onClick={onOpenPreferences}
-              aria-label="Open taste preferences"
-              title="Taste Preferences"
-              className="glass-pill p-2 sm:px-3 sm:py-1.5 flex items-center gap-1.5 text-xs font-medium text-text-dim hover:text-text hover:bg-white/[0.08] transition-all cursor-pointer border border-white/10"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 mood-accent-text" />
-              <span className="hidden sm:inline font-medium">Preferences</span>
-            </button>
-          )}
-
-          {/* User Account State */}
-          {user ? (
+        {/* Right: Account menu */}
+        <div className="justify-self-end">
+          {user || isGuest ? (
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
                 onClick={() => setIsMenuOpen((prev) => !prev)}
-                className="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-colors cursor-pointer"
-                title={profile?.display_name || user.email || 'Account'}
+                aria-label="Open account menu"
+                aria-haspopup="true"
+                aria-expanded={isMenuOpen}
+                className="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 hover:border-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_4px_16px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-all cursor-pointer"
+                title={profile?.display_name || user?.email || 'Account'}
               >
-                {profile?.avatar_url ? (
+                {user && profile?.avatar_url ? (
                   <img
                     src={profile.avatar_url}
                     alt={profile.display_name || 'User Avatar'}
                     className="w-6 h-6 rounded-full object-cover border border-white/20"
                   />
-                ) : (
+                ) : user ? (
                   <div className="w-6 h-6 rounded-full bg-violet/30 border border-violet/40 flex items-center justify-center text-[10px] font-bold text-violet">
                     {(profile?.display_name || user.email || 'U')[0].toUpperCase()}
                   </div>
+                ) : (
+                  <UserRound className="w-4 h-4 text-text-dim" />
                 )}
-                <span className="hidden md:inline text-xs font-medium text-text max-w-[90px] truncate">
-                  {profile?.display_name || user.email?.split('@')[0]}
+                <span className="hidden sm:inline text-xs font-medium text-text max-w-[90px] truncate">
+                  {user ? profile?.display_name || user.email?.split('@')[0] : 'Account'}
                 </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-text-dim transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {/* Account Dropdown Menu */}
@@ -139,44 +137,65 @@ export const TopBar = memo(function TopBar({
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 6 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-56 rounded-2xl bg-ink/95 border border-white/15 p-2 backdrop-blur-2xl shadow-2xl z-50"
+                    className="liquid-account-menu absolute right-0 mt-3 w-[min(18rem,calc(100vw-2rem))] rounded-[24px] p-2.5 z-50 origin-top-right"
                   >
-                    <div className="px-3 py-2 border-b border-white/[0.08] mb-1">
-                      <p className="text-xs font-semibold text-text truncate">
-                        {profile?.display_name || 'EchoRa Listener'}
-                      </p>
-                      <p className="text-[11px] text-text-dim truncate">
-                        {profile?.email || user.email || 'No email shared'}
-                      </p>
-                      <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-white/[0.06] text-text-muted">
-                        via {profile?.auth_provider || 'OAuth'}
-                      </span>
-                    </div>
+                    <div className="liquid-account-menu-content relative z-10">
+                      <div className="px-3 py-2.5 border-b border-white/[0.12] mb-1.5">
+                        <p className="text-xs font-semibold text-text truncate">
+                          {user ? profile?.display_name || 'EchoRa Listener' : 'Guest session'}
+                        </p>
+                        <p className="text-[11px] text-text-dim truncate mt-0.5">
+                          {user ? profile?.email || user.email || 'No email shared' : 'Your preferences are saved on this device'}
+                        </p>
+                        {user && <span className="inline-block mt-2 px-2 py-1 rounded-full text-[9px] uppercase font-bold tracking-wider bg-white/[0.08] border border-white/[0.1] text-text-muted">
+                          via {profile?.auth_provider || 'OAuth'}
+                        </span>}
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        signOut();
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Sign Out</span>
-                    </button>
+                      {onOpenPreferences && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            onOpenPreferences();
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-text hover:bg-white/[0.1] transition-colors cursor-pointer text-left"
+                        >
+                          <SlidersHorizontal className="w-4 h-4 text-violet-200" />
+                          <span className="font-medium">Taste Preferences</span>
+                        </button>
+                      )}
+
+                      {user ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            signOut();
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-rose-300 hover:bg-rose-400/10 hover:text-rose-200 transition-colors cursor-pointer text-left"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span className="font-medium">Sign Out</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            onOpenSignIn?.();
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-cyan-100 hover:bg-cyan-300/10 hover:text-white transition-colors cursor-pointer text-left"
+                        >
+                          <LogIn className="w-4 h-4" />
+                          <span className="font-medium">Sign In</span>
+                        </button>
+                      )}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
-          ) : isGuest ? (
-            <button
-              type="button"
-              onClick={onOpenSignIn}
-              className="glass-pill px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium text-cyan hover:text-white bg-cyan/10 hover:bg-cyan/20 border border-cyan/30 transition-all cursor-pointer"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In</span>
-            </button>
           ) : null}
         </div>
       </div>

@@ -111,3 +111,4 @@ Response needing clarification:
 - [x] Added bounded prompt validation, endpoint normalization, and clarification responses for missing or identical moods.
 - [x] Added an editable endpoint review with the existing presets as a second path; both paths continue through the existing four-stage planner.
 - [x] Added integration and unit coverage for validation, parsing, provider fallback, ambiguity, and the frontend interpretation-to-review flow.
+- [x] Refined manual selection into a guided two-step flow and added gradual mood tint transitions with reduced-motion-aware aurora drift.

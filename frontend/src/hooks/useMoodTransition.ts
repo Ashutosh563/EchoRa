@@ -49,6 +49,14 @@ export function useMoodTransition() {
     }
   }, []);
 
+  const clearInterpretation = useCallback(() => {
+    setStartingMood("");
+    setDestinationMood("");
+    setInterpretation("");
+    setNeedsClarification(false);
+    setError(null);
+  }, []);
+
   const selectStartingMood = useCallback((mood: string) => {
     setStartingMood(mood);
     setError(null);
@@ -166,6 +174,7 @@ export function useMoodTransition() {
     interpretation,
     needsClarification,
     interpretPrompt,
+    clearInterpretation,
     selectStartingMood,
     selectDestinationMood,
     generatePlan,

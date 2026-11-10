@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Register theme colors so mood changes interpolate instead of snapping. */
+@property --mood-primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8B5CF6;
+}
+
+@property --mood-secondary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #22D3EE;
+}
+
+@property --mood-accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #EC4899;
+}
+
+@property --mood-accent-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #F59E0B;
+}
+
 :root {
   --ink: #07070D;
   --surface: rgba(255, 255, 255, 0.045);
@@ -31,6 +56,7 @@ body {
   overflow-x: hidden;
   margin: 0;
   padding: 0;
+  transition: background-color 1600ms ease, color 1600ms ease;
 }
 
 /* Glass panel style - tuned blur radius for compositor efficiency */
@@ -43,17 +69,89 @@ body {
   border: 1px solid var(--border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 16px 40px rgba(0, 0, 0, 0.08);
   border-radius: 20px;
+  transition: border-color 1500ms ease, box-shadow 1500ms ease;
 }
 
 /* Mood-responsive liquid surfaces. The dark base stays stable while accents
    and reflections gently follow the interpreted listening mood. */
 .mood-shell {
-  transition: color 900ms ease;
+  transition:
+    --mood-primary 1800ms cubic-bezier(0.22, 1, 0.36, 1),
+    --mood-secondary 1800ms cubic-bezier(0.22, 1, 0.36, 1),
+    --mood-accent 1800ms cubic-bezier(0.22, 1, 0.36, 1),
+    --mood-accent-2 1800ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 1500ms ease;
+}
+
+/* Shared liquid-glass header: lets the page aurora show through without losing contrast. */
+.site-topbar {
+  isolation: isolate;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mood-primary) 8%, rgba(7, 7, 13, 0.88)),
+    rgba(7, 7, 13, 0.72)
+  );
+  border-bottom-color: color-mix(in srgb, var(--mood-secondary) 16%, rgba(255, 255, 255, 0.10));
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 34px rgba(0, 0, 0, 0.16);
+  transition: background 1800ms ease, border-color 1800ms ease, box-shadow 1800ms ease;
+}
+
+/* Floating account controls use a stronger Liquid Glass surface over the aurora. */
+.liquid-account-menu {
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(145deg, rgba(32, 26, 51, 0.76), rgba(10, 12, 24, 0.72) 58%, rgba(15, 31, 43, 0.72));
+  -webkit-backdrop-filter: blur(32px) saturate(1.85) contrast(1.08);
+  backdrop-filter: blur(32px) saturate(1.85) contrast(1.08);
+  border: 1px solid rgba(255, 255, 255, 0.23);
+  box-shadow:
+    0 26px 72px rgba(0, 0, 0, 0.52),
+    0 8px 24px rgba(11, 9, 25, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.liquid-account-menu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(130% 85% at 6% -12%, rgba(255, 255, 255, 0.23), transparent 58%),
+    linear-gradient(125deg, rgba(255, 255, 255, 0.10), transparent 34%, rgba(34, 211, 238, 0.07) 78%, transparent);
+}
+
+.liquid-account-menu-content {
+  position: relative;
+  z-index: 1;
+}
+
+.site-topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 52% 170% at 14% -45%, color-mix(in srgb, var(--mood-primary) 22%, transparent), transparent 78%),
+    radial-gradient(ellipse 48% 160% at 84% 145%, color-mix(in srgb, var(--mood-secondary) 17%, transparent), transparent 78%);
+  opacity: 0.72;
+  transition: opacity 1400ms ease;
+}
+
+.site-topbar-content {
+  position: relative;
+  z-index: 1;
 }
 
 .mood-accent-text {
   color: var(--mood-primary);
-  transition: color 900ms ease;
+  transition: color 1500ms ease;
 }
 
 .mood-surface {
@@ -65,12 +163,12 @@ body {
   );
   border-color: color-mix(in srgb, var(--mood-primary) 42%, rgba(255, 255, 255, 0.14));
   box-shadow: 0 12px 28px color-mix(in srgb, var(--mood-primary) 15%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  transition: border-color 900ms ease, box-shadow 900ms ease;
+  transition: border-color 1500ms ease, box-shadow 1500ms ease;
 }
 
 .mood-gradient {
   background: linear-gradient(135deg, var(--mood-primary), var(--mood-secondary) 55%, var(--mood-accent));
-  transition: box-shadow 900ms ease;
+  transition: box-shadow 1500ms ease;
 }
 
 .mood-discover-btn {
@@ -81,7 +179,7 @@ body {
     color-mix(in srgb, var(--mood-accent, #EC4899) 35%, rgba(15, 17, 23, 0.72))
   );
   border-color: color-mix(in srgb, var(--mood-primary, #8B5CF6) 32%, rgba(255, 255, 255, 0.15));
-  transition: border-color 250ms ease, box-shadow 250ms ease, color 250ms ease, filter 250ms ease;
+  transition: border-color 1500ms ease, box-shadow 450ms ease, color 700ms ease, filter 450ms ease;
 }
 
 .group\/btn:hover .mood-discover-btn {
@@ -100,7 +198,7 @@ body {
 .mood-cta {
   background: linear-gradient(135deg, var(--mood-primary), var(--mood-secondary) 55%, var(--mood-accent));
   box-shadow: 0 10px 28px color-mix(in srgb, var(--mood-primary) 35%, transparent), 0 0 20px color-mix(in srgb, var(--mood-accent) 24%, transparent);
-  transition: box-shadow 400ms ease, filter 200ms ease, transform 200ms ease;
+  transition: box-shadow 1500ms ease, filter 250ms ease, transform 250ms ease;
 }
 
 .mood-cta:hover:not(:disabled) {
@@ -112,6 +210,7 @@ body {
   border-color: color-mix(in srgb, var(--tile-mood) 65%, white 10%);
   background: linear-gradient(135deg, color-mix(in srgb, var(--tile-mood) 24%, rgba(255,255,255,.06)), color-mix(in srgb, var(--tile-secondary) 16%, rgba(255,255,255,.035)));
   box-shadow: 0 8px 24px color-mix(in srgb, var(--tile-mood) 22%, transparent), inset 0 1px 0 rgba(255,255,255,.2);
+  transition: background 700ms ease, border-color 700ms ease, box-shadow 700ms ease;
 }
 
 .mood-choice-selected::after {
@@ -120,6 +219,22 @@ body {
   inset: -45% -20%;
   background: radial-gradient(ellipse at 25% 20%, color-mix(in srgb, var(--tile-mood) 28%, transparent), transparent 58%);
   pointer-events: none;
+}
+
+.mood-step-panel {
+  animation: mood-step-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-topbar,
+  .site-topbar::before {
+    transition: none;
+  }
+}
+
+@keyframes mood-step-enter {
+  from { opacity: 0; transform: translate3d(0, 7px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 .mood-stage-card {
@@ -173,29 +288,29 @@ body {
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Hardware-accelerated Aurora Orbital Drift Keyframes (compositor thread only) */
+/* Slow, small transform-only drifts keep the aurora alive without layout work. */
 @keyframes aurora-drift-1 {
-  0%, 100% { transform: translate3d(0px, 0px, 0) scale(1); }
-  33% { transform: translate3d(90px, 80px, 0) scale(1.12); }
-  66% { transform: translate3d(-70px, 20px, 0) scale(0.92); }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(145px, 95px, 0) scale(1.035); }
+  66% { transform: translate3d(-105px, 35px, 0) scale(0.985); }
 }
 
 @keyframes aurora-drift-2 {
-  0%, 100% { transform: translate3d(0px, 0px, 0) scale(1); }
-  33% { transform: translate3d(-110px, 120px, 0) scale(0.9); }
-  66% { transform: translate3d(50px, -60px, 0) scale(1.15); }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(-165px, 125px, 0) scale(0.985); }
+  66% { transform: translate3d(85px, -80px, 0) scale(1.04); }
 }
 
 @keyframes aurora-drift-3 {
-  0%, 100% { transform: translate3d(0px, 0px, 0) scale(1); }
-  33% { transform: translate3d(130px, -90px, 0) scale(1.08); }
-  66% { transform: translate3d(-80px, 70px, 0) scale(0.95); }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(175px, -115px, 0) scale(1.025); }
+  66% { transform: translate3d(-115px, 90px, 0) scale(0.99); }
 }
 
 @keyframes aurora-drift-4 {
-  0%, 100% { transform: translate3d(0px, 0px, 0) scale(1); }
-  33% { transform: translate3d(-90px, -110px, 0) scale(1.18); }
-  66% { transform: translate3d(100px, -30px, 0) scale(0.88); }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(-135px, -145px, 0) scale(1.035); }
+  66% { transform: translate3d(125px, -55px, 0) scale(0.985); }
 }
 
 /* Equalizer audio wave animation (transform scaleY instead of layout-inducing height) */
@@ -331,5 +446,9 @@ input:focus-visible {
   }
   .animate-conic {
     animation: none !important;
+  }
+
+  .mood-step-panel {
+    animation: none;
   }
 }
