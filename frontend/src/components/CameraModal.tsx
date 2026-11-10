@@ -167,7 +167,7 @@ export function CameraModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, y: 12 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="relative w-full max-w-lg bg-[#12121E]/75 backdrop-blur-2xl p-5 sm:p-6 rounded-[24px] border border-white/20 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.25)]"
+          className="glass-panel relative w-full max-w-lg p-5 sm:p-6 rounded-[24px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.6)]"
         >
           {/* Header */}
           <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-4">

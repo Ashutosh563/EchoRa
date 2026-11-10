@@ -41,6 +41,18 @@ describe("Transition Endpoints (Integration)", () => {
     });
   });
 
+  describe("POST /api/transition/interpret", () => {
+    it("validates that the prompt is present and bounded", async () => {
+      const empty = await request(app).post("/api/transition/interpret").send({ prompt: " " });
+      expect(empty.status).toBe(400);
+      expect(empty.body.error.code).toBe("VALIDATION_ERROR");
+
+      const tooLong = await request(app).post("/api/transition/interpret").send({ prompt: "x".repeat(501) });
+      expect(tooLong.status).toBe(400);
+      expect(tooLong.body.error.code).toBe("VALIDATION_ERROR");
+    });
+  });
+
   describe("POST /api/transition/generate-music", () => {
     it("returns 200 with 4 stage playlists and up to 20 tracks total", async () => {
       const planRes = await request(app)

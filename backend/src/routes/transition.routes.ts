@@ -16,6 +16,10 @@ const planTransitionSchema = z.object({
     .max(50, "Mood must be 50 characters or less."),
 });
 
+const interpretTransitionSchema = z.object({
+  prompt: z.string().trim().min(1, "Describe the mood transition you want.").max(500, "Description must be 500 characters or less."),
+});
+
 const moodStageSchema = z.object({
   stage: z.number().int().min(1).max(4),
   mood: z.string().trim().min(1).max(50),
@@ -37,6 +41,10 @@ export function createTransitionRouter(
   controller: ReturnType<typeof createTransitionController>,
 ): Router {
   const router = Router();
+
+  router.post("/interpret", validateBody(interpretTransitionSchema), (req, res, next) => {
+    void controller.interpret(req, res, next);
+  });
 
   router.post("/plan", validateBody(planTransitionSchema), (req, res, next) => {
     void controller.plan(req, res, next);

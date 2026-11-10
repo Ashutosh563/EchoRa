@@ -3,6 +3,7 @@ import type {
   MoodStage,
   TransitionJourneyResponse,
   TransitionPlanResponse,
+  TransitionIntentResponse,
 } from "../types/transition";
 
 interface ErrorResponseBody {
@@ -29,6 +30,25 @@ async function handleResponse<T>(res: Response): Promise<T> {
   }
 
   return (await res.json()) as T;
+}
+
+export async function interpretTransition(
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<TransitionIntentResponse> {
+  try {
+    const res = await fetch("/api/transition/interpret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+      signal,
+    });
+    return await handleResponse<TransitionIntentResponse>(res);
+  } catch (err: unknown) {
+    if (err instanceof AppApiError) throw err;
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new AppApiError("NETWORK_ERROR", "Could not reach ECHORA mood interpreter.");
+  }
 }
 
 export async function planTransition(

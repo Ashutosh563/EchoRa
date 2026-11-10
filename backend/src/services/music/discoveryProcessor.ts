@@ -5,6 +5,8 @@ export interface ProcessedDiscoveryResult {
   mode: DiscoveryMode;
   injectedGenre?: string;
   injectedArtist?: string;
+  excludedGenres: string[];
+  excludedArtists: string[];
   excludedTerms: Set<string>;
   adjustedIntent: MusicIntent;
 }
@@ -43,6 +45,20 @@ const MOOD_EXPLORE_GENRES: Record<string, string[]> = {
   workout: ["drum and bass", "electro house", "post-punk"],
 };
 
+function explicitlyRequestsTerm(prompt: string, term: string): boolean {
+  const normalizedPrompt = prompt.toLowerCase();
+  const normalizedTerm = term.trim().toLowerCase();
+  if (!normalizedTerm) return false;
+
+  const escapedTerm = normalizedTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`(?:^|[^a-z0-9])${escapedTerm}(?=$|[^a-z0-9])`, "i").exec(normalizedPrompt);
+  if (!match || match.index === undefined) return false;
+
+  const beforeTerm = normalizedPrompt.slice(Math.max(0, match.index - 64), match.index);
+  const immediatelyNegated = /\b(?:no|not|without|avoid|avoiding|exclude|excluding)\b(?:\s+\w+){0,4}\s*$/i.test(beforeTerm);
+  return !immediatelyNegated;
+}
+
 export class DiscoveryPreferenceProcessor {
   /**
    * Processes Gemini intent, discovery mode, preferences, and prompt.
@@ -63,22 +79,34 @@ export class DiscoveryPreferenceProcessor {
 
     const rawPromptLower = (context.rawPrompt || "").toLowerCase();
     const excludedTerms = new Set<string>();
-
-    // 1. Process Disliked Preferences:
-    // Respect disliked items UNLESS user explicitly named them in current prompt
-    for (const disliked of [...preferences.dislikedGenres, ...preferences.dislikedArtists]) {
-      const clean = disliked.trim().toLowerCase();
-      if (!clean) continue;
-      // If user typed it directly in prompt, current request takes precedence
-      if (!rawPromptLower.includes(clean)) {
-        excludedTerms.add(clean);
-      }
-    }
+    const excludedGenres = preferences.dislikedGenres.filter((term) => {
+      const clean = term.trim().toLowerCase();
+      if (!clean || explicitlyRequestsTerm(rawPromptLower, clean)) return false;
+      excludedTerms.add(clean);
+      return true;
+    });
+    const excludedArtists = preferences.dislikedArtists.filter((term) => {
+      const clean = term.trim().toLowerCase();
+      if (!clean || explicitlyRequestsTerm(rawPromptLower, clean)) return false;
+      excludedTerms.add(clean);
+      return true;
+    });
 
     // Clone intent so base is never mutated
     const adjustedIntent: MusicIntent = {
       ...baseIntent,
       genre: [...(baseIntent.genre || [])],
+      negativeConstraints: {
+        ...baseIntent.negativeConstraints,
+        excludedGenres: [...new Set([
+          ...(baseIntent.negativeConstraints?.excludedGenres || []),
+          ...excludedGenres,
+        ])],
+        excludedArtists: [...new Set([
+          ...(baseIntent.negativeConstraints?.excludedArtists || []),
+          ...excludedArtists,
+        ])],
+      },
     };
 
     // Filter out disliked genres from intent's genre list
@@ -189,6 +217,8 @@ export class DiscoveryPreferenceProcessor {
       mode,
       injectedGenre,
       injectedArtist,
+      excludedGenres,
+      excludedArtists,
       excludedTerms,
       adjustedIntent,
     };

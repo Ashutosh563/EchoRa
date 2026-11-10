@@ -9,6 +9,13 @@ export interface MoodStage {
   valence?: number;
 }
 
+export interface TransitionIntentResponse {
+  status: "ready" | "clarification_needed";
+  startingMood: string | null;
+  destinationMood: string | null;
+  interpretation: string;
+}
+
 export interface TransitionPlanResponse {
   stages: MoodStage[];
 }

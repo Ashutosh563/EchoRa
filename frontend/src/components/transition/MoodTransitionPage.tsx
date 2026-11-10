@@ -1,12 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useMoodTransition } from "../../hooks/useMoodTransition";
-import { MoodSelectorSection } from "./MoodSelectorSection";
+import { MoodSelectorSection, type MoodInputMode } from "./MoodSelectorSection";
 import { JourneyReviewCard } from "./JourneyReviewCard";
 import { LayeredPlaylistView } from "./LayeredPlaylistView";
 import { ThinkingState } from "../ThinkingState";
 import { ErrorCard } from "../ErrorCard";
 
 export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: string | undefined) => void }) {
+  const [inputMode, setInputMode] = useState<MoodInputMode>("describe");
   const {
     status,
     startingMood,
@@ -14,6 +15,10 @@ export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: str
     stages,
     journey,
     error,
+    interpretation,
+    needsClarification,
+    interpretPrompt,
+    clearInterpretation,
     selectStartingMood,
     selectDestinationMood,
     generatePlan,
@@ -28,7 +33,7 @@ export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: str
       ? journey.stages[Math.floor((journey.stages.length - 1) / 2)]?.mood || startingMood
       : status === "review"
       ? stages[1]?.mood || startingMood
-      : startingMood || destinationMood || undefined;
+      : destinationMood || startingMood || undefined;
     onMoodChange?.(paletteMood);
   }, [onMoodChange, status, startingMood, destinationMood, stages, journey]);
 
@@ -39,6 +44,15 @@ export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: str
         <p className="text-xs text-text-dim pt-4">
           Composing an emotional 4-stage bridge from {startingMood} to {destinationMood}...
         </p>
+      </div>
+    );
+  }
+
+  if (status === "interpreting") {
+    return (
+      <div className="py-20 flex flex-col items-center" role="status" aria-live="polite">
+        <ThinkingState />
+        <p className="text-xs text-text-dim pt-4">Reading your mood description and finding the emotional endpoints…</p>
       </div>
     );
   }
@@ -96,6 +110,8 @@ export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: str
   // Default: Selection View
   return (
     <MoodSelectorSection
+      mode={inputMode}
+      onModeChange={setInputMode}
       startingMood={startingMood}
       destinationMood={destinationMood}
       onSelectStarting={selectStartingMood}
@@ -103,6 +119,10 @@ export function MoodTransitionPage({ onMoodChange }: { onMoodChange?: (mood: str
       onGenerate={generatePlan}
       isLoading={false}
       error={error}
+      onInterpretPrompt={interpretPrompt}
+      onClearInterpretation={clearInterpretation}
+      interpretation={interpretation}
+      needsClarification={needsClarification}
     />
   );
 }

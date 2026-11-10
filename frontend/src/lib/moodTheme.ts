@@ -15,14 +15,14 @@ export function getMoodTheme(intent?: MusicIntent | null, moodOverride?: string)
   const mood = (moodOverride ?? intent?.mood ?? '').toLowerCase();
 
   // Energy modifies animation speed & opacity
-  let animationDuration = 30;
+  let animationDuration = 34;
   let opacity = 0.42;
 
   if (energy === 'low') {
     animationDuration = 45;
     opacity = 0.35;
   } else if (energy === 'high') {
-    animationDuration = 16;
+    animationDuration = 27;
     opacity = 0.52;
   }
 
@@ -73,7 +73,7 @@ export function getMoodTheme(intent?: MusicIntent | null, moodOverride?: string)
       accent1: '#EF4444',
       accent2: '#F97316',
       blobs: ['#F43F5E', '#F59E0B', '#E11D48', '#EA580C'],
-      animationDuration: Math.min(animationDuration, 16),
+      animationDuration: Math.min(animationDuration, 25),
       opacity: Math.max(opacity, 0.5),
     };
   }
