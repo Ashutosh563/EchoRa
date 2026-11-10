@@ -8,6 +8,7 @@ import { generateQueries } from "./queryGenerator.js";
 import { defaultDiscoveryProcessor } from "./discoveryProcessor.js";
 import { BACKEND_MOCK_TRACKS, getMockIntent } from "./mockMusic.js";
 import { fuseTrackLists, getSongSignature } from "./fusion.js";
+import { createSemanticReranker, parseTargetArtists, type SemanticReranker } from "../gemini/reranker.js";
 import { createSemanticReranker, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
 import { logger } from "../../utils/logger.js";
 
@@ -70,6 +71,12 @@ export function cleanSpotifyQuery(q: string, lang?: string | null): string {
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
   if (!lang) return cleaned;
+
+  // Never prepend language or generic keywords if query is already an explicit Spotify fielded filter (artist: or track:)
+  if (/^(?:artist:|track:)/i.test(cleaned)) {
+    return cleaned;
+  }
+
   const normalizedLang = lang.toLowerCase().trim();
 
   if (normalizedLang === "spanish" || normalizedLang === "latin") {
@@ -266,6 +273,26 @@ export function createSearchPipeline({
         }
       }
 
+      // If user specifically requested artist(s), ensure dedicated artist queries are prioritized
+      const targetArtists = parseTargetArtists(activeIntent.artist);
+      if (targetArtists.length > 1) {
+        for (const art of targetArtists) {
+          const artQuery = `artist:"${art}"`;
+          if (!queryList.includes(artQuery)) {
+            queryList.unshift(artQuery);
+          }
+        }
+        const jointQuery = targetArtists.map((a) => `"${a}"`).join(" ");
+        if (!queryList.includes(jointQuery)) {
+          queryList.unshift(jointQuery);
+        }
+      } else if (targetArtists.length === 1) {
+        const artistQuery = `artist:"${targetArtists[0]}"`;
+        if (!queryList.includes(artistQuery)) {
+          queryList.unshift(artistQuery);
+        }
+      }
+
 
 
       const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, activeIntent.language));
@@ -274,11 +301,10 @@ export function createSearchPipeline({
         activeIntent.language,
       );
 
-      // 4. Parallel Spotify Retrieval across query facets (15 tracks per facet = 45 candidates)
-      const searchErrors: unknown[] = [];
+      // 4. Parallel Spotify Retrieval across query facets (25 tracks per facet = up to 75 candidates)
       const searchPromises = finalizedQueries.map(async (q) => {
         try {
-          const tracks = await spotifySearch.searchTracks(q, 15, signal);
+          const tracks = await spotifySearch.searchTracks(q, 25, signal);
           logger.info(`[SpotifySearch] Query "${q}" returned ${tracks.length} tracks. Top: ${tracks.slice(0, 3).map(t => t.name).join(", ")}`);
           return tracks;
         } catch (err) {
@@ -294,13 +320,13 @@ export function createSearchPipeline({
       }
 
       // 5. In-Memory Reciprocal Rank Fusion (< 2ms)
-      let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 35 });
+      let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 50 });
 
-      // Safety fallback: if fused candidates are sparse (< 10), search master query
-      if (fusedCandidates.length < 10) {
+      // Safety fallback: if fused candidates are sparse (< 15), search master query
+      if (fusedCandidates.length < 15) {
         try {
           logger.info(`[SpotifySearch] Candidate pool sparse (${fusedCandidates.length}). Executing master fallback: "${masterQueryStr}"`);
-          const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 15, signal);
+          const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 25, signal);
           const seenIds = new Set(fusedCandidates.map((t) => t.id));
           for (const t of fallbackTracks) {
             if (!seenIds.has(t.id)) {
@@ -325,6 +351,9 @@ export function createSearchPipeline({
         rerankerPreferences(fallbackContext, discoveryResult),
       ) : [];
 
+      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+      const hasMoreInitial = isExclusiveArtist ? finalTracks.length >= 10 : finalTracks.length > 0;
+
       return {
         mode: "live",
         discoveryMode: discoveryResult.mode,
@@ -334,6 +363,7 @@ export function createSearchPipeline({
           alternatives: finalizedQueries,
         },
         tracks: finalTracks,
+        hasMore: hasMoreInitial,
         ...(finalTracks.length === 0
           ? { notice: "No Spotify tracks matched this request and its filters. Try broadening the prompt or adjusting your Preferences." }
           : {}),
@@ -381,19 +411,29 @@ export function createSearchPipeline({
 
       if (mode === "mock" || !spotifySearch) {
         const available = BACKEND_MOCK_TRACKS.filter((t) => !excludeIdSet.has(t.id));
-        const nextBatch = available.slice(0, 10);
+        const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
+        const batchSize = Math.min(5, remainingSlots);
+        const nextBatch = available.slice(0, batchSize);
+        const totalAfter = excludeTrackIds.length + nextBatch.length;
         return {
           page,
           tracks: nextBatch,
-          hasMore: page < 4 && available.length > 10,
+          hasMore: totalAfter < 25 && available.length > batchSize,
           queriesUsed: ["mock-load-more"],
         };
       }
 
       // Live mode: 4-Tier Page Candidate Mining
       const queryList: { query: string; offset: number }[] = [];
+      const targetArtists = parseTargetArtists(intent.artist);
+      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
 
-      if (page === 2) {
+      if (isExclusiveArtist && targetArtists.length > 0) {
+        for (const art of targetArtists) {
+          queryList.push({ query: `artist:"${art}"`, offset: (page - 1) * 10 });
+          queryList.push({ query: art, offset: (page - 1) * 10 });
+        }
+      } else if (page === 2) {
         // Tier 2: Mood context, curator nuance, and genre offset
         if (activeIntent.multiQueries?.contextQuery) {
           queryList.push({ query: activeIntent.multiQueries.contextQuery, offset: 0 });
@@ -490,18 +530,43 @@ export function createSearchPipeline({
         (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
       ).length;
 
+      // Detect if the candidate pool belongs to a tight niche micro-scene (< 12 unique artists)
+      const rawUniqueArtists = new Set<string>();
+      for (const t of rawCandidates) {
+        if (t.artists?.[0]) rawUniqueArtists.add(t.artists[0].toLowerCase().trim());
+      }
+      const isNicheScene = rawUniqueArtists.size > 0 && rawUniqueArtists.size < 12;
+
       if (filteredCount < 30) {
         try {
-          const fallbackQuery = cleanSpotifyQuery(
-            activeIntent.multiQueries?.masterQuery || activeIntent.multiQueries?.moodQuery || prompt,
-            activeIntent.language,
-          );
-          logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}"`);
-          const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 30, signal, page * 10);
-          for (const t of cascadeTracks) {
-            if (!seenRawIds.has(t.id)) {
-              seenRawIds.add(t.id);
-              rawCandidates.push(t);
+          // If niche micro-scene has seed artists, query authentic scene artists first
+          if (isNicheScene && intent.seedArtists && intent.seedArtists.length >= 2) {
+            const seedQuery = intent.seedArtists.length >= 4 && page % 2 === 0
+              ? `artist:"${intent.seedArtists[2]}" OR artist:"${intent.seedArtists[3]}"`
+              : `artist:"${intent.seedArtists[0]}" OR artist:"${intent.seedArtists[1]}"`;
+            logger.info(`[LoadMore] Niche micro-scene sparse (${filteredCount} tracks, ${rawUniqueArtists.size} artists). Querying seed artist network: "${seedQuery}"`);
+            const seedTracks = await spotifySearch.searchTracks(seedQuery, 25, signal, 0);
+            for (const t of seedTracks) {
+              if (!seenRawIds.has(t.id)) {
+                seenRawIds.add(t.id);
+                rawCandidates.push(t);
+              }
+            }
+          }
+
+          // Fallback to master query if still low
+          if (rawCandidates.filter((t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t))).length < 25) {
+            const fallbackQuery = cleanSpotifyQuery(
+              intent.multiQueries?.masterQuery || intent.multiQueries?.moodQuery || prompt,
+              intent.language,
+            );
+            logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}"`);
+            const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 25, signal, page * 10);
+            for (const t of cascadeTracks) {
+              if (!seenRawIds.has(t.id)) {
+                seenRawIds.add(t.id);
+                rawCandidates.push(t);
+              }
             }
           }
         } catch (err) {
@@ -514,8 +579,28 @@ export function createSearchPipeline({
         (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
       );
 
-      // Gemini Call 2 Reranker with 2-batch / 6-cumulative artist limits
-      const finalTracks = await activeReranker.rerank(
+      // Edge Case C: If exclusive artist catalog is exhausted, exit gracefully immediately
+      if (isExclusiveArtist && candidatesToRerank.length === 0) {
+        logger.info(`[LoadMore] Exclusive catalog for "${intent.artist}" exhausted at page ${page}. Returning empty batch with hasMore: false.`);
+        return {
+          page,
+          tracks: [],
+          hasMore: false,
+          queriesUsed: finalizedQueries.map((q) => q.query),
+        };
+      }
+
+      // Re-evaluate artist density on deduplicated candidates
+      const rerankUniqueArtists = new Set<string>();
+      for (const t of candidatesToRerank) {
+        if (t.artists?.[0]) rerankUniqueArtists.add(t.artists[0].toLowerCase().trim());
+      }
+      // For tight niche micro-scenes on deep pages (Page 3/4), gracefully adapt maxPerArtist from 2 to 3
+      // For popular/dense scenes (rerankUniqueArtists >= 12), artist cap stays strictly at 2 (100% untouched)
+      const dynamicMaxPerArtist = (rerankUniqueArtists.size > 0 && rerankUniqueArtists.size < 12 && page >= 3) ? 3 : 2;
+
+      // Gemini Call 2 Reranker with dynamic artist limits
+      const rerankedTracks = await activeReranker.rerank(
         prompt,
         activeIntent,
         candidatesToRerank,
@@ -525,16 +610,23 @@ export function createSearchPipeline({
         {
           cumulativeArtistCounts,
           maxCumulativePerArtist: 6,
-          maxPerArtist: 2,
+          maxPerArtist: dynamicMaxPerArtist,
           excludeTrackIds: excludeIdSet,
           excludeSignatures: excludeSigSet,
         },
       );
 
+      // Enforce clean 5-track batch size and hard session ceiling of 25 tracks
+      const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
+      const batchSize = Math.min(5, remainingSlots);
+      const finalTracks = rerankedTracks.slice(0, batchSize);
+      const totalAfter = excludeTrackIds.length + finalTracks.length;
+      const hasMore = totalAfter < 25 && finalTracks.length > 0;
+
       return {
         page,
         tracks: finalTracks,
-        hasMore: finalTracks.length > 0,
+        hasMore,
         queriesUsed: finalizedQueries.map((q) => q.query),
       };
     },
@@ -651,7 +743,7 @@ export function createSearchPipeline({
       const searchErrors: unknown[] = [];
       const searchPromises = finalizedQueries.map(async (q) => {
         try {
-          return await spotifySearch.searchTracks(q, 15, signal);
+          return await spotifySearch.searchTracks(q, 25, signal);
         } catch (err) {
           searchErrors.push(err);
           logger.warn(`[RefineVibe] Spotify search for "${q}" failed:`, err);

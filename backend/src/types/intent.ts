@@ -72,6 +72,8 @@ export interface MultiQueries {
 export interface MusicIntent {
   /** Primary mood, e.g. "calm", "peaceful", or "any" if not stated */
   mood: string;
+  /** Custom poetic/atmospheric mood persona (e.g. "Warm Vinyl & Raindrops", "Midnight Highway Velocity") */
+  persona?: string | null;
   /** Activity/context, e.g. "studying", null when not mentioned */
   activity: string | null;
   energy: Energy;

@@ -22,6 +22,7 @@ export interface SearchResponse {
   queries: SearchQueries;
   tracks: Track[];
   notice?: string;
+  hasMore?: boolean;
 }
 
 export interface StatusResponse {
