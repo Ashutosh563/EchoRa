@@ -17,6 +17,20 @@ export interface SearchPipelineOptions {
   reranker?: SemanticReranker | null;
 }
 
+function resolveDiscoveryContext(prompt: string, context?: DiscoveryContext): DiscoveryContext {
+  return {
+    discoveryMode: context?.discoveryMode ?? "FAMILIAR",
+    preferences: {
+      favoriteGenres: context?.preferences?.favoriteGenres ?? [],
+      favoriteArtists: context?.preferences?.favoriteArtists ?? [],
+      dislikedGenres: context?.preferences?.dislikedGenres ?? [],
+      dislikedArtists: context?.preferences?.dislikedArtists ?? [],
+    },
+    historySignals: context?.historySignals,
+    rawPrompt: prompt,
+  };
+}
+
 function discoveryQueries(
   intent: MusicIntent,
   result: ReturnType<typeof defaultDiscoveryProcessor.process>,
@@ -38,12 +52,12 @@ function discoveryQueries(
   const prompt = context.rawPrompt.toLowerCase();
   const hasExplicitGenre = intent.breakdown?.genre?.source === "explicit" ||
     intent.genre.some((genre) => Boolean(genre.trim()) && prompt.includes(genre.toLowerCase()));
-  const favoriteGenre = context.preferences.favoriteGenres[0];
+  const favoriteGenre = context.preferences?.favoriteGenres?.[0];
   if (result.mode === "BALANCED" && favoriteGenre && !hasExplicitGenre && favoriteGenre.toLowerCase() !== result.injectedGenre?.toLowerCase()) {
     queries.push([...contextTerms, favoriteGenre].join(" "));
   }
 
-  const favoriteArtist = context.preferences.favoriteArtists[0];
+  const favoriteArtist = context.preferences?.favoriteArtists?.[0];
   if ((result.mode === "FAMILIAR" || result.mode === "BALANCED") && favoriteArtist && !intent.artist && !intent.trackTitle) {
     queries.push([`artist:"${favoriteArtist}"`, ...contextTerms].join(" "));
   }
@@ -56,114 +70,133 @@ function rerankerPreferences(
   result: ReturnType<typeof defaultDiscoveryProcessor.process>,
 ): PreferenceProfile {
   return {
-    favoriteGenres: context.preferences.favoriteGenres,
-    favoriteArtists: context.preferences.favoriteArtists,
+    favoriteGenres: context.preferences?.favoriteGenres ?? [],
+    favoriteArtists: context.preferences?.favoriteArtists ?? [],
     dislikedGenres: result.excludedGenres,
     dislikedArtists: result.excludedArtists,
   };
 }
 
-export function cleanSpotifyQuery(q: string, lang?: string | null): string {
+export function getEraYearFilter(era?: string | null): string | null {
+  if (!era) return null;
+  const e = era.toLowerCase().trim();
+  if (e.includes("90") || e.includes("1990")) return "year:1989-2001";
+  if (e.includes("80") || e.includes("1980")) return "year:1979-1991";
+  if (e.includes("70") || e.includes("1970")) return "year:1969-1981";
+  if (e.includes("2000") || e.includes("00s")) return "year:1999-2011";
+  return null;
+}
+
+export function cleanSpotifyQuery(q: string, lang?: string | null, era?: string | null): string {
   let cleaned = q.replace(/\bNOT\s+("[^"]*"|[^\s]+)/gi, "").trim();
   cleaned = cleaned.replace(/genre:"bollywood"/gi, "bollywood");
   cleaned = cleaned.replace(/genre:bollywood/gi, "bollywood");
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
-  if (!lang) return cleaned;
-
-  // Never prepend language or generic keywords if query is already an explicit Spotify fielded filter (artist: or track:)
-  if (/^(?:artist:|track:)/i.test(cleaned)) {
+  // If query is an explicit track query, keep exact track search intact
+  if (/^(?:track:)/i.test(cleaned)) {
     return cleaned;
   }
 
-  const normalizedLang = lang.toLowerCase().trim();
+  // Never prepend language or generic keywords if query is already an explicit artist filter
+  const isArtistQuery = /^(?:artist:)/i.test(cleaned);
 
-  if (normalizedLang === "spanish" || normalizedLang === "latin") {
-    // Translate English search words to Spanish so Spotify finds authentic Spanish tracks
-    cleaned = cleaned
-      .replace(/\bheartbreak\b/gi, "desamor")
-      .replace(/\bbreakup\b/gi, "desamor")
-      .replace(/\bsad\b/gi, "triste")
-      .replace(/\bacoustic\b/gi, "acustico")
-      .replace(/\s+/g, " ")
-      .trim();
+  if (lang && !isArtistQuery) {
+    const normalizedLang = lang.toLowerCase().trim();
 
-    if (
-      !cleaned.toLowerCase().includes("spanish") &&
-      !cleaned.toLowerCase().includes("espanol") &&
-      !cleaned.toLowerCase().includes("español") &&
-      !cleaned.toLowerCase().includes("latin")
-    ) {
-      cleaned = `spanish ${cleaned}`;
-    }
-  } else if (normalizedLang === "hindi" || normalizedLang === "bollywood") {
-    cleaned = cleaned
-      .replace(/\bbreakup\b/gi, "heartbreak")
-      .replace(/\s+/g, " ")
-      .trim();
+    if (normalizedLang === "spanish" || normalizedLang === "latin") {
+      // Translate English search words to Spanish so Spotify finds authentic Spanish tracks
+      cleaned = cleaned
+        .replace(/\bheartbreak\b/gi, "desamor")
+        .replace(/\bbreakup\b/gi, "desamor")
+        .replace(/\bsad\b/gi, "triste")
+        .replace(/\bacoustic\b/gi, "acustico")
+        .replace(/\s+/g, " ")
+        .trim();
 
-    if (!cleaned.toLowerCase().includes("hindi") && !cleaned.toLowerCase().includes("bollywood")) {
-      cleaned = `bollywood ${cleaned}`;
+      if (
+        !cleaned.toLowerCase().includes("spanish") &&
+        !cleaned.toLowerCase().includes("espanol") &&
+        !cleaned.toLowerCase().includes("español") &&
+        !cleaned.toLowerCase().includes("latin")
+      ) {
+        cleaned = `spanish ${cleaned}`;
+      }
+    } else if (normalizedLang === "hindi" || normalizedLang === "bollywood") {
+      cleaned = cleaned
+        .replace(/\bbreakup\b/gi, "heartbreak")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!cleaned.toLowerCase().includes("hindi") && !cleaned.toLowerCase().includes("bollywood")) {
+        cleaned = `bollywood ${cleaned}`;
+      }
+    } else if (normalizedLang === "russian") {
+      if (!cleaned.toLowerCase().includes("russian") && !cleaned.toLowerCase().includes("русский")) {
+        cleaned = `russian ${cleaned}`;
+      }
+    } else if (normalizedLang === "punjabi") {
+      if (!cleaned.toLowerCase().includes("punjabi")) {
+        cleaned = `punjabi ${cleaned}`;
+      }
+    } else if (normalizedLang === "japanese") {
+      if (
+        !cleaned.toLowerCase().includes("japanese") &&
+        !cleaned.toLowerCase().includes("j-pop") &&
+        !cleaned.toLowerCase().includes("japan")
+      ) {
+        cleaned = `japanese ${cleaned}`;
+      }
+    } else if (normalizedLang === "korean") {
+      if (
+        !cleaned.toLowerCase().includes("korean") &&
+        !cleaned.toLowerCase().includes("k-pop") &&
+        !cleaned.toLowerCase().includes("kpop")
+      ) {
+        cleaned = `korean ${cleaned}`;
+      }
+    } else if (normalizedLang === "french") {
+      if (
+        !cleaned.toLowerCase().includes("french") &&
+        !cleaned.toLowerCase().includes("francais") &&
+        !cleaned.toLowerCase().includes("français")
+      ) {
+        cleaned = `french ${cleaned}`;
+      }
+    } else if (normalizedLang === "tamil") {
+      if (!cleaned.toLowerCase().includes("tamil")) {
+        cleaned = `tamil ${cleaned}`;
+      }
+    } else if (normalizedLang === "telugu") {
+      if (!cleaned.toLowerCase().includes("telugu")) {
+        cleaned = `telugu ${cleaned}`;
+      }
+    } else if (normalizedLang === "german") {
+      if (!cleaned.toLowerCase().includes("german") && !cleaned.toLowerCase().includes("deutsch")) {
+        cleaned = `german ${cleaned}`;
+      }
+    } else if (normalizedLang === "italian") {
+      if (!cleaned.toLowerCase().includes("italian") && !cleaned.toLowerCase().includes("italiano")) {
+        cleaned = `italian ${cleaned}`;
+      }
+    } else if (normalizedLang === "portuguese") {
+      if (
+        !cleaned.toLowerCase().includes("portuguese") &&
+        !cleaned.toLowerCase().includes("brasil") &&
+        !cleaned.toLowerCase().includes("brazil")
+      ) {
+        cleaned = `portuguese ${cleaned}`;
+      }
+    } else if (normalizedLang !== "english" && !cleaned.toLowerCase().includes(normalizedLang)) {
+      cleaned = `${normalizedLang} ${cleaned}`;
     }
-  } else if (normalizedLang === "russian") {
-    if (!cleaned.toLowerCase().includes("russian") && !cleaned.toLowerCase().includes("русский")) {
-      cleaned = `russian ${cleaned}`;
-    }
-  } else if (normalizedLang === "punjabi") {
-    if (!cleaned.toLowerCase().includes("punjabi")) {
-      cleaned = `punjabi ${cleaned}`;
-    }
-  } else if (normalizedLang === "japanese") {
-    if (
-      !cleaned.toLowerCase().includes("japanese") &&
-      !cleaned.toLowerCase().includes("j-pop") &&
-      !cleaned.toLowerCase().includes("japan")
-    ) {
-      cleaned = `japanese ${cleaned}`;
-    }
-  } else if (normalizedLang === "korean") {
-    if (
-      !cleaned.toLowerCase().includes("korean") &&
-      !cleaned.toLowerCase().includes("k-pop") &&
-      !cleaned.toLowerCase().includes("kpop")
-    ) {
-      cleaned = `korean ${cleaned}`;
-    }
-  } else if (normalizedLang === "french") {
-    if (
-      !cleaned.toLowerCase().includes("french") &&
-      !cleaned.toLowerCase().includes("francais") &&
-      !cleaned.toLowerCase().includes("français")
-    ) {
-      cleaned = `french ${cleaned}`;
-    }
-  } else if (normalizedLang === "tamil") {
-    if (!cleaned.toLowerCase().includes("tamil")) {
-      cleaned = `tamil ${cleaned}`;
-    }
-  } else if (normalizedLang === "telugu") {
-    if (!cleaned.toLowerCase().includes("telugu")) {
-      cleaned = `telugu ${cleaned}`;
-    }
-  } else if (normalizedLang === "german") {
-    if (!cleaned.toLowerCase().includes("german") && !cleaned.toLowerCase().includes("deutsch")) {
-      cleaned = `german ${cleaned}`;
-    }
-  } else if (normalizedLang === "italian") {
-    if (!cleaned.toLowerCase().includes("italian") && !cleaned.toLowerCase().includes("italiano")) {
-      cleaned = `italian ${cleaned}`;
-    }
-  } else if (normalizedLang === "portuguese") {
-    if (
-      !cleaned.toLowerCase().includes("portuguese") &&
-      !cleaned.toLowerCase().includes("brasil") &&
-      !cleaned.toLowerCase().includes("brazil")
-    ) {
-      cleaned = `portuguese ${cleaned}`;
-    }
-  } else if (normalizedLang !== "english" && !cleaned.toLowerCase().includes(normalizedLang)) {
-    cleaned = `${normalizedLang} ${cleaned}`;
   }
+
+  const yearFilter = getEraYearFilter(era);
+  if (yearFilter && !/\byear:\d{4}/i.test(cleaned)) {
+    cleaned = `${cleaned} ${yearFilter}`.trim();
+  }
+
   return cleaned;
 }
 
@@ -181,11 +214,7 @@ export function createSearchPipeline({
       discoveryContext?: DiscoveryContext,
       signal?: AbortSignal,
     ): Promise<{ mode: "mock" | "live"; intent: MusicIntent; notice?: string }> {
-      const fallbackContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const fallbackContext: DiscoveryContext = resolveDiscoveryContext(prompt, discoveryContext);
 
       if (mode === "mock" || !intentExtractor) {
         const rawIntent = getMockIntent(prompt);
@@ -211,11 +240,7 @@ export function createSearchPipeline({
       discoveryContext?: DiscoveryContext,
       signal?: AbortSignal,
     ): Promise<SearchResponse> {
-      const fallbackContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const fallbackContext: DiscoveryContext = resolveDiscoveryContext(prompt, discoveryContext);
 
       if (mode === "mock" || !intentExtractor || !spotifySearch) {
         const rawIntent = getMockIntent(prompt);
@@ -294,10 +319,11 @@ export function createSearchPipeline({
 
 
 
-      const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, activeIntent.language));
+      const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, activeIntent.language, activeIntent.era));
       const masterQueryStr = cleanSpotifyQuery(
         activeIntent.multiQueries?.masterQuery || baseQueries.primary,
         activeIntent.language,
+        activeIntent.era,
       );
 
       // 4. Parallel Spotify Retrieval across query facets (25 tracks per facet = up to 75 candidates)
@@ -322,20 +348,43 @@ export function createSearchPipeline({
       // 5. In-Memory Reciprocal Rank Fusion (< 2ms)
       let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 50 });
 
-      // Safety fallback: if fused candidates are sparse (< 15), search master query
-      if (fusedCandidates.length < 15) {
+      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+
+      // Safety replenishment: if fused candidates are sparse (< 20) and not an exclusive single/dual artist (preserves Edge Case C)
+      if (fusedCandidates.length < 20 && !isExclusiveArtist) {
         try {
-          logger.info(`[SpotifySearch] Candidate pool sparse (${fusedCandidates.length}). Executing master fallback: "${masterQueryStr}"`);
-          const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 25, signal);
-          const seenIds = new Set(fusedCandidates.map((t) => t.id));
-          for (const t of fallbackTracks) {
-            if (!seenIds.has(t.id)) {
-              fusedCandidates.push(t);
-              seenIds.add(t.id);
+          const langPart = activeIntent.language || "";
+          const coreGenre = (activeIntent.genre && activeIntent.genre[0]) || "";
+          const coreMood = activeIntent.mood || "songs";
+          const coreQuery = cleanSpotifyQuery(
+            `${langPart} ${coreGenre || coreMood}`.trim(),
+            activeIntent.language,
+            activeIntent.era,
+          );
+          if (coreQuery && coreQuery !== masterQueryStr) {
+            logger.info(`[SpotifySearch] Candidate pool sparse (${fusedCandidates.length}). Replenishing with core query: "${coreQuery}"`);
+            const fallbackTracks = await spotifySearch.searchTracks(coreQuery, 25, signal);
+            const seenIds = new Set(fusedCandidates.map((t) => t.id));
+            for (const t of fallbackTracks) {
+              if (!seenIds.has(t.id)) {
+                fusedCandidates.push(t);
+                seenIds.add(t.id);
+              }
+            }
+          }
+          if (fusedCandidates.length < 15) {
+            logger.info(`[SpotifySearch] Executing master fallback: "${masterQueryStr}"`);
+            const masterTracks = await spotifySearch.searchTracks(masterQueryStr, 25, signal);
+            const seenIds = new Set(fusedCandidates.map((t) => t.id));
+            for (const t of masterTracks) {
+              if (!seenIds.has(t.id)) {
+                fusedCandidates.push(t);
+                seenIds.add(t.id);
+              }
             }
           }
         } catch (err) {
-          logger.warn(`[SpotifySearch] Master fallback search for "${masterQueryStr}" failed:`, err);
+          logger.warn(`[SpotifySearch] Candidate replenishment search failed:`, err);
         }
       }
 
@@ -351,7 +400,6 @@ export function createSearchPipeline({
         rerankerPreferences(fallbackContext, discoveryResult),
       ) : [];
 
-      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
       const hasMoreInitial = isExclusiveArtist ? finalTracks.length >= 10 : finalTracks.length > 0;
 
       return {
@@ -401,11 +449,7 @@ export function createSearchPipeline({
       const excludeIdSet = new Set(excludeTrackIds);
       const excludeSigSet = new Set(excludeSongSignatures);
 
-      const activeContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const activeContext: DiscoveryContext = resolveDiscoveryContext(prompt, discoveryContext);
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, intent);
       const activeIntent = discoveryResult.adjustedIntent;
 
@@ -442,10 +486,23 @@ export function createSearchPipeline({
           queryList.push({ query: activeIntent.multiQueries.curatorQuery, offset: 0 });
         }
         if (activeIntent.multiQueries?.genreQuery) {
-          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: 10 });
+          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: 5 });
         }
         if (activeIntent.multiQueries?.moodQuery) {
-          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: 10 });
+          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: 5 });
+        }
+        if (activeIntent.language || activeIntent.era) {
+          const coreGenre = activeIntent.genre?.[0] || (activeIntent.language === "hindi" || activeIntent.language === "bollywood" ? "bollywood" : "");
+          const coreMood = activeIntent.mood || "love";
+          queryList.push({ query: `${activeIntent.language || ""} ${coreGenre || coreMood}`.trim(), offset: 5 });
+          if (activeIntent.language) {
+            queryList.push({ query: `${activeIntent.language} ${coreMood}`.trim(), offset: 0 });
+          }
+          if (activeIntent.seedArtists && activeIntent.seedArtists.length > 0) {
+            for (const sa of activeIntent.seedArtists.slice(0, 2)) {
+              queryList.push({ query: sa, offset: 0 });
+            }
+          }
         }
       } else if (page === 3) {
         // Tier 3: Subgenres or deep decade boundaries
@@ -455,13 +512,21 @@ export function createSearchPipeline({
           }
         }
         if (activeIntent.multiQueries?.genreQuery) {
-          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: 20 });
+          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: 10 });
         }
         if (activeIntent.multiQueries?.contextQuery) {
-          queryList.push({ query: activeIntent.multiQueries.contextQuery, offset: 10 });
+          queryList.push({ query: activeIntent.multiQueries.contextQuery, offset: 5 });
         }
         if (activeIntent.multiQueries?.masterQuery) {
-          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: 10 });
+          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: 5 });
+        }
+        if (activeIntent.language || activeIntent.era) {
+          const coreGenre = activeIntent.genre?.[0] || (activeIntent.language === "hindi" || activeIntent.language === "bollywood" ? "bollywood" : "");
+          const coreMood = activeIntent.mood || "romantic";
+          queryList.push({ query: `${activeIntent.language || ""} ${coreGenre || "classics"}`.trim(), offset: 0 });
+          if (activeIntent.language) {
+            queryList.push({ query: `${activeIntent.language} ${coreMood}`.trim(), offset: 5 });
+          }
         }
       } else {
         // Tier 4+: Seed artists graph queries
@@ -474,10 +539,18 @@ export function createSearchPipeline({
           }
         }
         if (activeIntent.multiQueries?.masterQuery) {
-          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: (page - 1) * 10 });
+          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: 10 });
         }
         if (activeIntent.multiQueries?.moodQuery) {
-          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: 20 });
+          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: 10 });
+        }
+        if (activeIntent.language || activeIntent.era) {
+          const coreGenre = activeIntent.genre?.[0] || (activeIntent.language === "hindi" || activeIntent.language === "bollywood" ? "bollywood" : "");
+          const coreMood = activeIntent.mood || "songs";
+          queryList.push({ query: `${activeIntent.language || ""} ${coreGenre || coreMood} songs`.trim(), offset: 0 });
+          if (activeIntent.language) {
+            queryList.push({ query: `${activeIntent.language} ${coreMood}`.trim(), offset: 10 });
+          }
         }
       }
 
@@ -493,7 +566,7 @@ export function createSearchPipeline({
       }
 
       const finalizedQueries = queryList.map((item) => ({
-        query: cleanSpotifyQuery(item.query, activeIntent.language),
+        query: cleanSpotifyQuery(item.query, activeIntent.language, activeIntent.era),
         offset: item.offset,
       }));
 
@@ -525,7 +598,7 @@ export function createSearchPipeline({
         }
       }
 
-      // Cascade Fallback Buffer: If candidate pool has < 30 tracks after exclusion filtering, widen retrieval
+      // Cascade Fallback Buffer: If candidate pool has < 25 tracks after exclusion filtering, widen retrieval
       const filteredCount = rawCandidates.filter(
         (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
       ).length;
@@ -537,14 +610,15 @@ export function createSearchPipeline({
       }
       const isNicheScene = rawUniqueArtists.size > 0 && rawUniqueArtists.size < 12;
 
-      if (filteredCount < 30) {
+      // CRITICAL GUARD: Never replenish if isExclusiveArtist is true (preserves Edge Case C!)
+      if (!isExclusiveArtist && filteredCount < 25) {
         try {
-          // If niche micro-scene has seed artists, query authentic scene artists first
+          // 1. If niche micro-scene has seed artists, query authentic scene artists first
           if (isNicheScene && intent.seedArtists && intent.seedArtists.length >= 2) {
             const seedQuery = intent.seedArtists.length >= 4 && page % 2 === 0
               ? `artist:"${intent.seedArtists[2]}" OR artist:"${intent.seedArtists[3]}"`
               : `artist:"${intent.seedArtists[0]}" OR artist:"${intent.seedArtists[1]}"`;
-            logger.info(`[LoadMore] Niche micro-scene sparse (${filteredCount} tracks, ${rawUniqueArtists.size} artists). Querying seed artist network: "${seedQuery}"`);
+            logger.info(`[LoadMore] Niche micro-scene sparse (${filteredCount} tracks). Querying seed artist network: "${seedQuery}"`);
             const seedTracks = await spotifySearch.searchTracks(seedQuery, 25, signal, 0);
             for (const t of seedTracks) {
               if (!seenRawIds.has(t.id)) {
@@ -554,18 +628,46 @@ export function createSearchPipeline({
             }
           }
 
-          // Fallback to master query if still low
-          if (rawCandidates.filter((t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t))).length < 25) {
-            const fallbackQuery = cleanSpotifyQuery(
-              intent.multiQueries?.masterQuery || intent.multiQueries?.moodQuery || prompt,
-              intent.language,
+          // 2. Core semantic replenishment (Language + Mood/Genre + Era with safe low offset)
+          const remainingFiltered = rawCandidates.filter(
+            (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
+          ).length;
+
+          if (remainingFiltered < 25) {
+            const langPart = activeIntent.language || "";
+            const genrePart = (activeIntent.genre && activeIntent.genre[0]) || "";
+            const moodPart = activeIntent.mood || "songs";
+            const safeOffset = Math.min(10, (page - 1) * 5);
+
+            const coreQuery = cleanSpotifyQuery(
+              `${langPart} ${genrePart || moodPart}`.trim(),
+              activeIntent.language,
+              activeIntent.era,
             );
-            logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}"`);
-            const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 25, signal, page * 10);
-            for (const t of cascadeTracks) {
+            logger.info(`[LoadMore] Replenishing candidate pool (${remainingFiltered} tracks). Executing core query: "${coreQuery}" (offset ${safeOffset})`);
+            const coreTracks = await spotifySearch.searchTracks(coreQuery, 25, signal, safeOffset);
+            for (const t of coreTracks) {
               if (!seenRawIds.has(t.id)) {
                 seenRawIds.add(t.id);
                 rawCandidates.push(t);
+              }
+            }
+
+            // If still low, query complementary mood facet
+            if (rawCandidates.filter((t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t))).length < 25) {
+              const compQuery = cleanSpotifyQuery(
+                `${langPart} ${moodPart}`.trim(),
+                activeIntent.language,
+                activeIntent.era,
+              );
+              if (compQuery && compQuery !== coreQuery) {
+                const compTracks = await spotifySearch.searchTracks(compQuery, 25, signal, 0);
+                for (const t of compTracks) {
+                  if (!seenRawIds.has(t.id)) {
+                    seenRawIds.add(t.id);
+                    rawCandidates.push(t);
+                  }
+                }
               }
             }
           }
@@ -710,11 +812,7 @@ export function createSearchPipeline({
         }
       }
 
-      const activeContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const activeContext: DiscoveryContext = resolveDiscoveryContext(prompt, discoveryContext);
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, refinedIntent);
       refinedIntent = discoveryResult.adjustedIntent;
 
@@ -738,7 +836,7 @@ export function createSearchPipeline({
         queryList.push(`${prompt} ${deltaText}`.trim());
       }
 
-      const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, refinedIntent.language));
+      const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, refinedIntent.language, refinedIntent.era));
 
       const searchErrors: unknown[] = [];
       const searchPromises = finalizedQueries.map(async (q) => {
@@ -755,7 +853,7 @@ export function createSearchPipeline({
       if (searchErrors.length === searchPromises.length && searchErrors.length > 0) {
         throw searchErrors[0];
       }
-      const fusedCandidates = fuseTrackLists(trackLists, { maxCandidates: 35 });
+      const fusedCandidates = fuseTrackLists(trackLists, { maxCandidates: 50 });
       const candidatesToUse = fusedCandidates;
 
       // 4. Gemini Call 2 Reranker scores candidate tracks against the refined sonic coordinates

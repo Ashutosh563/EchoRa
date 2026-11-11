@@ -24,7 +24,11 @@ export interface SpotifyAuthOptions {
   onClientValidity?: (valid: boolean) => void;
 }
 
-export interface SpotifyAuth {
+export interface SpotifySearchAuth {
+  getAccessToken(options?: { forceRefresh?: boolean }): Promise<string>;
+}
+
+export interface SpotifyAuth extends SpotifySearchAuth {
   /** Creates the Spotify consent URL with a single-use CSRF state value. */
   createAuthorizeUrl(): string;
   /** Validates the state, exchanges the code for tokens and stores them. */
@@ -173,6 +177,65 @@ export function createSpotifyAuth(options: SpotifyAuthOptions): SpotifyAuth {
 
     disconnect() {
       tokenStore.clear();
+    },
+  };
+}
+
+export interface ClientCredentialsAuthOptions {
+  clientId: string;
+  clientSecret: string;
+  fetchFn?: typeof fetch;
+  now?: () => number;
+}
+
+export function createClientCredentialsAuth(options: ClientCredentialsAuthOptions): SpotifySearchAuth {
+  const { clientId, clientSecret } = options;
+  const fetchFn = options.fetchFn ?? fetch;
+  const now = options.now ?? Date.now;
+  const basicAuth = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+
+  let cachedToken: { accessToken: string; expiresAt: number } | null = null;
+  let refreshInFlight: Promise<string> | null = null;
+
+  async function fetchToken(): Promise<string> {
+    let response: Response;
+    try {
+      response = await fetchFn(SPOTIFY_TOKEN_URL, {
+        method: "POST",
+        headers: {
+          Authorization: basicAuth,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: "grant_type=client_credentials",
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err) {
+      throw new AppError("NETWORK_ERROR", { detail: "Spotify search token request failed", cause: err });
+    }
+
+    const body = (await response.json().catch(() => ({}))) as TokenResponse;
+    if (response.ok && body.access_token) {
+      cachedToken = {
+        accessToken: body.access_token,
+        expiresAt: now() + (body.expires_in ?? 3600) * 1000 - EXPIRY_MARGIN_MS,
+      };
+      return cachedToken.accessToken;
+    }
+
+    const detail = `Spotify token endpoint ${response.status}: ${body.error ?? "unknown"} ${body.error_description ?? ""}`;
+    if (response.status === 429) throw new AppError("SPOTIFY_RATE_LIMITED", { detail });
+    throw new AppError("SPOTIFY_AUTH_FAILED", { message: "Spotify authorization failed for search client.", detail });
+  }
+
+  return {
+    async getAccessToken({ forceRefresh = false } = {}) {
+      if (!forceRefresh && cachedToken && cachedToken.expiresAt > now()) {
+        return cachedToken.accessToken;
+      }
+      refreshInFlight ??= fetchToken().finally(() => {
+        refreshInFlight = null;
+      });
+      return refreshInFlight;
     },
   };
 }

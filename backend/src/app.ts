@@ -4,7 +4,7 @@ import { loadConfig } from "./config/env.js";
 import { registerSecret } from "./utils/logger.js";
 import { createCredentialState } from "./services/credentialState.js";
 import { createFileTokenStore, type TokenStore } from "./services/spotify/tokenStore.js";
-import { createSpotifyAuth, type SpotifyAuth } from "./services/spotify/spotifyAuth.js";
+import { createSpotifyAuth, createClientCredentialsAuth, type SpotifyAuth } from "./services/spotify/spotifyAuth.js";
 import { createSpotifySearch, type SpotifySearch } from "./services/spotify/spotifySearch.js";
 import { createGeminiClient } from "./services/gemini/geminiClient.js";
 import { createOpenAIClient } from "./services/openai/openaiClient.js";
@@ -47,6 +47,8 @@ export function createApp(deps: AppDependencies = {}): Express {
   registerSecret(config.openaiApiKey);
   registerSecret(config.spotifyClientId);
   registerSecret(config.spotifyClientSecret);
+  registerSecret(config.spotifySearchClientId);
+  registerSecret(config.spotifySearchClientSecret);
 
   const credState = createCredentialState();
 
@@ -65,10 +67,18 @@ export function createApp(deps: AppDependencies = {}): Express {
     });
   }
 
-  // Initialize Spotify Search if auth exists
+  // Initialize Spotify Search using dedicated search credentials if available, or fallback to user auth
   let spotifySearch: SpotifySearch | null = deps.spotifySearch ?? null;
-  if (!spotifySearch && spotifyAuth) {
-    spotifySearch = createSpotifySearch({ auth: spotifyAuth });
+  if (!spotifySearch) {
+    if (config.spotifySearchClientId && config.spotifySearchClientSecret) {
+      const searchAuth = createClientCredentialsAuth({
+        clientId: config.spotifySearchClientId,
+        clientSecret: config.spotifySearchClientSecret,
+      });
+      spotifySearch = createSpotifySearch({ auth: searchAuth });
+    } else if (spotifyAuth) {
+      spotifySearch = createSpotifySearch({ auth: spotifyAuth });
+    }
   }
 
   // Initialize Gemini Intent Extractor if key exists

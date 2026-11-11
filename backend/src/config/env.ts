@@ -26,6 +26,8 @@ export interface AppConfig {
   openaiModel: string;
   spotifyClientId: string | null;
   spotifyClientSecret: string | null;
+  spotifySearchClientId: string | null;
+  spotifySearchClientSecret: string | null;
   spotifyRedirectUri: string;
   frontendUrl: string;
   spotifyTokenFile: string;
@@ -45,6 +47,8 @@ export function buildConfig(env: NodeJS.ProcessEnv): AppConfig {
     openaiModel: clean(env.OPENAI_MODEL) ?? DEFAULT_OPENAI_MODEL,
     spotifyClientId: clean(env.SPOTIFY_CLIENT_ID),
     spotifyClientSecret: clean(env.SPOTIFY_CLIENT_SECRET),
+    spotifySearchClientId: clean(env.SPOTIFY_SEARCH_CLIENT_ID) ?? clean(env.SPOTIFY_CLIENT_ID),
+    spotifySearchClientSecret: clean(env.SPOTIFY_SEARCH_CLIENT_SECRET) ?? clean(env.SPOTIFY_CLIENT_SECRET),
     spotifyRedirectUri: SPOTIFY_REDIRECT_URI,
     frontendUrl: FRONTEND_URL,
     spotifyTokenFile: SPOTIFY_TOKEN_FILE,

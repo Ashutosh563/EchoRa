@@ -9,6 +9,8 @@ const baseConfig: AppConfig = {
   openaiModel: "gpt-4o-mini",
   spotifyClientId: null,
   spotifyClientSecret: null,
+  spotifySearchClientId: null,
+  spotifySearchClientSecret: null,
   spotifyRedirectUri: "http://127.0.0.1:4000/api/spotify/callback",
   frontendUrl: "http://127.0.0.1:5173",
   spotifyTokenFile: "dummy",

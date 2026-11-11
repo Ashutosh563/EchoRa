@@ -2,7 +2,7 @@ import type { Track } from "../../types/track.js";
 import { AppError } from "../../utils/AppError.js";
 import { logger } from "../../utils/logger.js";
 import { sleep as defaultSleep, type Sleep } from "../../utils/sleep.js";
-import type { SpotifyAuth } from "./spotifyAuth.js";
+import type { SpotifySearchAuth } from "./spotifyAuth.js";
 import { mapSpotifyTrack, type SpotifyTrackObject } from "./trackMapper.js";
 
 export const SPOTIFY_SEARCH_URL = "https://api.spotify.com/v1/search";
@@ -20,7 +20,7 @@ interface SearchPage {
 }
 
 export interface SpotifySearchOptions {
-  auth: SpotifyAuth;
+  auth: SpotifySearchAuth;
   fetchFn?: typeof fetch;
   sleep?: Sleep;
 }
