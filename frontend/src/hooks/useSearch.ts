@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { AppApiError, searchMusic } from '../api/client';
 import type { SearchResponse } from '../types';
 import type { SearchOptions } from '../api/musicApi';
+import { collectBrowserContext } from '../utils/browserContext';
 import {
   getStoredProfile,
   recordInteraction,
@@ -61,6 +62,7 @@ export function useSearch(options?: UseSearchOptions): UseSearchReturn {
         discoveryMode: activeMode,
         preferences: activePreferences,
         historySignals,
+        browserContext: collectBrowserContext(),
       };
 
       try {

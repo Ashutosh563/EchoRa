@@ -71,6 +71,7 @@ export interface Track {
   releaseYear?: number | null;
   matchReason?: string | null;
   matchScore?: number | null;
+  aiRecommended?: boolean;
 }
 
 export interface SearchResponse {
@@ -81,6 +82,8 @@ export interface SearchResponse {
     alternatives?: string[];
   };
   tracks: Track[];
+  resultConfidence?: number | null;
+  aiRecommendationsAdded?: number;
   notice?: string;
   hasMore?: boolean;
 }

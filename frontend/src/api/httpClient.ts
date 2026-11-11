@@ -31,6 +31,7 @@ export function createHttpMusicClient(): FullMusicApi {
             discoveryMode: options?.discoveryMode,
             preferences: options?.preferences,
             historySignals: options?.historySignals,
+            browserContext: options?.browserContext,
           }),
           signal: activeSignal,
         });

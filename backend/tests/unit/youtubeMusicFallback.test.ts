@@ -79,7 +79,7 @@ describe("YouTube Music catalog fallback", () => {
     expect(result.tracks[0]?.matchScore).toBe(88);
   });
 
-  it("keeps explicit Karan Aujla results only when local artist and vibe confidence pass", async () => {
+  it("keeps low-confidence results when the local explicit-artist filter passes", async () => {
     const prompt = "Karan Aujla guilty songs";
     const matching = { ...makeYouTubeTrack("match", "Guilty Song"), artists: ["Karan Aujla"] };
     const wrongArtist = { ...makeYouTubeTrack("artist", "Guilty Song 2"), artists: ["Another Artist"] };
@@ -98,7 +98,58 @@ describe("YouTube Music catalog fallback", () => {
 
     const result = await pipeline.search(prompt, "live", []);
 
-    expect(result.tracks.map((track) => track.id)).toEqual(["ytmusic:match"]);
+    expect(result.tracks.map((track) => track.id)).toEqual(["ytmusic:match", "ytmusic:vibe"]);
     expect(result.tracks[0]?.matchScore).toBe(91);
+    expect(result.tracks[1]?.matchScore).toBe(42);
+  });
+
+  it("adds catalog-verified Gemini picks when the scored result is short", async () => {
+    const prompt = "Tum Hi Ho by Arijit Singh and related songs in the same mood";
+    const exactTrack = { ...makeYouTubeTrack("tum-hi-ho", "Tum Hi Ho"), artists: ["Arijit Singh"], catalogSource: "spotify" as const };
+    const spotifySearch = vi.fn(async (query: string) => {
+      const recommendation = query.match(/track:\"([^\"]+)\" artist:\"([^\"]+)\"/);
+      if (recommendation && recommendation[1] !== "Tum Hi Ho") {
+        return [{
+          ...makeYouTubeTrack(recommendation[1]!, recommendation[1]!),
+          artists: [recommendation[2]!],
+          catalogSource: "spotify" as const,
+        }];
+      }
+      return [exactTrack];
+    });
+    const suggestions = Array.from({ length: 9 }, (_, index) => ({
+      title: `AI Song ${index + 1}`,
+      artist: `AI Artist ${index + 1}`,
+    }));
+    const reranker = {
+      suggestTrackRecommendations: vi.fn().mockResolvedValue(suggestions),
+      rerank: vi.fn().mockImplementation(async (_prompt: string, _intent: unknown, candidates: Track[]) =>
+        candidates.map((track) => ({ ...track, matchScore: track.aiRecommended ? 42 : 90 }))),
+    };
+    const pipeline = createSearchPipeline({
+      intentExtractor: vi.fn().mockResolvedValue({
+        ...getMockIntent(prompt),
+        mood: "sad",
+        artist: "Arijit Singh",
+        trackTitle: "Tum Hi Ho",
+      }),
+      spotifySearch: { searchTracks: spotifySearch },
+      reranker,
+    });
+
+    const result = await pipeline.search(prompt, "live", []);
+
+    expect(reranker.suggestTrackRecommendations).toHaveBeenCalledWith(
+      prompt,
+      expect.objectContaining({ artist: "Arijit Singh", trackTitle: "Tum Hi Ho" }),
+      expect.any(Array),
+      90,
+      true,
+      undefined,
+    );
+    expect(result.tracks).toHaveLength(10);
+    expect(result.aiRecommendationsAdded).toBe(9);
+    expect(result.resultConfidence).toBe(47);
+    expect(result.tracks.filter((track) => track.aiRecommended)).toHaveLength(9);
   });
 });

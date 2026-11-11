@@ -26,6 +26,10 @@ export const TrackGrid = memo(function TrackGrid({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activePreviewIdRef = useRef<string | null>(null);
+  const scoredTracks = tracks.filter((track) => typeof track.matchScore === 'number');
+  const overallConfidence = scoredTracks.length
+    ? Math.round(scoredTracks.reduce((total, track) => total + (track.matchScore ?? 0), 0) / scoredTracks.length)
+    : null;
 
   // Manage single audio preview instance with stable callback reference
   const handleTogglePreview = useCallback((track: Track) => {
@@ -111,9 +115,28 @@ export const TrackGrid = memo(function TrackGrid({
             Tracks for this moment
           </h2>
         </div>
-        <span className="glass-pill px-2.5 py-0.5 text-xs font-mono text-text-dim border border-white/10">
-          {tracks.length} tracks
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="glass-pill px-2.5 py-0.5 text-xs font-mono text-text-dim border border-white/10">
+            {tracks.length} tracks
+          </span>
+          {overallConfidence !== null && (
+            <div
+              role="meter"
+              aria-label="Overall result confidence"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={overallConfidence}
+              className="glass-pill flex items-center gap-2 px-2.5 py-1 border border-violet/25"
+              title="Average Gemini match confidence across the displayed results"
+            >
+              <span className="text-[10px] text-violet-light whitespace-nowrap">Result confidence</span>
+              <span className="w-12 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <span className="block h-full rounded-full bg-gradient-to-r from-violet to-cyan" style={{ width: `${overallConfidence}%` }} />
+              </span>
+              <span className="text-[10px] font-mono font-semibold text-text">{overallConfidence}%</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Grid of Track Cards: 1 col mobile, 2 col tablet, 3 col desktop */}

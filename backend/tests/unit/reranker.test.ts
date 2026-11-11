@@ -26,6 +26,34 @@ const makeTrack = (id: string, name: string): Track => ({
 });
 
 describe("Semantic Reranker (reranker.ts)", () => {
+  it("returns catalog-searchable Gemini song recommendations", async () => {
+    const fakeClient: GeminiClient = {
+      generateJson: vi.fn().mockResolvedValue(JSON.stringify({
+        recommendations: [
+          { title: "Falling Slowly", artist: "Glen Hansard" },
+          { title: "Cherry Wine", artist: "Hozier" },
+        ],
+      })),
+    };
+    const reranker = createSemanticReranker(fakeClient);
+
+    const recommendations = await reranker.suggestTrackRecommendations?.(
+      "sad acoustic songs",
+      mockIntent,
+      [],
+      62,
+      false,
+    );
+
+    expect(recommendations).toEqual([
+      { title: "Falling Slowly", artist: "Glen Hansard" },
+      { title: "Cherry Wine", artist: "Hozier" },
+    ]);
+    expect(fakeClient.generateJson).toHaveBeenCalledWith(expect.objectContaining({
+      jsonSchema: expect.objectContaining({ properties: expect.objectContaining({ recommendations: expect.any(Object) }) }),
+    }));
+  });
+
   it("returns Gemini match scores with the ordered tracks", async () => {
     const candidates = [makeTrack("t1", "Fast Rap"), makeTrack("t2", "Slow Ambient Piano")];
     const fakeClient: GeminiClient = {

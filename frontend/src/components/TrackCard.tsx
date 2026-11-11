@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Music, Music2, ExternalLink, Play, Pause, Loader2 } from 'lucide-react';
+import { Music, Music2, ExternalLink, Play, Pause, Loader2, Sparkles } from 'lucide-react';
 import type { Track } from '../types';
 import { formatDuration } from '../lib/format';
 import { SpotifyIcon } from './ConnectSpotifyButton';
@@ -223,6 +223,11 @@ export const TrackCard = memo(function TrackCard({
                   title="Gemini estimate of how well this song matches your original request"
                 >
                   {Math.round(track.matchScore)}%
+                </span>
+              )}
+              {track.aiRecommended && (
+                <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-semibold text-cyan bg-cyan/10 border border-cyan/20" aria-label="Gemini recommended track" title="Suggested by Gemini and verified in the music catalog">
+                  <Sparkles className="w-2.5 h-2.5" /> AI pick
                 </span>
               )}
             </div>

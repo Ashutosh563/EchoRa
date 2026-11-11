@@ -63,6 +63,7 @@ export interface Track {
   releaseYear?: number | null;
   matchReason?: string | null;
   matchScore?: number | null;
+  aiRecommended?: boolean;
 }
 
 export type AppMode = "mock" | "live";
@@ -78,6 +79,8 @@ export interface SearchResponse {
   intent: MusicIntent;
   queries: SearchQueries;
   tracks: Track[];
+  resultConfidence?: number | null;
+  aiRecommendationsAdded?: number;
   /** Optional human-readable notice, e.g. why the app is in mock mode. */
   notice?: string;
   hasMore?: boolean;

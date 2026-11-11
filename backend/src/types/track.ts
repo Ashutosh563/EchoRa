@@ -17,5 +17,7 @@ export interface Track {
   /** AI-generated contextual reason explaining why this track matches the user's intent. */
   matchReason?: string | null;
   matchScore?: number | null;
+  /** Track was suggested by Gemini after the normal catalog result scored poorly or ran short. */
+  aiRecommended?: boolean;
 }
 

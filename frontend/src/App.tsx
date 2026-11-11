@@ -28,6 +28,7 @@ import {
   subscribeToProfile,
 } from './services/preferenceStorage';
 import { initPerfMetrics } from './utils/perfMetrics';
+import { collectBrowserContext } from './utils/browserContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthLandingView } from './components/auth/AuthLandingView';
 import { Wordmark } from './components/Wordmark';
@@ -231,6 +232,7 @@ function AppContent({ api }: AppProps = {}) {
         excludeTrackIds: cumulativeTracks.map((t) => t.id),
         cumulativeArtistCounts: counts,
         discoveryMode: profile.discoveryMode,
+        browserContext: collectBrowserContext(),
       });
 
       if (res && res.tracks && res.tracks.length > 0) {
@@ -275,6 +277,7 @@ function AppContent({ api }: AppProps = {}) {
           delta,
         },
         discoveryMode: profile.discoveryMode,
+        browserContext: collectBrowserContext(),
       });
 
       if (res && res.tracks && res.tracks.length > 0) {

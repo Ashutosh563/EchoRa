@@ -1,10 +1,11 @@
 import type { SearchResponse } from "../types/api";
-import type { DiscoveryMode, HistorySignal, UserPreferences } from "../types/discovery";
+import type { BrowserContext, DiscoveryMode, HistorySignal, UserPreferences } from "../types/discovery";
 
 export interface SearchOptions {
   discoveryMode?: DiscoveryMode;
   preferences?: UserPreferences;
   historySignals?: HistorySignal[];
+  browserContext?: BrowserContext;
 }
 
 /**

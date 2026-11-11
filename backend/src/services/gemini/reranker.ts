@@ -1,5 +1,6 @@
 import type { GeminiClient } from "./geminiClient.js";
 import type { MusicIntent } from "../../types/intent.js";
+import type { ContextualListeningSignals } from "../../types/discovery.js";
 import type { DiscoveryMode } from "../../types/discovery.js";
 import type { Track } from "../../types/track.js";
 import { logger } from "../../utils/logger.js";
@@ -784,6 +785,32 @@ const REFINEMENT_QUERY_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+const TRACK_RECOMMENDATION_SCHEMA = {
+  type: "object",
+  properties: {
+    recommendations: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          artist: { type: "string" },
+        },
+        required: ["title", "artist"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["recommendations"],
+  additionalProperties: false,
+} as const;
+
+export interface TrackRecommendation {
+  title: string;
+  artist: string;
+}
+
 export interface PreferenceProfile {
   favoriteGenres?: string[];
   favoriteArtists?: string[];
@@ -801,6 +828,7 @@ export interface SemanticReranker {
     signal?: AbortSignal,
     userPreferences?: PreferenceProfile,
     balanceOptions?: BalanceOptions,
+    contextualSignals?: ContextualListeningSignals,
   ): Promise<Track[]>;
   suggestRefinementQueries?(
     prompt: string,
@@ -808,10 +836,59 @@ export interface SemanticReranker {
     lowScoringTracks: Track[],
     signal?: AbortSignal,
   ): Promise<string[]>;
+  suggestTrackRecommendations?(
+    prompt: string,
+    intent: MusicIntent,
+    existingTracks: Track[],
+    resultConfidence: number | null,
+    relatedSongsRequested: boolean,
+    signal?: AbortSignal,
+  ): Promise<TrackRecommendation[]>;
 }
 
 export function createSemanticReranker(geminiClient: GeminiClient | null): SemanticReranker {
   return {
+    async suggestTrackRecommendations(prompt, intent, existingTracks, resultConfidence, relatedSongsRequested, signal) {
+      if (!geminiClient) return [];
+      const raw = await geminiClient.generateJson({
+        userText: JSON.stringify({
+          originalUserPrompt: prompt,
+          intent: {
+            mood: intent.mood,
+            activity: intent.activity,
+            tempo: intent.tempo,
+            energy: intent.energy,
+            language: intent.language,
+            era: intent.era,
+            requestedArtist: intent.artist,
+            requestedTitle: intent.trackTitle,
+            relatedSongsRequested,
+            negativeConstraints: intent.negativeConstraints,
+            sonicProfile: intent.sonicProfile,
+          },
+          resultConfidence,
+          alreadyReturnedTracks: existingTracks.map((track) => ({ title: track.name, artists: track.artists })),
+        }),
+        systemInstruction: `You recommend up to ten real songs that improve a music result whose confidence is low or whose list is short. Match the user's original mood and constraints first. Never repeat a returned song. If the user asks for related songs to a named title, use its mood and sound as the reference and recommend distinct songs; do not repeat the title or force every recommendation to have the same artist. Otherwise preserve explicit artist and title constraints. Return likely catalog titles and their primary artists only; the app will verify every recommendation against Spotify or YouTube Music before showing it. Return only JSON.`,
+        jsonSchema: TRACK_RECOMMENDATION_SCHEMA,
+        signal,
+      });
+      const parsed = JSON.parse(raw) as { recommendations?: unknown };
+      if (!Array.isArray(parsed.recommendations)) return [];
+      const seen = new Set<string>();
+      return parsed.recommendations.flatMap((item): TrackRecommendation[] => {
+        if (!item || typeof item !== "object") return [];
+        const recommendation = item as { title?: unknown; artist?: unknown };
+        if (typeof recommendation.title !== "string" || typeof recommendation.artist !== "string") return [];
+        const title = recommendation.title.trim();
+        const artist = recommendation.artist.trim();
+        if (!title || !artist) return [];
+        const key = `${title.toLowerCase()}::${artist.toLowerCase()}`;
+        if (seen.has(key)) return [];
+        seen.add(key);
+        return [{ title, artist }];
+      }).slice(0, 10);
+    },
     async suggestRefinementQueries(prompt, intent, lowScoringTracks, signal) {
       if (!geminiClient || lowScoringTracks.length === 0) return [];
       const raw = await geminiClient.generateJson({
@@ -853,6 +930,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
       signal?: AbortSignal,
       userPreferences?: PreferenceProfile,
       balanceOptions?: BalanceOptions,
+      contextualSignals?: ContextualListeningSignals,
     ): Promise<Track[]> {
       if (!candidates || candidates.length === 0) return [];
       const allowInstrumental = userWantsInstrumental(prompt, intent);
@@ -958,12 +1036,15 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           },
           sonicProfile: intent.sonicProfile,
           userPreferences: userPreferences ?? undefined,
+          contextualSignals: contextualSignals ?? undefined,
           candidates: candidatePayload,
         });
 
         const rawJson = await geminiClient.generateJson({
           userText,
-          systemInstruction: buildRerankerSystemInstruction(discoveryMode),
+          systemInstruction: contextualSignals
+            ? `${buildRerankerSystemInstruction(discoveryMode)} Browser context is a weak supporting signal only; explicit user prompt and intent always take priority. Do not infer emotion from time or culture from language/region.`
+            : buildRerankerSystemInstruction(discoveryMode),
           jsonSchema: RERANKER_JSON_SCHEMA,
           signal: abortSignal,
         });

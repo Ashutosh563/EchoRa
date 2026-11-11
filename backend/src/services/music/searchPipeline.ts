@@ -8,12 +8,11 @@ import type { YouTubeMusicSearch } from "../youtubeMusic/ytmusicSearch.js";
 import { generateQueries } from "./queryGenerator.js";
 import { defaultDiscoveryProcessor } from "./discoveryProcessor.js";
 import { BACKEND_MOCK_TRACKS, getMockIntent } from "./mockMusic.js";
-import { fuseTrackLists, getSongSignature } from "./fusion.js";
+import { fuseTrackLists, getSongSignature, normalizeSongTitle } from "./fusion.js";
 import { balanceTracks, createSemanticReranker, getPrimaryArtistKey, parseTargetArtists, userWantsInstrumental, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
 import { logger } from "../../utils/logger.js";
 import { enrichTracksWithPreviews } from "../spotify/previewEnricher.js";
-
-const MIN_GEMINI_MATCH_SCORE = 55;
+import { contextualSearchQuery, enrichListeningContext } from "./browserContextEnricher.js";
 
 export interface SearchPipelineOptions {
   intentExtractor: IntentExtractor | null;
@@ -26,6 +25,7 @@ function discoveryQueries(
   intent: MusicIntent,
   result: ReturnType<typeof defaultDiscoveryProcessor.process>,
   context: DiscoveryContext,
+  contextualQuery?: string,
 ): string[] {
   const preferredTerm = result.injectedArtist || result.injectedGenre;
   const contextTerms = [
@@ -39,6 +39,7 @@ function discoveryQueries(
       ? [`artist:"${result.injectedArtist}"`, ...contextTerms].join(" ")
       : [...contextTerms, result.injectedGenre!].join(" "));
   }
+  if (contextualQuery) queries.push([...contextTerms, contextualQuery].filter(Boolean).join(" "));
 
   const prompt = context.rawPrompt.toLowerCase();
   const hasExplicitGenre = intent.breakdown?.genre?.source === "explicit" ||
@@ -66,6 +67,21 @@ function rerankerPreferences(
     dislikedGenres: result.excludedGenres,
     dislikedArtists: result.excludedArtists,
   };
+}
+
+function matchesSuggestedTrack(track: Track, recommendation: { title: string; artist: string }): boolean {
+  const expectedTitle = normalizeSongTitle(recommendation.title);
+  const titleMatches = normalizeSongTitle(track.name) === expectedTitle;
+  const expectedArtist = recommendation.artist.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const artistMatches = track.artists.some((artist) => {
+    const actualArtist = artist.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return actualArtist === expectedArtist || actualArtist.includes(expectedArtist) || expectedArtist.includes(actualArtist);
+  });
+  return Boolean(expectedTitle && expectedArtist && titleMatches && artistMatches);
+}
+
+function isRelatedSongsRequest(prompt: string): boolean {
+  return /\b(?:related|similar)\s+(?:songs|tracks|music)\b|\bsame\s+mood\s+as\s+(?:this|that|it)\b|\bmore\s+like\s+(?:this|that|it)\b/i.test(prompt);
 }
 
 export function cleanSpotifyQuery(q: string, lang?: string | null): string {
@@ -247,6 +263,7 @@ export function createSearchPipeline({
       // 2. Discovery Preference Processor processes preferences & mode
       const discoveryResult = defaultDiscoveryProcessor.process(fallbackContext, rawIntent);
       const activeIntent = discoveryResult.adjustedIntent;
+      const contextualSignals = enrichListeningContext(activeIntent, fallbackContext.browserContext);
 
       // 3. Synthesize queries: use Gemini's multiQueries if present; fallback to queryGenerator
       const baseQueries = generateQueries(activeIntent, discoveryResult);
@@ -263,7 +280,7 @@ export function createSearchPipeline({
 
       // Keep Gemini's request facets, and add the selected Preferences-tab signal
       // as its own retrieval facet so the active discovery mode affects live search.
-      const preferenceQueries = discoveryQueries(activeIntent, discoveryResult, fallbackContext);
+      const preferenceQueries = discoveryQueries(activeIntent, discoveryResult, fallbackContext, contextualSearchQuery(contextualSignals));
       for (const preferenceQuery of preferenceQueries) {
         if (!queryList.some((q) => q.toLowerCase() === preferenceQuery.toLowerCase())) queryList.push(preferenceQuery);
       }
@@ -380,6 +397,8 @@ export function createSearchPipeline({
         discoveryResult.mode,
         signal,
         rerankerPreferences(fallbackContext, discoveryResult),
+        undefined,
+        contextualSignals,
       ) : [];
 
       const averageScore = (tracks: Track[]) => {
@@ -433,6 +452,8 @@ export function createSearchPipeline({
                 discoveryResult.mode,
                 signal,
                 rerankerPreferences(fallbackContext, discoveryResult),
+                undefined,
+                contextualSignals,
               );
               const refinedScore = averageScore(refinedRanking);
               if (refinedScore !== null && refinedScore > (firstPassScore ?? 0)) {
@@ -450,13 +471,9 @@ export function createSearchPipeline({
       // Keep the first page useful if the semantic model returns a short list.
       // Fill from the already-fused retrieval pool, applying the same language,
       // era, explicit request, negative constraint, and artist-balance rules.
+      // Confidence ranks tracks and informs the set score; it does not remove otherwise valid songs.
       const hasGeminiScores = rerankedTracks.some((track) => typeof track.matchScore === "number");
-      const confidenceCheckedTracks = hasGeminiScores
-        ? rerankedTracks.filter((track) => typeof track.matchScore !== "number" || track.matchScore >= MIN_GEMINI_MATCH_SCORE)
-        : rerankedTracks;
-      if (hasGeminiScores && confidenceCheckedTracks.length < rerankedTracks.length) {
-        logger.info(`[SemanticFilter] Removed ${rerankedTracks.length - confidenceCheckedTracks.length} tracks below the ${MIN_GEMINI_MATCH_SCORE}% Gemini fit threshold.`);
-      }
+      const confidenceCheckedTracks = rerankedTracks;
 
       const pageArtistLimit = activeIntent.artist ? 10 : 2;
       const locallyVerifiedTracks = balanceTracks(
@@ -493,7 +510,98 @@ export function createSearchPipeline({
           cumulativeArtistCounts: rankedArtistCounts,
         },
       );
-      const finalTracks = [...locallyVerifiedTracks, ...balancedTopUp].slice(0, 10);
+      let finalTracks = [...locallyVerifiedTracks, ...balancedTopUp].slice(0, 10);
+      const initialResultScore = averageScore(finalTracks);
+      let resultConfidence = initialResultScore === null ? null : Math.round(initialResultScore);
+      let aiRecommendationsAdded = 0;
+      const relatedSongsRequested = isRelatedSongsRequest(prompt);
+      if (
+        activeReranker.suggestTrackRecommendations &&
+        (finalTracks.length < 10 || (resultConfidence !== null && resultConfidence < 75))
+      ) {
+        try {
+          const suggestions = await activeReranker.suggestTrackRecommendations(
+            prompt,
+            activeIntent,
+            finalTracks,
+            resultConfidence,
+            relatedSongsRequested,
+            signal,
+          );
+          const currentSignatures = new Set(finalTracks.map(getSongSignature));
+          const recommendationResults = await Promise.all(suggestions.slice(0, 10).map(async (recommendation) => {
+            const spotifyQuery = `track:"${recommendation.title}" artist:"${recommendation.artist}"`;
+            if (spotifySearch) {
+              try {
+                const tracks = await spotifySearch.searchTracks(spotifyQuery, 5, signal);
+                const verified = tracks.filter((track) => matchesSuggestedTrack(track, recommendation));
+                if (verified.length > 0) return verified;
+              } catch (err) {
+                logger.warn(`[GeminiRecommendations] Spotify lookup failed for "${recommendation.title}" by "${recommendation.artist}":`, err);
+              }
+            }
+            if (youtubeMusicSearch) {
+              try {
+                const tracks = await youtubeMusicSearch.searchTracks(`${recommendation.title} ${recommendation.artist}`, 5, signal);
+                return tracks.filter((track) => matchesSuggestedTrack(track, recommendation));
+              } catch (err) {
+                logger.warn(`[GeminiRecommendations] YouTube Music lookup failed for "${recommendation.title}" by "${recommendation.artist}":`, err);
+              }
+            }
+            return [] as Track[];
+          }));
+          const verifiedRecommendations = fuseTrackLists(recommendationResults, { maxCandidates: 20 })
+            .filter((track) => !currentSignatures.has(getSongSignature(track)))
+            .map((track) => ({ ...track, aiRecommended: true }));
+
+          if (verifiedRecommendations.length > 0) {
+            // For a requested song plus related songs, treat its artist/title as the recommendation seed.
+            // Keep the normal search intent and filters unchanged.
+            const recommendationIntent = relatedSongsRequested
+              ? { ...activeIntent, artist: null, trackTitle: null }
+              : activeIntent;
+            const recommendationRanking = await activeReranker.rerank(
+              prompt,
+              recommendationIntent,
+              [...finalTracks, ...verifiedRecommendations],
+              discoveryResult.mode,
+              signal,
+              rerankerPreferences(fallbackContext, discoveryResult),
+              {
+                maxPerArtist: relatedSongsRequested ? 10 : pageArtistLimit,
+              },
+              contextualSignals,
+            );
+            // Keep low-confidence but catalog-verified recommendations when the result is short.
+            const verifiedRanking = recommendationRanking;
+            const recommendationTracks = balanceTracks(
+              verifiedRanking,
+              prompt.toLowerCase().includes("mashup") || prompt.toLowerCase().includes("mix") ? 10 : 2,
+              activeIntent.era,
+              activeIntent.language,
+              userWantsInstrumental(prompt, recommendationIntent),
+              relatedSongsRequested ? 10 : pageArtistLimit,
+              recommendationIntent,
+              { maxPerArtist: relatedSongsRequested ? 10 : pageArtistLimit, maxCumulativePerArtist: 10 },
+            ).slice(0, 10);
+            const recommendationScore = averageScore(recommendationTracks);
+            const recommendationConfidence = recommendationScore === null ? null : Math.round(recommendationScore);
+            const fillsShortResult = finalTracks.length < 10 && recommendationTracks.length > finalTracks.length;
+            const improvesResult = recommendationConfidence !== null && (
+              (resultConfidence !== null && recommendationConfidence > resultConfidence) ||
+              (recommendationTracks.length > finalTracks.length && recommendationConfidence >= (resultConfidence ?? 0) - 5)
+            );
+            if (fillsShortResult || improvesResult) {
+              finalTracks = recommendationTracks;
+              resultConfidence = recommendationConfidence;
+              aiRecommendationsAdded = finalTracks.filter((track) => track.aiRecommended).length;
+              logger.info(`[GeminiRecommendations] Added ${aiRecommendationsAdded} catalog-verified AI recommendations; result confidence is ${resultConfidence === null ? "unavailable" : `${resultConfidence}%`}.`);
+            }
+          }
+        } catch (err) {
+          logger.warn("[GeminiRecommendations] Supplement skipped after a Gemini/catalog error:", err);
+        }
+      }
 
       const enrichedTracks = await enrichTracksWithPreviews(finalTracks);
 
@@ -514,6 +622,8 @@ export function createSearchPipeline({
           alternatives: [...finalizedQueries, ...refinementQueriesUsed],
         },
         tracks: pageTracks,
+        resultConfidence,
+        aiRecommendationsAdded,
         hasMore: hasMoreInitial,
         ...(usedYouTubeMusicFallback
           ? { notice: "Spotify results were unavailable or incomplete. Showing YouTube Music catalog results." }
@@ -564,6 +674,7 @@ export function createSearchPipeline({
       };
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, intent);
       const activeIntent = discoveryResult.adjustedIntent;
+      const contextualSignals = enrichListeningContext(activeIntent, activeContext.browserContext);
 
       if (mode === "mock" || (!spotifySearch && !youtubeMusicSearch)) {
         const available = BACKEND_MOCK_TRACKS.filter((t) => !excludeIdSet.has(t.id));
@@ -646,7 +757,7 @@ export function createSearchPipeline({
         }
       }
 
-      const preferenceQueries = discoveryQueries(activeIntent, discoveryResult, activeContext);
+      const preferenceQueries = discoveryQueries(activeIntent, discoveryResult, activeContext, contextualSearchQuery(contextualSignals));
       for (const preferenceQuery of preferenceQueries) {
         if (!queryList.some((item) => item.query.toLowerCase() === preferenceQuery.toLowerCase())) {
           queryList.push({ query: preferenceQuery, offset: 0 });
@@ -812,15 +923,14 @@ export function createSearchPipeline({
           excludeTrackIds: excludeIdSet,
           excludeSignatures: excludeSigSet,
         },
+        contextualSignals,
       );
 
       // Enforce clean 5-track batch size and hard session ceiling of 25 tracks
       const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
       const batchSize = Math.min(5, remainingSlots);
-      const hasGeminiScores = rerankedTracks.some((track) => typeof track.matchScore === "number");
-      const confidenceCheckedTracks = hasGeminiScores
-        ? rerankedTracks.filter((track) => typeof track.matchScore !== "number" || track.matchScore >= MIN_GEMINI_MATCH_SCORE)
-        : rerankedTracks;
+      // Low confidence affects ordering and the displayed score, not eligibility.
+      const confidenceCheckedTracks = rerankedTracks;
       const locallyVerifiedTracks = balanceTracks(
         confidenceCheckedTracks,
         2,
@@ -936,6 +1046,7 @@ export function createSearchPipeline({
       };
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, refinedIntent);
       refinedIntent = discoveryResult.adjustedIntent;
+      const contextualSignals = enrichListeningContext(refinedIntent, activeContext.browserContext);
 
       if (mode === "mock" || !spotifySearch) {
         return {
@@ -949,7 +1060,7 @@ export function createSearchPipeline({
       if (refinedIntent.multiQueries?.moodQuery) queryList.push(refinedIntent.multiQueries.moodQuery);
       if (refinedIntent.multiQueries?.genreQuery) queryList.push(refinedIntent.multiQueries.genreQuery);
       if (refinedIntent.multiQueries?.contextQuery) queryList.push(refinedIntent.multiQueries.contextQuery);
-      const preferenceQueries = discoveryQueries(refinedIntent, discoveryResult, activeContext);
+      const preferenceQueries = discoveryQueries(refinedIntent, discoveryResult, activeContext, contextualSearchQuery(contextualSignals));
       for (const preferenceQuery of preferenceQueries) {
         if (!queryList.some((q) => q.toLowerCase() === preferenceQuery.toLowerCase())) queryList.push(preferenceQuery);
       }
@@ -988,6 +1099,7 @@ export function createSearchPipeline({
         {
           maxPerArtist: 2,
         },
+        contextualSignals,
       ) : [];
 
       const enrichedTracks = await enrichTracksWithPreviews(finalTracks);
