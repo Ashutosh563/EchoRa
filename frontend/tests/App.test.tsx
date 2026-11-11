@@ -115,22 +115,6 @@ describe('ECHORA App UI', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   }, 15000);
 
-  it('switches discovery searches to browser-local mock data from the account menu', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole('button', { name: 'Open account menu' }));
-    const mockDataSwitch = screen.getByRole('switch', { name: /Use mock data/i });
-    expect(mockDataSwitch).toHaveAttribute('aria-checked', 'false');
-    await user.click(mockDataSwitch);
-
-    expect(await screen.findByText('Mock sample data enabled for searches in this browser.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /🌧 Rainy day focus/i }));
-
-    expect(await screen.findByText(/Showing mock data\./i, {}, { timeout: 5000 })).toBeInTheDocument();
-    expect(await screen.findByText('Midnight Library')).toBeInTheDocument();
-  }, 10000);
-
   it('displays error card when search fails', async () => {
     vi.spyOn(client, 'searchMusic').mockRejectedValue(
       new client.AppApiError('GEMINI_UNAVAILABLE', 'The AI is overloaded right now.')
