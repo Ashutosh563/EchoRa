@@ -9,11 +9,12 @@
  */
 export interface CredentialState {
   geminiValid: boolean | null;
-  openaiValid: boolean | null;
+  openRouterValid: boolean | null;
+  lastAiProvider: "gemini" | "openRouter" | null;
   spotifyValid: boolean | null;
 }
 
 export function createCredentialState(): CredentialState {
-  return { geminiValid: null, openaiValid: null, spotifyValid: null };
+  return { geminiValid: null, openRouterValid: null, lastAiProvider: null, spotifyValid: null };
 }
 

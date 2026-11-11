@@ -80,8 +80,25 @@ function matchesSuggestedTrack(track: Track, recommendation: { title: string; ar
   return Boolean(expectedTitle && expectedArtist && titleMatches && artistMatches);
 }
 
-function isRelatedSongsRequest(prompt: string): boolean {
-  return /\b(?:related|similar)\s+(?:songs|tracks|music)\b|\bsame\s+mood\s+as\s+(?:this|that|it)\b|\bmore\s+like\s+(?:this|that|it)\b/i.test(prompt);
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+};
+
+export function relatedSongRequest(prompt: string): { requested: boolean; relatedCount: number } {
+  const lower = prompt.toLowerCase();
+  const countToken = "(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten)";
+  const requested =
+    /\b(?:related|similar)\s+(?:songs|tracks|music)\b/.test(lower) ||
+    /\b(?:songs|tracks|music)\s+(?:that\s+are\s+)?(?:related|similar)\s+to\b/.test(lower) ||
+    /\b(?:songs|tracks|music)\s+on\s+the\s+same\s+mood\s+as\b/.test(lower) ||
+    /\b(?:same\s+mood\s+as|more\s+like)\s+(?:this|that|it|the\s+(?:song|track))\b/.test(lower) ||
+    /\b(?:songs|tracks)\s+relate\s+to\b/.test(lower) ||
+    new RegExp(`\\b${countToken}\\s+more\\s+(?:tracks?|songs?)\\s+(?:(?:related|similar)\\s+to|relate\\s+to)\\b`).test(lower);
+
+  const quantityMatch = lower.match(new RegExp(`\\b(${countToken})\\s+more\\s+(?:related\\s+)?(?:tracks?|songs?)\\b`))
+    ?? lower.match(new RegExp(`\\b(${countToken})\\s+(?:related\\s+)?(?:tracks?|songs?)\\b`));
+  const parsedCount = quantityMatch ? Number(quantityMatch[1]) || NUMBER_WORDS[quantityMatch[1]!] : undefined;
+  return { requested, relatedCount: Math.max(1, Math.min(24, parsedCount ?? 10)) };
 }
 
 export function cleanSpotifyQuery(q: string, lang?: string | null): string {
@@ -264,6 +281,9 @@ export function createSearchPipeline({
       const discoveryResult = defaultDiscoveryProcessor.process(fallbackContext, rawIntent);
       const activeIntent = discoveryResult.adjustedIntent;
       const contextualSignals = enrichListeningContext(activeIntent, fallbackContext.browserContext);
+      const relatedRequest = relatedSongRequest(prompt);
+      const relatedSongsRequested = relatedRequest.requested;
+      const requestedResultLimit = relatedSongsRequested ? relatedRequest.relatedCount + 1 : 10;
 
       // 3. Synthesize queries: use Gemini's multiQueries if present; fallback to queryGenerator
       const baseQueries = generateQueries(activeIntent, discoveryResult);
@@ -387,6 +407,43 @@ export function createSearchPipeline({
         }
       }
 
+      // Related-song prompts name a seed, not an artist/title filter. Fetch the
+      // exact seed explicitly so it can always be shown alongside ten related tracks.
+      let referenceTrack: Track | undefined;
+      if (relatedSongsRequested && activeIntent.trackTitle) {
+        const seedQuery = activeIntent.artist
+          ? `track:"${activeIntent.trackTitle}" artist:"${activeIntent.artist}"`
+          : `track:"${activeIntent.trackTitle}"`;
+        const existingSeed = fusedCandidates.find((track) => matchesSuggestedTrack(track, {
+          title: activeIntent.trackTitle!,
+          artist: activeIntent.artist ?? track.artists[0] ?? "",
+        }));
+        const seedLookups: Track[][] = existingSeed ? [] : await Promise.all([
+          spotifySearch
+            ? spotifySearch.searchTracks(seedQuery, 5, signal).catch((err) => {
+            logger.warn(`[RelatedSongs] Spotify seed lookup failed for "${activeIntent.trackTitle}":`, err);
+            return [] as Track[];
+          })
+            : Promise.resolve([] as Track[]),
+          youtubeMusicSearch
+            ? youtubeMusicSearch.searchTracks(`${activeIntent.trackTitle} ${activeIntent.artist ?? ""}`, 5, signal).catch((err) => {
+            logger.warn(`[RelatedSongs] YouTube Music seed lookup failed for "${activeIntent.trackTitle}":`, err);
+            return [] as Track[];
+          })
+            : Promise.resolve([] as Track[]),
+        ]);
+        const exactSeed = existingSeed ?? fuseTrackLists(seedLookups, { maxCandidates: 10 })
+          .find((track) => matchesSuggestedTrack(track, {
+            title: activeIntent.trackTitle!,
+            artist: activeIntent.artist ?? track.artists[0] ?? "",
+          }));
+        if (exactSeed) {
+          referenceTrack = exactSeed;
+          if (exactSeed.catalogSource === "youtube_music") usedYouTubeMusicFallback = true;
+          fusedCandidates = fuseTrackLists([[exactSeed], fusedCandidates], { maxCandidates: 60 });
+        }
+      }
+
       let candidatesToUse = fusedCandidates;
 
       // 6. Gemini Semantic Reranker (with safety timeout and mode awareness)
@@ -397,7 +454,7 @@ export function createSearchPipeline({
         discoveryResult.mode,
         signal,
         rerankerPreferences(fallbackContext, discoveryResult),
-        undefined,
+        { relatedSongsRequested, maxResults: requestedResultLimit },
         contextualSignals,
       ) : [];
 
@@ -452,7 +509,7 @@ export function createSearchPipeline({
                 discoveryResult.mode,
                 signal,
                 rerankerPreferences(fallbackContext, discoveryResult),
-                undefined,
+                { relatedSongsRequested, maxResults: requestedResultLimit },
                 contextualSignals,
               );
               const refinedScore = averageScore(refinedRanking);
@@ -475,7 +532,8 @@ export function createSearchPipeline({
       const hasGeminiScores = rerankedTracks.some((track) => typeof track.matchScore === "number");
       const confidenceCheckedTracks = rerankedTracks;
 
-      const pageArtistLimit = activeIntent.artist ? 10 : 2;
+      const initialResultLimit = requestedResultLimit;
+      const pageArtistLimit = activeIntent.artist && !relatedSongsRequested ? 10 : 2;
       const locallyVerifiedTracks = balanceTracks(
         confidenceCheckedTracks,
         prompt.toLowerCase().includes("mashup") || prompt.toLowerCase().includes("mix") ? 10 : 2,
@@ -484,7 +542,12 @@ export function createSearchPipeline({
         userWantsInstrumental(prompt, activeIntent),
         pageArtistLimit,
         activeIntent,
-        { maxPerArtist: pageArtistLimit, maxCumulativePerArtist: pageArtistLimit },
+        {
+          maxPerArtist: pageArtistLimit,
+          maxCumulativePerArtist: pageArtistLimit,
+          relatedSongsRequested,
+          maxResults: initialResultLimit,
+        },
       );
       const rankedIds = new Set(locallyVerifiedTracks.map((track) => track.id));
       const rankedSignatures = new Set(locallyVerifiedTracks.map(getSongSignature));
@@ -508,27 +571,29 @@ export function createSearchPipeline({
           maxPerArtist: pageArtistLimit,
           maxCumulativePerArtist: pageArtistLimit,
           cumulativeArtistCounts: rankedArtistCounts,
+          relatedSongsRequested,
+          maxResults: initialResultLimit,
         },
       );
-      let finalTracks = [...locallyVerifiedTracks, ...balancedTopUp].slice(0, 10);
+      let finalTracks = [...locallyVerifiedTracks, ...balancedTopUp].slice(0, initialResultLimit);
       const initialResultScore = averageScore(finalTracks);
       let resultConfidence = initialResultScore === null ? null : Math.round(initialResultScore);
       let aiRecommendationsAdded = 0;
-      const relatedSongsRequested = isRelatedSongsRequest(prompt);
       if (
         activeReranker.suggestTrackRecommendations &&
-        (finalTracks.length < 10 || (resultConfidence !== null && resultConfidence < 75))
+        (relatedSongsRequested || finalTracks.length < initialResultLimit || (resultConfidence !== null && resultConfidence < 75))
       ) {
         try {
           const suggestions = await activeReranker.suggestTrackRecommendations(
             prompt,
             activeIntent,
-            finalTracks,
+            candidatesToUse,
             resultConfidence,
             relatedSongsRequested,
             signal,
+            relatedRequest.relatedCount,
           );
-          const currentSignatures = new Set(finalTracks.map(getSongSignature));
+          const currentSignatures = new Set(candidatesToUse.map(getSongSignature));
           const recommendationResults = await Promise.all(suggestions.slice(0, 10).map(async (recommendation) => {
             const spotifyQuery = `track:"${recommendation.title}" artist:"${recommendation.artist}"`;
             if (spotifySearch) {
@@ -555,43 +620,62 @@ export function createSearchPipeline({
             .map((track) => ({ ...track, aiRecommended: true }));
 
           if (verifiedRecommendations.length > 0) {
-            // For a requested song plus related songs, treat its artist/title as the recommendation seed.
-            // Keep the normal search intent and filters unchanged.
-            const recommendationIntent = relatedSongsRequested
-              ? { ...activeIntent, artist: null, trackTitle: null }
-              : activeIntent;
+            // Preserve the parsed intent and let the reranker treat the title/artist
+            // as a reference seed instead of hard filters for related candidates.
+            const recommendationIntent = activeIntent;
+            const combinedCatalog = fuseTrackLists(
+              [candidatesToUse.slice(0, 30), verifiedRecommendations],
+              { maxCandidates: 40 },
+            );
             const recommendationRanking = await activeReranker.rerank(
               prompt,
               recommendationIntent,
-              [...finalTracks, ...verifiedRecommendations],
+              combinedCatalog,
               discoveryResult.mode,
               signal,
               rerankerPreferences(fallbackContext, discoveryResult),
               {
-                maxPerArtist: relatedSongsRequested ? 10 : pageArtistLimit,
+                maxPerArtist: relatedSongsRequested ? 2 : pageArtistLimit,
+                maxCumulativePerArtist: relatedSongsRequested ? 6 : pageArtistLimit,
+                relatedSongsRequested,
+                maxResults: requestedResultLimit,
               },
               contextualSignals,
             );
             // Keep low-confidence but catalog-verified recommendations when the result is short.
             const verifiedRanking = recommendationRanking;
-            const recommendationTracks = balanceTracks(
+            let recommendationTracks = balanceTracks(
               verifiedRanking,
               prompt.toLowerCase().includes("mashup") || prompt.toLowerCase().includes("mix") ? 10 : 2,
               activeIntent.era,
               activeIntent.language,
               userWantsInstrumental(prompt, recommendationIntent),
-              relatedSongsRequested ? 10 : pageArtistLimit,
+              relatedSongsRequested ? 2 : pageArtistLimit,
               recommendationIntent,
-              { maxPerArtist: relatedSongsRequested ? 10 : pageArtistLimit, maxCumulativePerArtist: 10 },
-            ).slice(0, 10);
+              {
+                maxPerArtist: relatedSongsRequested ? 2 : pageArtistLimit,
+                maxCumulativePerArtist: relatedSongsRequested ? 6 : pageArtistLimit,
+                relatedSongsRequested,
+                maxResults: requestedResultLimit,
+              },
+            );
+            if (relatedSongsRequested) {
+              const seed = referenceTrack
+                ? verifiedRanking.find((track) => getSongSignature(track) === getSongSignature(referenceTrack!)) ?? referenceTrack
+                : undefined;
+              const relatedTracks = recommendationTracks.filter((track) => !seed || getSongSignature(track) !== getSongSignature(seed));
+              recommendationTracks = [...(seed ? [seed] : []), ...relatedTracks.slice(0, relatedRequest.relatedCount)].slice(0, seed ? requestedResultLimit : relatedRequest.relatedCount);
+            } else {
+              recommendationTracks = recommendationTracks.slice(0, 10);
+            }
             const recommendationScore = averageScore(recommendationTracks);
             const recommendationConfidence = recommendationScore === null ? null : Math.round(recommendationScore);
-            const fillsShortResult = finalTracks.length < 10 && recommendationTracks.length > finalTracks.length;
+            const fillsShortResult = finalTracks.length < initialResultLimit && recommendationTracks.length > finalTracks.length;
             const improvesResult = recommendationConfidence !== null && (
               (resultConfidence !== null && recommendationConfidence > resultConfidence) ||
               (recommendationTracks.length > finalTracks.length && recommendationConfidence >= (resultConfidence ?? 0) - 5)
             );
-            if (fillsShortResult || improvesResult) {
+            if (relatedSongsRequested || fillsShortResult || improvesResult) {
               finalTracks = recommendationTracks;
               resultConfidence = recommendationConfidence;
               aiRecommendationsAdded = finalTracks.filter((track) => track.aiRecommended).length;
@@ -605,8 +689,8 @@ export function createSearchPipeline({
 
       const enrichedTracks = await enrichTracksWithPreviews(finalTracks);
 
-      // ----- Enforce a fixed page size of 10 tracks -----
-      const PAGE_SIZE = 10;
+      // Related requests include the named reference song plus ten more tracks.
+      const PAGE_SIZE = requestedResultLimit;
       const pageTracks = enrichedTracks.slice(0, PAGE_SIZE);
       // A short first page is not evidence that the catalog is exhausted. Keep
       // discovery available while there is at least one live result; load-more
@@ -675,6 +759,9 @@ export function createSearchPipeline({
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, intent);
       const activeIntent = discoveryResult.adjustedIntent;
       const contextualSignals = enrichListeningContext(activeIntent, activeContext.browserContext);
+      const relatedRequest = relatedSongRequest(prompt);
+      const relatedSongsRequested = relatedRequest.requested;
+      const requestedResultLimit = relatedSongsRequested ? relatedRequest.relatedCount + 1 : 10;
 
       if (mode === "mock" || (!spotifySearch && !youtubeMusicSearch)) {
         const available = BACKEND_MOCK_TRACKS.filter((t) => !excludeIdSet.has(t.id));
@@ -693,7 +780,7 @@ export function createSearchPipeline({
 
       // Live mode: 4-Tier Page Candidate Mining
       const queryList: { query: string; offset: number }[] = [];
-      const targetArtists = parseTargetArtists(intent.artist);
+      const targetArtists = relatedSongsRequested ? [] : parseTargetArtists(intent.artist);
       const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
 
       // Continue an explicitly requested artist catalog on later pages even
@@ -922,6 +1009,8 @@ export function createSearchPipeline({
           maxPerArtist: dynamicMaxPerArtist,
           excludeTrackIds: excludeIdSet,
           excludeSignatures: excludeSigSet,
+          relatedSongsRequested,
+          maxResults: requestedResultLimit,
         },
         contextualSignals,
       );
@@ -937,7 +1026,7 @@ export function createSearchPipeline({
         activeIntent.era,
         activeIntent.language,
         userWantsInstrumental(prompt, activeIntent),
-        activeIntent.artist ? 10 : dynamicMaxPerArtist,
+        activeIntent.artist && !relatedSongsRequested ? 10 : dynamicMaxPerArtist,
         activeIntent,
         {
           cumulativeArtistCounts,
@@ -945,6 +1034,8 @@ export function createSearchPipeline({
           maxPerArtist: activeIntent.artist ? 10 : dynamicMaxPerArtist,
           excludeTrackIds: excludeIdSet,
           excludeSignatures: excludeSigSet,
+          relatedSongsRequested,
+          maxResults: requestedResultLimit,
         },
       );
       const finalTracks = locallyVerifiedTracks.slice(0, batchSize);

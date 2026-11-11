@@ -95,6 +95,14 @@ export interface StatusResponse {
     configured: boolean;
     valid: boolean | null;
   };
+  openRouter?: {
+    configured: boolean;
+    valid: boolean | null;
+  };
+  aiProviders?: {
+    priority: Array<'gemini' | 'openRouter'>;
+    lastUsed: 'gemini' | 'openRouter' | null;
+  };
   spotify: {
     configured: boolean;
     valid: boolean | null;

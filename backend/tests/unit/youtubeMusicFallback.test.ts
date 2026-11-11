@@ -152,4 +152,70 @@ describe("YouTube Music catalog fallback", () => {
     expect(result.resultConfidence).toBe(47);
     expect(result.tracks.filter((track) => track.aiRecommended)).toHaveLength(9);
   });
+
+  it("treats '8 more tracks relate to it' as a seed plus exactly eight related tracks", async () => {
+    const prompt = "Tum Hi Ho by Arijit Singh and 8 more tracks relate to it";
+    const candidates: Track[] = [
+      { ...makeYouTubeTrack("seed", "Tum Hi Ho"), artists: ["Arijit Singh"] },
+      ...Array.from({ length: 15 }, (_, index) => ({
+        ...makeYouTubeTrack(`catalog-${index}`, `Catalog Song ${index}`),
+        artists: [`Catalog Artist ${index}`],
+      })),
+    ];
+    const spotifySearch = {
+      searchTracks: vi.fn(async (query: string) => {
+        const recommendation = query.match(/track:"([^"]+)" artist:"([^"]+)"/);
+        if (recommendation) {
+          return [{
+            ...makeYouTubeTrack(`ai-${recommendation[1]}`, recommendation[1]!),
+            artists: [recommendation[2]!],
+            catalogSource: "spotify" as const,
+          }];
+        }
+        return candidates;
+      }),
+    };
+    const suggestions = Array.from({ length: 8 }, (_, index) => ({
+      title: `Related Song ${index + 1}`,
+      artist: `Related Artist ${index + 1}`,
+    }));
+    const reranker = {
+      suggestTrackRecommendations: vi.fn().mockResolvedValue(suggestions),
+      rerank: vi.fn().mockImplementation(async (
+        _prompt: string,
+        _intent: unknown,
+        pool: Track[],
+        _mode: unknown,
+        _signal: unknown,
+        _preferences: unknown,
+        options: { maxResults?: number } = {},
+      ) => pool.slice(0, options.maxResults ?? 10).map((track, index) => ({ ...track, matchScore: 90 - index }))),
+    };
+    const pipeline = createSearchPipeline({
+      intentExtractor: vi.fn().mockResolvedValue({
+        ...getMockIntent(prompt),
+        mood: "sad romantic",
+        artist: "Arijit Singh",
+        trackTitle: "Tum Hi Ho",
+      }),
+      spotifySearch,
+      reranker,
+    });
+
+    const result = await pipeline.search(prompt, "live", []);
+
+    expect(reranker.suggestTrackRecommendations).toHaveBeenCalledWith(
+      prompt,
+      expect.objectContaining({ artist: "Arijit Singh", trackTitle: "Tum Hi Ho" }),
+      expect.any(Array),
+      expect.any(Number),
+      true,
+      undefined,
+      8,
+    );
+    expect(result.tracks).toHaveLength(9);
+    expect(result.tracks[0]).toMatchObject({ name: "Tum Hi Ho", artists: ["Arijit Singh"] });
+    expect(result.aiRecommendationsAdded).toBe(8);
+    expect(result.tracks.every((track) => typeof track.matchScore === "number")).toBe(true);
+  });
 });

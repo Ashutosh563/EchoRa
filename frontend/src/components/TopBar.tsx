@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useEffect } from 'react';
 import { Wordmark } from './Wordmark';
-import { SlidersHorizontal, LogOut, LogIn, UserRound, ChevronDown, FlaskConical } from 'lucide-react';
+import { SlidersHorizontal, LogOut, LogIn, UserRound, ChevronDown, FlaskConical, Check, Circle, X } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import type { StatusResponse } from '../types';
@@ -12,17 +12,19 @@ interface TopBarProps {
   onTabChange?: (tab: 'discover' | 'transition') => void;
   onOpenSignIn?: () => void;
   onBrandClick?: () => void;
+  onOpenAccountMenu?: () => void;
   isMockMode: boolean;
   onToggleMockMode: () => void;
 }
 
 export const TopBar = memo(function TopBar({
-  status: _status,
+  status,
   onOpenPreferences,
   activeTab = 'discover',
   onTabChange,
   onOpenSignIn,
   onBrandClick,
+  onOpenAccountMenu,
   isMockMode,
   onToggleMockMode,
 }: TopBarProps) {
@@ -144,7 +146,11 @@ export const TopBar = memo(function TopBar({
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
-                onClick={() => setIsMenuOpen((prev) => !prev)}
+                onClick={() => setIsMenuOpen((prev) => {
+                  const next = !prev;
+                  if (next) onOpenAccountMenu?.();
+                  return next;
+                })}
                 aria-label="Open account menu"
                 aria-haspopup="true"
                 aria-expanded={isMenuOpen}
@@ -178,7 +184,7 @@ export const TopBar = memo(function TopBar({
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 6 }}
                     transition={{ duration: 0.15 }}
-                    className="liquid-glass-prominent liquid-account-menu absolute right-0 mt-3 w-[min(18rem,calc(100vw-2rem))] rounded-[24px] p-2.5 z-50 origin-top-right"
+                    className="liquid-glass-prominent liquid-account-menu absolute right-0 mt-3 w-[min(18rem,calc(100vw-2rem))] max-h-[min(85vh,34rem)] overflow-y-auto rounded-[24px] p-2.5 z-50 origin-top-right"
                   >
                     <div className="liquid-account-menu-content relative z-10">
                       <div className="px-3 py-2.5 border-b border-white/[0.12] mb-1.5">
@@ -191,6 +197,49 @@ export const TopBar = memo(function TopBar({
                         {user && <span className="inline-block mt-2 px-2 py-1 rounded-full text-[9px] uppercase font-bold tracking-wider bg-white/[0.08] border border-white/[0.1] text-text-muted">
                           via {profile?.auth_provider || 'OAuth'}
                         </span>}
+                      </div>
+
+                      <div className="px-3 py-3 border-b border-white/[0.12] mb-1.5" aria-label="AI provider priority">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-text-dim">AI provider priority</p>
+                          <span className="text-[9px] text-text-faint">server side</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {(status?.aiProviders?.priority ?? ['gemini', 'openRouter']).map((provider, index) => {
+                            const providerState = provider === 'gemini' ? status?.gemini : status?.openRouter;
+                            const configured = providerState?.configured ?? false;
+                            const rejected = providerState?.valid === false;
+                            const stateLabel = !status
+                              ? 'Checking'
+                              : rejected
+                                ? 'Key rejected'
+                                : configured
+                                  ? 'Ready'
+                                  : 'Not configured';
+                            const StatusIcon = rejected ? X : configured ? Check : Circle;
+                            return (
+                              <div key={provider} className="flex items-center gap-2 text-[11px]">
+                                <span className="w-4 shrink-0 text-right font-mono text-text-faint">{index + 1}</span>
+                                <span className="flex-1 min-w-0 text-text">
+                                  {provider === 'gemini' ? 'Gemini' : 'OpenRouter'}
+                                  <span className="text-text-faint"> · {index === 0 ? 'Primary' : 'Fallback'}</span>
+                                </span>
+                                <span className={`inline-flex items-center gap-1 text-[9px] ${rejected ? 'text-rose-300' : configured ? 'text-emerald-200' : 'text-text-faint'}`}>
+                                  <StatusIcon className="w-3 h-3" />{stateLabel}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-2 text-[10px] text-text-faint" aria-live="polite">
+                          Last used: <span className="text-text-dim">
+                            {status?.aiProviders?.lastUsed === 'gemini'
+                              ? 'Gemini'
+                              : status?.aiProviders?.lastUsed === 'openRouter'
+                                ? 'OpenRouter fallback'
+                                : 'No AI request yet'}
+                          </span>
+                        </p>
                       </div>
 
                       <button

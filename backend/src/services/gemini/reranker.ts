@@ -611,6 +611,9 @@ export interface BalanceOptions {
   excludeSignatures?: Set<string>;
   maxPerArtist?: number;
   isExclusive?: boolean;
+  /** The named artist/title is a seed for related-track discovery, not a filter for every candidate. */
+  relatedSongsRequested?: boolean;
+  maxResults?: number;
 }
 
 export function balanceTracks(
@@ -631,12 +634,13 @@ export function balanceTracks(
 
   const maxAllowedArtist = options?.maxPerArtist ?? maxPerArtist;
   const maxCumulativeArtist = options?.maxCumulativePerArtist ?? 6;
+  const resultLimit = options?.maxResults ?? 10;
 
   for (const t of tracks) {
     if (options?.excludeTrackIds && options.excludeTrackIds.has(t.id)) continue;
     const songSig = getSongSignature(t);
     if (options?.excludeSignatures && options.excludeSignatures.has(songSig)) continue;
-    if (!matchesExplicitRequest(t, negativeIntent)) continue;
+    if (!options?.relatedSongsRequested && !matchesExplicitRequest(t, negativeIntent)) continue;
 
     if (!allowInstrumental && isInstrumentalTrack(t)) continue;
     if (negativeIntent && matchesNegativeConstraints(t, negativeIntent)) continue;
@@ -668,11 +672,11 @@ export function balanceTracks(
 
   // Strict Era Gate: if an era was explicitly requested, NEVER append other-era tracks
   if (era) {
-    return targetEraTracks.slice(0, 10);
+    return targetEraTracks.slice(0, resultLimit);
   }
 
   const combined = [...targetEraTracks, ...otherEraTracks];
-  if (negativeIntent?.artist) {
+  if (negativeIntent?.artist && !options?.relatedSongsRequested) {
     const targetArtists = parseTargetArtists(negativeIntent.artist);
     const isExcl = Boolean(
       options?.isExclusive ||
@@ -690,7 +694,7 @@ export function balanceTracks(
     const targetQuota = targetArtists.length > 1 ? 6 : 5;
     return [...artistMatches.slice(0, targetQuota), ...companionMatches.slice(0, 10 - targetQuota)].slice(0, 10);
   }
-  return combined.slice(0, 10);
+  return combined.slice(0, resultLimit);
 }
 
 function buildRerankerSystemInstruction(discoveryMode: DiscoveryMode = "FAMILIAR"): string {
@@ -843,12 +847,13 @@ export interface SemanticReranker {
     resultConfidence: number | null,
     relatedSongsRequested: boolean,
     signal?: AbortSignal,
+    requestedRelatedCount?: number,
   ): Promise<TrackRecommendation[]>;
 }
 
 export function createSemanticReranker(geminiClient: GeminiClient | null): SemanticReranker {
   return {
-    async suggestTrackRecommendations(prompt, intent, existingTracks, resultConfidence, relatedSongsRequested, signal) {
+    async suggestTrackRecommendations(prompt, intent, existingTracks, resultConfidence, relatedSongsRequested, signal, requestedRelatedCount = 10) {
       if (!geminiClient) return [];
       const raw = await geminiClient.generateJson({
         userText: JSON.stringify({
@@ -863,13 +868,14 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
             requestedArtist: intent.artist,
             requestedTitle: intent.trackTitle,
             relatedSongsRequested,
+            requestedRelatedCount,
             negativeConstraints: intent.negativeConstraints,
             sonicProfile: intent.sonicProfile,
           },
           resultConfidence,
           alreadyReturnedTracks: existingTracks.map((track) => ({ title: track.name, artists: track.artists })),
         }),
-        systemInstruction: `You recommend up to ten real songs that improve a music result whose confidence is low or whose list is short. Match the user's original mood and constraints first. Never repeat a returned song. If the user asks for related songs to a named title, use its mood and sound as the reference and recommend distinct songs; do not repeat the title or force every recommendation to have the same artist. Otherwise preserve explicit artist and title constraints. Return likely catalog titles and their primary artists only; the app will verify every recommendation against Spotify or YouTube Music before showing it. Return only JSON.`,
+        systemInstruction: `You recommend up to ${Math.max(1, Math.min(10, requestedRelatedCount))} real songs that improve a music result whose confidence is low or whose list is short. Match the user's original mood and constraints first. Never repeat a returned song. If the user asks for related songs to a named title, use its mood and sound as the reference and recommend distinct songs; do not repeat the title or force every recommendation to have the same artist. Otherwise preserve explicit artist and title constraints. Return likely catalog titles and their primary artists only; the app will verify every recommendation against Spotify or YouTube Music before showing it. Return only JSON.`,
         jsonSchema: TRACK_RECOMMENDATION_SCHEMA,
         signal,
       });
@@ -887,7 +893,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
         if (seen.has(key)) return [];
         seen.add(key);
         return [{ title, artist }];
-      }).slice(0, 10);
+      }).slice(0, Math.max(1, Math.min(10, requestedRelatedCount)));
     },
     async suggestRefinementQueries(prompt, intent, lowScoringTracks, signal) {
       if (!geminiClient || lowScoringTracks.length === 0) return [];
@@ -934,8 +940,9 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
     ): Promise<Track[]> {
       if (!candidates || candidates.length === 0) return [];
       const allowInstrumental = userWantsInstrumental(prompt, intent);
-      const isExclusive = Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
-      const hasExplicitArtist = Boolean(intent.artist && intent.artist.trim().length > 0);
+      const relatedSongsRequested = Boolean(balanceOptions?.relatedSongsRequested);
+      const isExclusive = !relatedSongsRequested && Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+      const hasExplicitArtist = !relatedSongsRequested && Boolean(intent.artist && intent.artist.trim().length > 0);
       const maxPerArtist = balanceOptions?.maxPerArtist ?? (hasExplicitArtist ? 10 : 2);
       const maxCumulativeArtist = balanceOptions?.maxCumulativePerArtist ?? 6;
       const promptWantsMashup = prompt.toLowerCase().includes("mashup") || prompt.toLowerCase().includes("mix");
@@ -960,8 +967,19 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
 
       // Prioritize exact song title and artist matches at top of candidate list
       let sortedCandidates = [...candidates];
-      const targetArtists = parseTargetArtists(intent.artist);
+      const targetArtists = relatedSongsRequested ? [] : parseTargetArtists(intent.artist);
       const targetTitleLower = intent.trackTitle?.toLowerCase().trim();
+
+      if (relatedSongsRequested && intent.trackTitle) {
+        const seedIndex = sortedCandidates.findIndex((track) =>
+          normalizeSongTitle(track.name) === normalizeSongTitle(intent.trackTitle!) &&
+          (!intent.artist || track.artists.some((artist) => isArtistMatch(artist, intent.artist!))),
+        );
+        if (seedIndex > 0) {
+          const [seed] = sortedCandidates.splice(seedIndex, 1);
+          sortedCandidates.unshift(seed!);
+        }
+      }
 
       if (targetTitleLower || targetArtists.length > 0) {
         sortedCandidates.sort((a, b) => {
@@ -991,7 +1009,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
 
       // Filter out pure instrumental tracks, negative constraint violations, and language leaks before sending candidate pool to Gemini
       let eligibleCandidates = sortedCandidates.filter((t) => {
-        if (!matchesExplicitRequest(t, intent)) return false;
+        if (!relatedSongsRequested && !matchesExplicitRequest(t, intent)) return false;
         if (!allowInstrumental && isInstrumentalTrack(t)) return false;
         if (matchesNegativeConstraints(t, intent)) return false;
         if (!isLanguageMatch(t, intent.language, intent)) return false;
@@ -999,7 +1017,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
       });
       if (eligibleCandidates.length < 5) {
         eligibleCandidates = sortedCandidates.filter((t) => {
-          if (!matchesExplicitRequest(t, intent)) return false;
+          if (!relatedSongsRequested && !matchesExplicitRequest(t, intent)) return false;
           if (matchesNegativeConstraints(t, intent)) return false;
           if (!isLanguageMatch(t, intent.language, intent)) return false;
           return true;
@@ -1007,7 +1025,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
       }
 
       try {
-        const candidatePayload = eligibleCandidates.slice(0, 30).map((t, idx) => ({
+        const candidatePayload = eligibleCandidates.slice(0, relatedSongsRequested ? 40 : 30).map((t, idx) => ({
           id: t.id,
           title: t.name,
           artists: t.artists.join(", "),
@@ -1037,14 +1055,24 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           sonicProfile: intent.sonicProfile,
           userPreferences: userPreferences ?? undefined,
           contextualSignals: contextualSignals ?? undefined,
+          relatedSongsRequested,
+          referenceTrack: relatedSongsRequested && intent.trackTitle
+            ? { title: intent.trackTitle, artist: intent.artist }
+            : undefined,
           candidates: candidatePayload,
         });
 
         const rawJson = await geminiClient.generateJson({
           userText,
-          systemInstruction: contextualSignals
-            ? `${buildRerankerSystemInstruction(discoveryMode)} Browser context is a weak supporting signal only; explicit user prompt and intent always take priority. Do not infer emotion from time or culture from language/region.`
-            : buildRerankerSystemInstruction(discoveryMode),
+          systemInstruction: [
+            buildRerankerSystemInstruction(discoveryMode),
+            relatedSongsRequested
+              ? "The requested title and artist identify the reference seed. Score every supplied candidate and return every candidate in best-to-worst order with its own match score. Include the exact reference track if present, then the best ten distinct tracks with similar mood and sound. The named artist is not a restriction on related tracks; the reference seed is not one of the ten related songs."
+              : "",
+            contextualSignals
+              ? "Browser context is a weak supporting signal only; explicit user prompt and intent always take priority. Do not infer emotion from time or culture from language/region."
+              : "",
+          ].filter(Boolean).join(" "),
           jsonSchema: RERANKER_JSON_SCHEMA,
           signal: abortSignal,
         });
@@ -1108,7 +1136,8 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
         }
 
         // Fill up to 10 from original candidates respecting era, language, artist diversity, and negative constraints
-        if (rerankedList.length < 10) {
+        const resultLimit = balanceOptions?.maxResults ?? (relatedSongsRequested ? 11 : 10);
+        if (rerankedList.length < resultLimit) {
           const remainingCandidates = candidates.filter(
             (t) =>
               !seenIds.has(t.id) &&
@@ -1146,12 +1175,12 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
               ...track,
               matchReason: track.matchReason || `Matches ${intent.mood || "acoustic"} profile.`,
             });
-            if (rerankedList.length >= 10) break;
+            if (rerankedList.length >= resultLimit) break;
           }
         }
 
-        const isExclusive = Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
-        const targetArtists = parseTargetArtists(intent.artist);
+        const isExclusive = !relatedSongsRequested && Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+        const targetArtists = relatedSongsRequested ? [] : parseTargetArtists(intent.artist);
 
         if (targetArtists.length > 0 && isExclusive) {
           // "ONLY" Case: Return 100% tracks by the requested artist(s)
@@ -1289,7 +1318,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           return assembled.slice(0, 10);
         }
 
-        return rerankedList.slice(0, 10);
+        return rerankedList.slice(0, relatedSongsRequested ? 11 : 10);
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn(`[Reranker] Semantic reranker skipped or timed out (${errorMsg}). Using balanced candidate ranking.`);

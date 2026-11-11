@@ -1,7 +1,7 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import fs from "node:fs";
-import { ENV_FILE, loadConfig, DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL } from "../src/config/env.js";
+import { ENV_FILE, loadConfig, DEFAULT_GEMINI_MODEL, DEFAULT_OPENROUTER_MODEL } from "../src/config/env.js";
 import { validateGeminiKey } from "../src/services/gemini/validateKey.js";
 import { validateSpotifyCredentials } from "../src/services/spotify/validateCredentials.js";
 
@@ -30,12 +30,12 @@ async function main() {
     const geminiKey = await promptSecret(rl, `   Enter Gemini API Key ${currentGemini} (press Enter to keep): `);
     const finalGeminiKey = geminiKey || existing.geminiApiKey || "";
 
-    console.log("\n1b. OpenAI API Key (fallback provider, optional)");
-    const currentOpenAI = existing.openaiApiKey ? "[configured: hidden]" : "[not configured]";
-    const openaiKey = await promptSecret(rl, `   Enter OpenAI API Key ${currentOpenAI} (press Enter to keep): `);
-    const finalOpenAIKey = openaiKey || existing.openaiApiKey || "";
-    const openaiModelInput = await promptSecret(rl, `   OpenAI model [${existing.openaiModel || DEFAULT_OPENAI_MODEL}] (press Enter to keep): `);
-    const finalOpenAIModel = openaiModelInput || existing.openaiModel || DEFAULT_OPENAI_MODEL;
+    console.log("\n1b. OpenRouter API Key (fallback provider, optional)");
+    const currentOpenRouter = existing.openRouterApiKey ? "[configured: hidden]" : "[not configured]";
+    const openRouterKey = await promptSecret(rl, `   Enter OpenRouter API Key ${currentOpenRouter} (press Enter to keep): `);
+    const finalOpenRouterKey = openRouterKey || existing.openRouterApiKey || "";
+    const openRouterModelInput = await promptSecret(rl, `   OpenRouter model [${existing.openRouterModel || DEFAULT_OPENROUTER_MODEL}] (press Enter to keep): `);
+    const finalOpenRouterModel = openRouterModelInput || existing.openRouterModel || DEFAULT_OPENROUTER_MODEL;
 
     if (finalGeminiKey) {
       process.stdout.write("   Validating Gemini API Key... ");
@@ -77,8 +77,8 @@ async function main() {
       `# ECHORA API Credentials`,
       `GEMINI_API_KEY=${finalGeminiKey}`,
       `GEMINI_MODEL=${existing.geminiModel || DEFAULT_GEMINI_MODEL}`,
-      `OPENAI_API_KEY=${finalOpenAIKey}`,
-      `OPENAI_MODEL=${finalOpenAIModel}`,
+      `OPENROUTER_API_KEY=${finalOpenRouterKey}`,
+      `OPENROUTER_MODEL=${finalOpenRouterModel}`,
       `SPOTIFY_CLIENT_ID=${finalSpotifyId}`,
       `SPOTIFY_CLIENT_SECRET=${finalSpotifySecret}`,
       ``,

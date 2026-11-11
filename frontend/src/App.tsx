@@ -46,7 +46,7 @@ function AppContent({ api }: AppProps = {}) {
   const reduceMotion = useReducedMotion();
   const { user, isGuest, isLoading: isAuthLoading } = useAuth();
   const [forceShowAuth, setForceShowAuth] = useState(false);
-  const { status } = useStatus();
+  const { status, refetch: refreshStatus } = useStatus();
   const [isMockMode, setIsMockMode] = useState(false);
   const mockClient = useMemo(() => createMockClient(), []);
   const searchOptions = useMemo(
@@ -84,6 +84,10 @@ function AppContent({ api }: AppProps = {}) {
       setHasMorePages(data.hasMore !== undefined ? data.hasMore : data.mode !== 'mock' && data.tracks.length >= 10);
     }
   }, [data]);
+
+  useEffect(() => {
+    if (data) void refreshStatus();
+  }, [data, refreshStatus]);
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -336,6 +340,7 @@ function AppContent({ api }: AppProps = {}) {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onBrandClick={handleBrandClick}
+        onOpenAccountMenu={() => { void refreshStatus(); }}
         onOpenSignIn={() => setForceShowAuth(true)}
       />
 

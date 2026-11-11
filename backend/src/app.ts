@@ -8,11 +8,8 @@ import { createSpotifyAuth, type SpotifyAuth } from "./services/spotify/spotifyA
 import { createSpotifySearch, type SpotifySearch } from "./services/spotify/spotifySearch.js";
 import { createYouTubeMusicSearch } from "./services/youtubeMusic/ytmusicSearch.js";
 import { createGeminiClient } from "./services/gemini/geminiClient.js";
-import { createOpenAIClient } from "./services/openai/openaiClient.js";
+import { createGeminiFallbackClient, createOpenRouterClient } from "./services/openrouter/openRouterClient.js";
 import { createIntentExtractor, type IntentExtractor } from "./services/gemini/intentExtractor.js";
-import { parseIntent } from "./services/gemini/intentExtractor.js";
-import { INTENT_SYSTEM_INSTRUCTION } from "./services/gemini/prompt.js";
-import { MUSIC_INTENT_JSON_SCHEMA } from "./services/gemini/intentSchema.js";
 import { createMusicController } from "./controllers/music.controller.js";
 import { createSemanticReranker } from "./services/gemini/reranker.js";
 import { createSpotifyController } from "./controllers/spotify.controller.js";
@@ -45,7 +42,7 @@ export function createApp(deps: AppDependencies = {}): Express {
 
   // Register secrets for redaction in logs
   registerSecret(config.geminiApiKey);
-  registerSecret(config.openaiApiKey);
+  registerSecret(config.openRouterApiKey);
   registerSecret(config.spotifyClientId);
   registerSecret(config.spotifyClientSecret);
 
@@ -76,46 +73,29 @@ export function createApp(deps: AppDependencies = {}): Express {
   // Initialize Gemini Intent Extractor if key exists
   let intentExtractor: IntentExtractor | null = deps.intentExtractor ?? null;
   let visionService: GeminiVisionService | null = deps.visionService ?? null;
-  let geminiClient: ReturnType<typeof createGeminiClient> | null = null;
-  const openaiClient = config.openaiApiKey ? createOpenAIClient(config.openaiApiKey, config.openaiModel) : null;
+  const geminiPrimaryClient = config.geminiApiKey ? createGeminiClient(config.geminiApiKey, config.geminiModel) : null;
+  const openRouterClient = config.openRouterApiKey
+    ? createOpenRouterClient(config.openRouterApiKey, config.openRouterModel)
+    : null;
+  const geminiClient = createGeminiFallbackClient(geminiPrimaryClient, openRouterClient, {
+    onGeminiSuccess: () => { credState.geminiValid = true; credState.lastAiProvider = "gemini"; },
+    onGeminiAuthFailure: () => { credState.geminiValid = false; },
+    onOpenRouterSuccess: () => { credState.openRouterValid = true; credState.lastAiProvider = "openRouter"; },
+    onOpenRouterAuthFailure: () => { credState.openRouterValid = false; },
+  });
+
+  if (geminiClient && !intentExtractor) {
+    intentExtractor = createIntentExtractor(geminiClient);
+  }
 
   if (config.geminiApiKey) {
-    geminiClient = createGeminiClient(config.geminiApiKey, config.geminiModel);
-    if (!intentExtractor) {
-      intentExtractor = createIntentExtractor(geminiClient, {
-        onKeyValidity: (valid) => {
-          credState.geminiValid = valid;
-        },
-      });
-    }
-
     if (!visionService) {
       visionService = createGeminiVisionService(config.geminiApiKey, config.geminiModel);
     }
   }
 
-  if (openaiClient) {
-    const geminiExtractor = intentExtractor;
-    intentExtractor = async (prompt, signal) => {
-      try {
-        if (!geminiExtractor) throw new Error("Gemini provider is not configured");
-        return await geminiExtractor(prompt, signal);
-      } catch {
-        // Gemini is unavailable or rejected; continue with OpenAI as the provider fallback.
-      }
-      try {
-        const raw = await openaiClient.generateJson({ userText: prompt, systemInstruction: INTENT_SYSTEM_INSTRUCTION, jsonSchema: MUSIC_INTENT_JSON_SCHEMA, signal });
-        credState.openaiValid = true;
-        return parseIntent(raw);
-      } catch (error) {
-        if (error instanceof Error && /OpenAI API key was rejected/i.test(error.message)) credState.openaiValid = false;
-        throw error;
-      }
-    };
-  }
-
   const transitionPlanner = createTransitionPlanner(geminiClient);
-  const transitionIntentExtractor = createTransitionIntentExtractor(geminiClient, openaiClient);
+  const transitionIntentExtractor = createTransitionIntentExtractor(geminiClient);
   const stageIntentGenerator = createStageIntentGenerator(geminiClient);
   const transitionReranker = createTransitionReranker(geminiClient);
   const playlistAssembler = createPlaylistAssembler(spotifySearch, transitionReranker);

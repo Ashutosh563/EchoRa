@@ -16,18 +16,17 @@ export function resolveAppMode(
   youtubeMusicAvailable = false,
 ): ModeResolution {
   const geminiConfigured = Boolean(config.geminiApiKey);
-  const openaiConfigured = Boolean(config.openaiApiKey);
-  const aiReady = (geminiConfigured && credState.geminiValid !== false) || (openaiConfigured && credState.openaiValid !== false);
+  const openRouterConfigured = Boolean(config.openRouterApiKey);
+  const aiReady = (geminiConfigured && credState.geminiValid !== false) || (openRouterConfigured && credState.openRouterValid !== false);
   const spotifyConfigured = Boolean(config.spotifyClientId && config.spotifyClientSecret);
   const spotifyAuthorized = Boolean(spotifyAuth?.isAuthorized());
 
   const missing: string[] = [];
   if (!aiReady) {
     if (!geminiConfigured) missing.push("Gemini API key is not configured.");
-    if (!openaiConfigured) missing.push("OpenAI API key is not configured.");
-  }
-  if (geminiConfigured && credState.geminiValid === false && !openaiConfigured) {
-    missing.push("Gemini API key was rejected by the API.");
+    if (!openRouterConfigured) missing.push("OpenRouter API key is not configured.");
+    if (geminiConfigured && credState.geminiValid === false) missing.push("Gemini API key was rejected by the API.");
+    if (openRouterConfigured && credState.openRouterValid === false) missing.push("OpenRouter API key was rejected by the API.");
   }
 
   if (!spotifyConfigured && !youtubeMusicAvailable) {
@@ -51,7 +50,11 @@ export function resolveAppMode(
       configured: geminiConfigured,
       valid: credState.geminiValid,
     },
-    openai: { configured: openaiConfigured, valid: credState.openaiValid },
+    openRouter: { configured: openRouterConfigured, valid: credState.openRouterValid },
+    aiProviders: {
+      priority: ["gemini", "openRouter"],
+      lastUsed: credState.lastAiProvider,
+    },
     spotify: {
       configured: spotifyConfigured,
       valid: credState.spotifyValid,

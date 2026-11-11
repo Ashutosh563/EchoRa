@@ -90,7 +90,11 @@ export interface StatusResponse {
   mode: AppMode;
   interpretMode: AppMode;
   gemini: { configured: boolean; valid: boolean | null };
-  openai: { configured: boolean; valid: boolean | null };
+  openRouter?: { configured: boolean; valid: boolean | null };
+  aiProviders?: {
+    priority: Array<'gemini' | 'openRouter'>;
+    lastUsed: 'gemini' | 'openRouter' | null;
+  };
   spotify: { configured: boolean; valid: boolean | null; authorized: boolean };
   missing: string[];
 }

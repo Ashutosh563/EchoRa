@@ -66,7 +66,8 @@ export function createHttpMusicClient(): FullMusicApi {
           mode: "mock",
           interpretMode: "mock",
           gemini: { configured: false, valid: null },
-          openai: { configured: false, valid: null },
+          openRouter: { configured: false, valid: null },
+          aiProviders: { priority: ['gemini', 'openRouter'], lastUsed: null },
           spotify: { configured: false, valid: null, authorized: false },
           missing: ["Backend server unavailable."],
         };
