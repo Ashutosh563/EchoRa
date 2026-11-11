@@ -21,6 +21,7 @@ import { useSearch } from './hooks/useSearch';
 import { useMoodTheme } from './hooks/useMoodTheme';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import { loadMoreMusic, refineVibeMusic } from './api/client';
+import { createMockClient } from './api/mockClient';
 import {
   getStoredProfile,
   setDiscoveryMode,
@@ -45,9 +46,18 @@ function AppContent({ api }: AppProps = {}) {
   const { user, isGuest, isLoading: isAuthLoading } = useAuth();
   const [forceShowAuth, setForceShowAuth] = useState(false);
   const { status } = useStatus();
-  const { status: searchStatus, data, error, lastPrompt, search } = useSearch(
-    api ? { searchFn: (p, s) => api.search(p, s) } : undefined
+  const [isMockMode, setIsMockMode] = useState(false);
+  const mockClient = useMemo(() => createMockClient(), []);
+  const searchOptions = useMemo(
+    () =>
+      isMockMode
+        ? { searchFn: (p: string, s?: AbortSignal) => mockClient.search(p, undefined, s) }
+        : api
+        ? { searchFn: (p: string, s?: AbortSignal) => api.search(p, s) }
+        : undefined,
+    [api, isMockMode, mockClient]
   );
+  const { status: searchStatus, data, error, lastPrompt, search, reset: resetSearch } = useSearch(searchOptions);
   const [profile, setProfile] = useState<StoredProfile>(getStoredProfile);
   const { closePlayer, appendQueue } = useAudioPlayer();
   const [prompt, setPrompt] = useState('');
@@ -70,7 +80,7 @@ function AppContent({ api }: AppProps = {}) {
     if (data?.tracks) {
       setCumulativeTracks(data.tracks);
       setCurrentPage(1);
-      setHasMorePages(data.hasMore !== undefined ? data.hasMore : data.tracks.length >= 10);
+      setHasMorePages(data.hasMore !== undefined ? data.hasMore : data.mode !== 'mock' && data.tracks.length >= 10);
     }
   }, [data]);
 
@@ -119,6 +129,22 @@ function AppContent({ api }: AppProps = {}) {
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const handleToggleMockMode = useCallback(() => {
+    const nextMode = !isMockMode;
+    setIsMockMode(nextMode);
+    resetSearch();
+    setCumulativeTracks([]);
+    setCurrentPage(1);
+    setHasMorePages(false);
+    closePlayer();
+    addToast(
+      nextMode
+        ? 'Mock sample data enabled for searches in this browser.'
+        : 'Using the server-selected search mode.',
+      'info'
+    );
+  }, [isMockMode, resetSearch, closePlayer, addToast]);
 
   // Voice speech-to-text integration
   const speech = useSpeechRecognition({
@@ -233,7 +259,7 @@ function AppContent({ api }: AppProps = {}) {
   }, [data, isLoadingMore, cumulativeTracks, currentPage, lastPrompt, prompt, profile.discoveryMode, appendQueue, addToast]);
 
   const handleRefineVibe = useCallback(async (type: string, label: string, delta: string) => {
-    if (!data?.intent || isRefiningVibe || isLoadingMore) return;
+    if (!data?.intent || data.mode === 'mock' || isMockMode || isRefiningVibe || isLoadingMore) return;
     setIsRefiningVibe(true);
 
     try {
@@ -258,7 +284,7 @@ function AppContent({ api }: AppProps = {}) {
     } finally {
       setIsRefiningVibe(false);
     }
-  }, [data, isRefiningVibe, isLoadingMore, lastPrompt, prompt, profile.discoveryMode, appendQueue, addToast]);
+  }, [data, isMockMode, isRefiningVibe, isLoadingMore, lastPrompt, prompt, profile.discoveryMode, appendQueue, addToast]);
 
   // Smooth scroll into results when search finishes
   useEffect(() => {
@@ -298,6 +324,8 @@ function AppContent({ api }: AppProps = {}) {
       {/* Sticky Glass Top Bar */}
       <TopBar
         status={status}
+        isMockMode={isMockMode}
+        onToggleMockMode={handleToggleMockMode}
         onOpenPreferences={handleOpenPreferences}
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -378,7 +406,7 @@ function AppContent({ api }: AppProps = {}) {
                     totalTracks={cumulativeTracks.length}
                     activeMood={data.intent.mood}
                     onRefine={handleRefineVibe}
-                    disabled={isLoadingMore || isRefiningVibe}
+                    disabled={data.mode === 'mock' || isMockMode || isLoadingMore || isRefiningVibe}
                   />
 
                   {/* Tracks Grid with Continuous Discovery */}

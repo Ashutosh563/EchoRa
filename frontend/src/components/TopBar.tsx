@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useEffect } from 'react';
 import { Wordmark } from './Wordmark';
-import { SlidersHorizontal, LogOut, LogIn, UserRound, ChevronDown } from 'lucide-react';
+import { SlidersHorizontal, LogOut, LogIn, UserRound, ChevronDown, FlaskConical } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import type { StatusResponse } from '../types';
@@ -11,6 +11,8 @@ interface TopBarProps {
   activeTab?: 'discover' | 'transition';
   onTabChange?: (tab: 'discover' | 'transition') => void;
   onOpenSignIn?: () => void;
+  isMockMode: boolean;
+  onToggleMockMode: () => void;
 }
 
 export const TopBar = memo(function TopBar({
@@ -19,6 +21,8 @@ export const TopBar = memo(function TopBar({
   activeTab = 'discover',
   onTabChange,
   onOpenSignIn,
+  isMockMode,
+  onToggleMockMode,
 }: TopBarProps) {
   const { user, profile, isGuest, signOut } = useAuth();
   const reduceMotion = useReducedMotion();
@@ -183,6 +187,30 @@ export const TopBar = memo(function TopBar({
                           via {profile?.auth_provider || 'OAuth'}
                         </span>}
                       </div>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isMockMode}
+                        onClick={() => {
+                          onToggleMockMode();
+                          setIsMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-text hover:bg-white/[0.1] transition-colors cursor-pointer text-left"
+                      >
+                        <FlaskConical className={`w-4 h-4 ${isMockMode ? 'text-mock-status' : 'text-text-dim'}`} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block font-medium">Use mock data</span>
+                          <span className="block text-[10px] text-text-faint mt-0.5">Only affects searches in this browser</span>
+                        </span>
+                        <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-full border ${
+                          isMockMode
+                            ? 'text-mock-status bg-mock-status/10 border-mock-status/25'
+                            : 'text-text-faint bg-white/[0.04] border-white/[0.08]'
+                        }`}>
+                          {isMockMode ? 'On' : 'Off'}
+                        </span>
+                      </button>
 
                       {onOpenPreferences && (
                         <button
