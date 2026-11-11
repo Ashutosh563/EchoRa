@@ -13,6 +13,7 @@ export type TimeContext = "morning" | "afternoon" | "evening" | "late_night" | "
 
 export interface MusicIntent {
   mood: string;
+  persona?: string | null;
   activity: string | null;
   energy: Energy;
   tempo: Tempo;
@@ -56,9 +57,13 @@ export interface Track {
   albumArtUrl: string | null;
   durationMs: number | null;
   spotifyUrl: string;
+  catalogSource?: 'spotify' | 'youtube_music';
+  catalogUrl?: string;
   previewUrl: string | null;
   releaseYear?: number | null;
   matchReason?: string | null;
+  matchScore?: number | null;
+  aiRecommended?: boolean;
 }
 
 export type AppMode = "mock" | "live";
@@ -74,15 +79,22 @@ export interface SearchResponse {
   intent: MusicIntent;
   queries: SearchQueries;
   tracks: Track[];
+  resultConfidence?: number | null;
+  aiRecommendationsAdded?: number;
   /** Optional human-readable notice, e.g. why the app is in mock mode. */
   notice?: string;
+  hasMore?: boolean;
 }
 
 export interface StatusResponse {
   mode: AppMode;
   interpretMode: AppMode;
   gemini: { configured: boolean; valid: boolean | null };
-  openai: { configured: boolean; valid: boolean | null };
+  openRouter?: { configured: boolean; valid: boolean | null };
+  aiProviders?: {
+    priority: Array<'gemini' | 'openRouter'>;
+    lastUsed: 'gemini' | 'openRouter' | null;
+  };
   spotify: { configured: boolean; valid: boolean | null; authorized: boolean };
   missing: string[];
 }

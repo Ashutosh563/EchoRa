@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.build.json",
     "setup": "tsx scripts/setup.ts",
+    "setup:ytmusic": "node scripts/setupYtMusic.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",

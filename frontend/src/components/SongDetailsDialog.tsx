@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import {
   ExternalLink,
   Music,
+  Music2,
   X,
   Disc3,
   Clock,
@@ -96,7 +97,7 @@ export function SongDetailsDialog({
 
   const handleCopySpotifyLink = async () => {
     try {
-      await navigator.clipboard.writeText(track.spotifyUrl);
+      await navigator.clipboard.writeText(track.catalogUrl || track.spotifyUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -208,7 +209,7 @@ export function SongDetailsDialog({
               <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet/20 border border-violet/30 text-violet-light">
                   <Disc3 className="w-2.5 h-2.5" />
-                  <span>Spotify Catalog</span>
+                  <span>{track.catalogSource === 'youtube_music' ? 'YouTube Music Catalog' : 'Spotify Catalog'}</span>
                 </span>
                 {track.previewUrl && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan/15 border border-cyan/30 text-cyan">
@@ -241,7 +242,7 @@ export function SongDetailsDialog({
               <Sparkles className="w-4 h-4 text-violet shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1">
                 <span className="block text-[10px] font-semibold uppercase tracking-wider text-violet-light">
-                  AI Vibe Match Reason
+                  AI Match Confidence{typeof track.matchScore === 'number' ? ` · ${Math.round(track.matchScore)}%` : ''}
                 </span>
                 <p className="text-xs text-text-dim mt-0.5 leading-relaxed">
                   {track.matchReason}
@@ -387,13 +388,13 @@ export function SongDetailsDialog({
             </button>
 
             <a
-              href={track.spotifyUrl}
+              href={track.catalogUrl || track.spotifyUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-1.5 rounded-lg bg-spotify/20 hover:bg-spotify/30 border border-spotify/40 text-spotify text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-spotify"
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${track.catalogSource === 'youtube_music' ? 'bg-red-500/15 hover:bg-red-500/25 border-red-400/40 text-red-300' : 'bg-spotify/20 hover:bg-spotify/30 border-spotify/40 text-spotify focus-visible:outline focus-visible:outline-2 focus-visible:outline-spotify'}`}
             >
-              <SpotifyIcon className="w-3.5 h-3.5 text-spotify" />
-              <span>Listen on Spotify</span>
+              {track.catalogSource === 'youtube_music' ? <Music2 className="w-3.5 h-3.5" /> : <SpotifyIcon className="w-3.5 h-3.5 text-spotify" />}
+              <span>Listen on {track.catalogSource === 'youtube_music' ? 'YouTube Music' : 'Spotify'}</span>
               <ExternalLink className="w-3 h-3 opacity-80" />
             </a>
           </div>

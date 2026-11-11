@@ -59,6 +59,8 @@ export function mapSpotifyTrack(raw: SpotifyTrackObject | null | undefined): Tra
     albumArtUrl: pickImage(raw.album?.images),
     durationMs: typeof raw.duration_ms === "number" && raw.duration_ms >= 0 ? raw.duration_ms : null,
     spotifyUrl: raw.external_urls?.spotify || `https://open.spotify.com/track/${raw.id}`,
+    catalogSource: "spotify",
+    catalogUrl: raw.external_urls?.spotify || `https://open.spotify.com/track/${raw.id}`,
     previewUrl: raw.preview_url || null,
     releaseYear,
   };

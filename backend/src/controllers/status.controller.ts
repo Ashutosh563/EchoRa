@@ -8,10 +8,11 @@ export function createStatusController(
   config: AppConfig,
   credState: CredentialState,
   spotifyAuth: SpotifyAuth | null,
+  youtubeMusicAvailable = false,
 ) {
   return {
     getStatus(_req: Request, res: Response, _next: NextFunction) {
-      const resolution = resolveAppMode(config, credState, spotifyAuth);
+      const resolution = resolveAppMode(config, credState, spotifyAuth, youtubeMusicAvailable);
       res.json(resolution.status);
     },
   };

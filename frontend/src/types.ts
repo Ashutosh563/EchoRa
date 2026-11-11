@@ -12,6 +12,7 @@ export interface CategorizedPreference<T> {
 
 export interface MusicIntent {
   mood: string;
+  persona?: string | null;
   activity: string | null;
   energy: Energy;
   tempo: Tempo;
@@ -64,9 +65,13 @@ export interface Track {
   albumArtUrl: string | null;
   durationMs: number | null;
   spotifyUrl: string;
+  catalogSource?: 'spotify' | 'youtube_music';
+  catalogUrl?: string;
   previewUrl: string | null;
   releaseYear?: number | null;
   matchReason?: string | null;
+  matchScore?: number | null;
+  aiRecommended?: boolean;
 }
 
 export interface SearchResponse {
@@ -77,7 +82,10 @@ export interface SearchResponse {
     alternatives?: string[];
   };
   tracks: Track[];
+  resultConfidence?: number | null;
+  aiRecommendationsAdded?: number;
   notice?: string;
+  hasMore?: boolean;
 }
 
 export interface StatusResponse {
@@ -87,11 +95,20 @@ export interface StatusResponse {
     configured: boolean;
     valid: boolean | null;
   };
+  openRouter?: {
+    configured: boolean;
+    valid: boolean | null;
+  };
+  aiProviders?: {
+    priority: Array<'gemini' | 'openRouter'>;
+    lastUsed: 'gemini' | 'openRouter' | null;
+  };
   spotify: {
     configured: boolean;
     valid: boolean | null;
     authorized: boolean;
   };
+  youtubeMusic?: { available: boolean };
   missing: string[];
 }
 

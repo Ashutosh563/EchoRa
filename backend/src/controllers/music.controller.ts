@@ -20,7 +20,7 @@ export function createMusicController(
     async interpret(req: Request<unknown, unknown, MusicPromptBody>, res: Response, next: NextFunction) {
       try {
         const { prompt, discoveryMode, preferences, historySignals } = req.body;
-        const resolution = resolveAppMode(config, credState, spotifyAuth);
+        const resolution = resolveAppMode(config, credState, spotifyAuth, Boolean(pipelineOptions.youtubeMusicSearch));
         const discoveryContext: DiscoveryContext = {
           discoveryMode,
           preferences,
@@ -36,12 +36,13 @@ export function createMusicController(
 
     async search(req: Request<unknown, unknown, MusicPromptBody>, res: Response, next: NextFunction) {
       try {
-        const { prompt, discoveryMode, preferences, historySignals } = req.body;
-        const resolution = resolveAppMode(config, credState, spotifyAuth);
+        const { prompt, discoveryMode, preferences, historySignals, browserContext } = req.body;
+        const resolution = resolveAppMode(config, credState, spotifyAuth, Boolean(pipelineOptions.youtubeMusicSearch));
         const discoveryContext: DiscoveryContext = {
           discoveryMode,
           preferences,
           historySignals,
+          browserContext,
           rawPrompt: prompt,
         };
         const result = await pipeline.search(
@@ -68,14 +69,21 @@ export function createMusicController(
           discoveryMode,
           preferences,
           historySignals,
+          browserContext,
         } = req.body;
 
-        const resolution = resolveAppMode(config, credState, spotifyAuth);
+        const resolution = resolveAppMode(config, credState, spotifyAuth, Boolean(pipelineOptions.youtubeMusicSearch));
         const discoveryContext: DiscoveryContext = {
-          discoveryMode,
-          preferences,
-          historySignals,
+          discoveryMode: discoveryMode ?? "FAMILIAR",
+          preferences: preferences ?? {
+            favoriteGenres: [],
+            favoriteArtists: [],
+            dislikedGenres: [],
+            dislikedArtists: [],
+          },
+          historySignals: historySignals ?? [],
           rawPrompt: prompt || "",
+          browserContext,
         };
 
         const result = await pipeline.loadMore({
@@ -98,13 +106,19 @@ export function createMusicController(
 
     async refineVibe(req: Request, res: Response, next: NextFunction) {
       try {
-        const { prompt, intent, refinement, discoveryMode, preferences, historySignals } = req.body;
-        const resolution = resolveAppMode(config, credState, spotifyAuth);
+        const { prompt, intent, refinement, discoveryMode, preferences, historySignals, browserContext } = req.body;
+        const resolution = resolveAppMode(config, credState, spotifyAuth, Boolean(pipelineOptions.youtubeMusicSearch));
         const discoveryContext: DiscoveryContext = {
-          discoveryMode,
-          preferences,
-          historySignals,
+          discoveryMode: discoveryMode ?? "FAMILIAR",
+          preferences: preferences ?? {
+            favoriteGenres: [],
+            favoriteArtists: [],
+            dislikedGenres: [],
+            dislikedArtists: [],
+          },
+          historySignals: historySignals ?? [],
           rawPrompt: prompt || "",
+          browserContext,
         };
 
         const result = await pipeline.refineVibe({

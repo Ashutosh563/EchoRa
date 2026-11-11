@@ -1,356 +1,335 @@
-# ECHORA (Phase 1)
+# ECHORA
 
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-6.x-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-8E75B2?logo=google-gemini&logoColor=white)](https://aistudio.google.com/)
-[![Spotify Web API](https://img.shields.io/badge/Spotify-Web_API-1DB954?logo=spotify&logoColor=white)](https://developer.spotify.com/)
+<div align="center">
 
-ECHORA enables natural-language music discovery: users describe their vibe, setting, or state of mind (e.g. *"Recommend peaceful instrumental music for studying at 3 AM"*), and the system extracts structured listening intent via **Google Gemini** and retrieves matching tracks via the **Spotify Web API**.
+<img src="./assets/echora-banner.svg" alt="ECHORA Banner" width="620" />
+<br/><br/>
 
----
+**AI-Native Mood & Psychophysiological Music Intelligence Engine**
 
-## Table of Contents
+[![React](https://img.shields.io/badge/React-19.x-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-6.x-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-8E75B2?style=for-the-badge&logo=google-gemini&logoColor=white)](https://aistudio.google.com/)
+[![Spotify Web API](https://img.shields.io/badge/Spotify-Web_API-1DB954?style=for-the-badge&logo=spotify&logoColor=white)](https://developer.spotify.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth_&_OAuth-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 
-- [Core Capabilities](#core-capabilities)
-- [System Architecture (Layered)](#system-architecture-layered)
-- [Workflow Architecture](#workflow-architecture)
-  - [Module 1: Discovery & Mood Search](#module-1-discovery--mood-search)
-  - [Module 2: Mood Transition Journey](#module-2-mood-transition-journey)
-- [Compliance & Privacy by Design](#compliance--privacy-by-design)
-- [Repository Structure](#repository-structure)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running in Mock Mode (Zero Config)](#running-in-mock-mode-zero-config)
-  - [Configuring Live Mode (Gemini + Spotify)](#configuring-live-mode-gemini--spotify)
-- [Testing](#testing)
+</div>
 
 ---
 
-## Core Capabilities
+## 📖 Overview
 
-- **Multimodal Expression:** Input moods via natural language prompts (*"rainy Tuesday night studying in a quiet coffee shop"*), voice transcription, or camera mood capture.
-- **Cognitive Intent Extraction:** Powered by Google Gemini 2.5 Flash NLU to extract valence, energy, tempo, target genres, acoustic qualities, and succinct 10-word explanations.
-- **Adaptive Discovery Modes:**
-  - `Familiar`: Biases queries toward user favorites and known genres.
-  - `Balanced`: Combines favored styles with fresh recommendations.
-  - `Explore`: Explores adjacent niches, filtering out repetitive tracks and disliked genres.
-- **Mood Transition Journey Planner:** Builds a 4-stage emotional bridge between disparate psychological states (e.g., *Stressed* → *Grounded* → *Calm* → *Energized*), generating tailored soundtrack stages with cross-stage deduplication.
-- **Dynamic Aurora UI:** Responsive interface built with React 19, TypeScript, and Tailwind CSS with real-time audio playback previews and contextual mood themes.
+**ECHORA** is an intelligent, mood-aware music discovery ecosystem that bridges nuanced human emotion with global music catalogs. Users express how they feel through open-ended natural language (*"quiet rainy midnight in a neon Tokyo café"*), voice dictation, or facial expressions. Spotify is the primary catalog; YouTube Music is used as a search fallback when Spotify is unavailable or returns too few candidates.
+
+ECHORA processes the psychological nuance through **Google Gemini 2.5 Flash**, builds deep sonic profiles (cadence, timbre, harmonic modes, and anti-sonic exclusions), resolves tracks through the **Spotify Web API**, and streams full-length audio in-app with zero subscription requirements.
 
 ---
 
-## System Architecture (Layered)
+## 🚀 Core Features
 
-The platform is designed in four distinct layers ensuring clear separation of concerns, high maintainability, and strict adherence to API policies.
+- **Multimodal Emotional Input:** Express vibe via natural language text, live browser speech-to-text (Web Speech API), or opt-in facial emotion recognition (MediaStream + Canvas).
+- **Deep Sonic Profiling & NLU:** Gemini analyzes psychological nuance to deduce tempo (BPM cadence), timbre textures (e.g. *warm tape saturation*, *cold post-punk reverb*), harmonic mode (*minor*, *major*, *modal*), and **Anti-Sonic Aura** (strict banning of disruptive instruments like phonk cowbells or aggressive trap 808s).
+- **Multi-Query Semantic Retrieval:** Generates 5 specialized query facets per intent (`moodQuery`, `genreQuery`, `contextQuery`, `masterQuery`, `curatorQuery`) with cultural anchoring (e.g. Bollywood/Hindi, Spanish, Russian, Japanese) and vintage slang translation.
+- **Intent-to-Track Scoring:** Gemini scores ranked songs against the original prompt. If the first set scores poorly, ECHORA requests up to two better search queries and reruns retrieval once while preserving explicit artist, title, language, and exclusion constraints.
+- **Native In-App Audio Playback:** Full-featured bottom player bar (`BottomPlayerBar`) with real-time scrubbing, buffering feedback, loop modes, and continuous track auto-advancement.
+- **Continuous Discovery Engine:** Infinite exploration via `/api/music/load-more` with dynamic track deduplication, artist frequency re-balancing, and interactive `<VibeRefinementBar />` controls.
+- **4-Stage Mood Transition Planner:** Synthesizes psychophysiological bridges between disparate emotional states (e.g., *Anxious* → *Grounded* → *Calm* → *Energized*), producing 20 curated tracks with seamless cross-stage queue progression.
+- **GPU-Composited 60fps Liquid Glass UI:** Built with React 19, Framer Motion, and Tailwind CSS. Employs `requestAnimationFrame` + CSS custom variable card tilt (`--rx`, `--ry`) with zero React state re-renders during pointer interactions.
+- **Identity & Personalization:** Supabase OAuth (Google & Spotify) + instantaneous Guest Mode, persistent favorites, and customizable discovery modes (`Familiar`, `Balanced`, `Explore`).
+
+---
+
+## 🏛️ System Architecture
+
+ECHORA is engineered as a clean 4-tier decoupled pipeline separating client-side presentation, cloud orchestration, intelligence synthesis, and persistent identity.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'lineColor':'#c4c4c4','primaryTextColor':'#f2f2f2','edgeLabelBackground':'#4a4a4a','fontSize':'13px'}}}%%
 flowchart TD
- subgraph LAYER1["1. Client Presentation Layer (Vite + React 19 + TypeScript + Tailwind CSS)"]
-  P1["Manual Mood Selector<br/>(Priority Input)<br/>(/mood)"]
-  P2["Text and Context Input<br/>(/describe)"]
-  P3["Facial Mood Capture<br/>(Opt-in)<br/>(/camera)"]
-  P4["Voice Mood Capture<br/>(/voice)"]
-  P5["Transition Playlist Builder<br/>(/transition)"]
-  P6["Discovery Mode Switcher<br/>(/discover)"]
-  P7["Mood Library Browser<br/>(Song, Artist, Mood)<br/>(/library)"]
-  P8["Artist Mood Profile<br/>(/artists/:id)"]
-  P9["Listening History and Feedback<br/>(/history)"]
-  P10["Sleep Wind-Down Mode<br/>(/sleep)"]
-  P1 ~~~ P5
-  P2 ~~~ P6
-  P3 ~~~ P7
-  P4 ~~~ P8
-  P5 ~~~ P9
-  P6 ~~~ P10
- end
- subgraph LAYER2["2. Subsystem API Integrations (Cloud Services and Browser APIs)"]
-  Q1["Google Gemini API<br/>(Semantic Context, Text Emotion and 10-Word Reasons)"]
-  Q2["Spotify Web API<br/>(Song and Artist Catalogue and Search)"]
-  Q3["Web Speech API<br/>(Voice Input to Text Transcript)"]
-  Q4["Media Capture and Streams API<br/>(Camera and Microphone Access)"]
-  Q5["HTML5 Canvas API<br/>(Camera Frame Capture for Face Analysis)"]
-  Q6["HTML5 Audio API<br/>(Audio Playback and Voice Tone Analysis)"]
-  Q7["Web Storage API<br/>(Mood Preferences and Listening History Cache)"]
-  Q8["REST APIs<br/>(Client-to-Backend Calls for Mood Fusion and Recommender)"]
-  Q1 ~~~ Q5
-  Q2 ~~~ Q6
-  Q3 ~~~ Q7
-  Q4 ~~~ Q8
- end
- subgraph LAYER3["3. Mood Analysis and Recommendation Engines"]
-  R1["Intent Understanding and NLU Engine<br/>(Parses Ambiguous Natural Language Input)"]
-  R2["Music Recommendation and Query Generation Engine<br/>(Bridges AI Intent with Spotify's Search Catalog)"]
-  R3["Discovery Modes and Preference Engine<br/>(Adjusts Recommendations by User History and Active Mode)"]
-  R4["Multimodal Vision and Camera Mood Engine<br/>(Evaluates Real-Time Webcam Snapshots)"]
-  R5["Mood Transition and Emotional Trajectory Engine<br/>(Builds an Emotional Bridge Between Psychological States)"]
-  R6["Spotify Integration and Auth Engine<br/>(Manages Communication with Spotify)"]
-  R1 ~~~ R4
-  R2 ~~~ R5
-  R3 ~~~ R6
- end
- subgraph LAYER4["4. Data Persistence (Browser-Native Storage)"]
-  S1["Browser Local Storage<br/>(Web Storage API, Browser-Native Key-Value Store)"]
-  S2["User Preferences and Active Discovery Mode<br/>(Familiar / Balanced / Explore)"]
-  S3["Interaction History<br/>(Up to 50 Recent Searches)"]
- end
- LAYER1 --> LAYER2
- LAYER2 --> LAYER3
- LAYER3 --> LAYER4
- classDef n fill:#1f1f1f,stroke:#9a9a9a,color:#f2f2f2,stroke-width:1px
- classDef proto fill:#1f1f1f,stroke:#9a9a9a,color:#f2f2f2,stroke-width:1px,stroke-dasharray:5 5
- class P1,P2,P5,P6,P7,P8,P9,Q1,Q2,Q6,Q7,Q8,R1,R2,R3,R5,R6,S1,S2,S3 n
- class P3,P4,P10,Q3,Q4,Q5,R4 proto
- style LAYER1 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style LAYER2 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style LAYER3 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style LAYER4 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- linkStyle default stroke:#c4c4c4,stroke-width:1.3px
+  subgraph TIER1["1. Client Presentation Layer (React 19 + Vite + Tailwind CSS)"]
+    UI_COMP["Composer & Multimodal Input<br/>(Text, Voice STT, Camera Mood)"]
+    UI_GRID["Track Grid & Liquid Glass Cards<br/>(Zero-Rerender GPU Tilt: --rx, --ry)"]
+    UI_PLAYER["Native Audio Player Bar<br/>(Persistent Queue, Loop & Scrubbing)"]
+    UI_VIBE["Vibe Refinement Controls<br/>(Interactive Mood Shift on Page 1)"]
+    UI_TRANS["Mood Transition Journey View<br/>(4 Layered Progressive Stages)"]
+    UI_AUTH["Auth Landing & Profile Menu<br/>(Supabase OAuth + Guest Mode)"]
+  end
+
+  subgraph TIER2["2. Express Backend API Gateway (Node.js + TypeScript)"]
+    API_ROUTER["API Router & Middleware<br/>(Rate Limiting, Error Boundary, CORS)"]
+    EP_SEARCH["POST /api/music/search<br/>(Initial Intent & Fusion)"]
+    EP_MORE["POST /api/music/load-more<br/>(Continuous Discovery)"]
+    EP_REFINE["POST /api/music/refine-vibe<br/>(Dynamic Vibe Shift)"]
+    EP_STREAM["GET /api/music/stream-url<br/>(Audio Stream Resolver)"]
+    EP_TRANS["POST /api/transition/*<br/>(Plan & Generate Music)"]
+  end
+
+  subgraph TIER3["3. Cognitive Intelligence & Audio Engines"]
+    GEMINI_NLU["Gemini 2.5 Flash Engine<br/>(Sonic Profile, Anti-Sonic Aura, 5 Query Facets)"]
+    FUSION_ENGINE["Fusion & Candidate Deduplication<br/>(Multi-Query Synthesis & Artist Capping)"]
+    TRANS_PLANNER["Emotional Trajectory Engine<br/>(4-Stage Psychological Bridge)"]
+    YT_RESOLVER["YouTube Stream Resolver & Cache<br/>(Search HTML Scraper + ytdl Audio Extraction)"]
+    SPOTIFY_SVC["Spotify Web API Integration<br/>(Catalog Search & Metadata Mapping)"]
+  end
+
+  subgraph TIER4["4. Identity & External Services"]
+    EXT_GEMINI["Google Gemini Cloud API"]
+    EXT_SPOTIFY["Spotify Web API"]
+    EXT_SUPABASE["Supabase Auth (OAuth 2.0 PKCE)"]
+    EXT_CDN["Google Video CDN (Audio Stream)"]
+  end
+
+  UI_COMP --> EP_SEARCH
+  UI_GRID --> EP_MORE
+  UI_VIBE --> EP_REFINE
+  UI_PLAYER --> EP_STREAM
+  UI_TRANS --> EP_TRANS
+  UI_AUTH --> EXT_SUPABASE
+
+  API_ROUTER --> GEMINI_NLU
+  API_ROUTER --> FUSION_ENGINE
+  API_ROUTER --> TRANS_PLANNER
+  API_ROUTER --> YT_RESOLVER
+  API_ROUTER --> SPOTIFY_SVC
+
+  GEMINI_NLU --> EXT_GEMINI
+  SPOTIFY_SVC --> EXT_SPOTIFY
+  YT_RESOLVER --> EXT_CDN
 ```
-
-### Layer Breakdown
-
-1. **Client Presentation Layer:** Interactive views providing manual mood selectors, text input, camera/voice captures, mood library browsing, history, and transition builders.
-2. **Subsystem API Integrations:** Handles cloud connections (Gemini NLU, Spotify Web API) and native browser APIs (Web Speech, Canvas, HTML5 Audio, Web Storage).
-3. **Mood Analysis & Recommendation Engines:**
-   - **NLU Engine:** Parses ambiguous natural language queries into structured musical parameters.
-   - **Query Generation Engine:** Bridges emotional attributes into Spotify-compatible search parameters.
-   - **Preference & Discovery Engine:** Weights queries against user preferences and active modes.
-   - **Emotional Trajectory Engine:** Synthesizes psychophysiological transition states.
-   - **Spotify Integration Engine:** Handles OAuth 2.0 PKCE / token exchanges and API queries.
-4. **Data Persistence:** Browser-native local storage retaining preferences, recent history (up to 50 queries), and favorite/disliked tags without external tracking.
 
 ---
 
-## Workflow Architecture
+## 🔄 End-to-End Workflows
 
-EchoRa operates via staged pipelines featuring deterministic decision gates.
-
-### Module 1: Discovery & Mood Search
-
-Transforms open-ended user input and mode preferences into an optimized Spotify catalog search:
+### 1. Intent Extraction & Continuous Discovery Flow
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'lineColor':'#c4c4c4','primaryTextColor':'#f2f2f2','edgeLabelBackground':'#4a4a4a','fontSize':'13px'}}}%%
-flowchart TD
- subgraph SA1["Stage 1: Client Input and Local Preferences"]
-  A1["User Input<br/>(Text Prompt / Voice Dictation / Camera Capture)"]
-  A2["Discovery Mode Selection<br/>(Familiar / Balanced / Explore)"]
-  A3["Local Preferences Read<br/>(localStorage: Favorite and Disliked Genres, Artists)"]
-  A2 --> A3
- end
- subgraph SA2["Stage 2: Request to Express Backend"]
-  B1["HTTP POST /api/music/search<br/>(prompt + discoveryMode + preferences)"]
- end
- subgraph SA3["Stage 3: Intent Extraction and Discovery Processing"]
-  C1["Gemini 2.5 Flash NLU<br/>(Extracts Mood, Valence, Energy, Tempo, Keywords)"]
-  C2{"Active Discovery Mode?"}
-  C3["Favor Favorites"]
-  C4["Blend Favorites with New Styles"]
-  C5["Steer Away from Repeated Listening, Explore Adjacent Genres, Filter Disliked Styles"]
-  C6["Discovery Processor Output<br/>(Mode-Weighted Intent)"]
- end
- subgraph SA4["Stage 4: Spotify Search"]
-  D1["Exactly 1 Optimized Search Query<br/>(e.g., q: synthwave outrun -metal)"]
-  D2["Spotify Search API Returns Track Results"]
- end
- subgraph SA5["Stage 5: Response and UI Presentation"]
-  E1["200 OK<br/>(intent, tracks, appliedMode)"]
-  E2["UI Presentation<br/>(Tracks Grid, Mood Intent Panel, Dynamic Aurora Theme)"]
- end
- A1 --> B1
- A3 --> B1
- B1 --> C1
- C1 --> C2
- C2 -->|Familiar| C3
- C2 -->|Balanced| C4
- C2 -->|Explore| C5
- C3 --> C6
- C4 --> C6
- C5 --> C6
- C6 --> D1
- D1 --> D2
- D2 --> E1
- E1 --> E2
- classDef n fill:#1f1f1f,stroke:#9a9a9a,color:#f2f2f2,stroke-width:1px
- class A1,A2,A3,B1,C1,C2,C3,C4,C5,C6,D1,D2,E1,E2 n
- style SA1 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style SA2 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style SA3 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style SA4 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style SA5 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- linkStyle default stroke:#c4c4c4,stroke-width:1.3px
-```
+flowchart LR
+  subgraph INPUT["User Prompt"]
+    P1["Natural Language<br/>'nostalgic 90s bollywood rain'"]
+    P2["Discovery Mode<br/>(Familiar / Balanced / Explore)"]
+  end
 
-- **Stage 1 (Client Input):** Capture prompt + active mode (`Familiar`, `Balanced`, `Explore`) + stored preferences.
-- **Stage 2 (Backend Request):** `POST /api/music/search` sends payload to the Express server.
-- **Stage 3 (Intent & Discovery Processing):** Gemini 2.5 Flash extracts musical intent parameters. The discovery processor shapes the query based on the active mode.
-- **Stage 4 (Spotify Search):** Exactly 1 optimized query string is executed against the Spotify Search API.
-- **Stage 5 (Response & Presentation):** Server delivers intent explanation and matching track metadata; the client updates the UI and aurora theme.
+  subgraph GEMINI["Gemini 2.5 Flash NLU"]
+    G1["Sonic Profiling<br/>Harmonic: Minor<br/>Instruments: Bansuri, Piano<br/>Anti-Sonic: No Phonk, No 808s"]
+    G2["5-Facet Query Generation<br/>moodQuery, genreQuery,<br/>contextQuery, masterQuery,<br/>curatorQuery"]
+  end
+
+  subgraph SPOTIFY["Catalog Recall & Fusion"]
+    S1["Multi-Query Execution<br/>(Spotify Web API Search)"]
+    S2["Reranking & Artist Balance<br/>(Max 2 tracks per primary artist)"]
+  end
+
+  subgraph CLIENT["Client Rendering"]
+    C1["Aurora Color Grading<br/>(CSS Theme retinting)"]
+    C2["Track Grid Rendering<br/>(Ready for In-App Playback)"]
+  end
+
+  P1 & P2 --> G1 --> G2 --> S1 --> S2 --> C1 & C2
+```
 
 ---
 
-### Module 2: Mood Transition Journey
-
-Creates an emotional progression that guides the user from an initial psychological state to a desired target mood:
+### 2. Native Audio Playback & Streaming Architecture
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'lineColor':'#c4c4c4','primaryTextColor':'#f2f2f2','edgeLabelBackground':'#4a4a4a','fontSize':'13px'}}}%%
-flowchart TD
- subgraph SB1["Stage 1: Journey Setup (Client)"]
-  T1["Select Start and Destination Moods<br/>(e.g., Anxious to Focused)"]
-  T2["Client Validation<br/>(Both Required, Must Not Be Identical)"]
-  T1 --> T2
- end
- subgraph SB2["Stage 2: Journey Planning and Review"]
-  P1["HTTP POST /api/transition/plan<br/>(startingMood, destinationMood)"]
-  P2["Gemini Transition Planner<br/>(Synthesizes 4-Stage Psychological Bridge)"]
-  P3["Interactive Journey Review Card<br/>(Edit Intermediate Mood Names Inline)"]
-  P4{"User Decision"}
-  P1 --> P2
-  P2 --> P3
-  P3 --> P4
-  P4 -->|Optional Edit / Regenerate| P1
- end
- subgraph SB3["Stage 3: Playlist Generation"]
-  G1["User Clicks Generate Transition Playlist<br/>(Explicit Approval Gate)"]
-  G2["HTTP POST /api/transition/generate-music<br/>(starting, destination, 4 stages)"]
-  G3["Gemini Stage Intent Generator<br/>(4 Distinct Stage Queries in 1 LLM Call)"]
-  G4["Spotify Assembler<br/>(Exactly 4 Searches, 1 per Stage: GET /v1/search?q=stage_query)"]
-  G5["Cross-Stage Deduplication<br/>(Max 5 Tracks per Stage, Max 20 Total)"]
-  G1 --> G2
-  G2 --> G3
-  G3 --> G4
-  G4 --> G5
- end
- subgraph SB4["Stage 4: Playlist Presentation and Playback"]
-  H1["200 OK: Layered Playlist<br/>(4 Stage Sections with Track Cards)"]
- end
- T2 --> P1
- P4 -->|Approve| G1
- G5 --> H1
- classDef n fill:#1f1f1f,stroke:#9a9a9a,color:#f2f2f2,stroke-width:1px
- class T1,T2,P1,P2,P3,P4,G1,G2,G3,G4,G5,H1 n
- style SB1 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style SB2 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style SB3 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- style SB4 fill:#4a4a4a,stroke:#9a9a9a,color:#ffffff
- linkStyle default stroke:#c4c4c4,stroke-width:1.3px
+sequenceDiagram
+  autonumber
+  actor User
+  participant UI as TrackCard / PlayerBar
+  participant Backend as Express API (/api/music/stream-url)
+  participant Cache as Memory Cache (Map, 3h TTL)
+  participant YT as YouTube Engine (ytdl-core)
+  participant Audio as HTML5 Audio Element
+
+  User->>UI: Clicks "Play Here" on Track
+  UI->>Backend: GET /api/music/stream-url?trackName=...&artist=...
+  
+  alt Video ID & Stream URL Cached
+    Backend->>Cache: Check videoId in memory
+    Cache-->>Backend: Return cached audio URL
+  else Fresh Extraction
+    Backend->>YT: Search & resolve candidate videoId
+    Backend->>YT: Extract highest-quality audio format URL
+    Backend->>Cache: Save URL (TTL: 3 hours)
+  end
+
+  Backend-->>UI: 200 OK { audioUrl: "https://...googlevideo.com/..." }
+  UI->>Audio: audio.src = audioUrl; audio.play()
+  Audio-->>User: Seamless full-length music playback
 ```
 
-- **Stage 1 (Journey Setup):** Select and validate starting and destination moods.
-- **Stage 2 (Planning & Review):** Gemini synthesizes a 4-step psychological progression. The user can review, customize stage names, or regenerate.
-- **Stage 3 (Playlist Generation):** Upon approval, Gemini generates 4 distinct stage queries in a single call. The Spotify assembler executes searches with cross-stage deduplication (up to 5 tracks per stage, max 20 total).
-- **Stage 4 (Playback & Presentation):** Renders a multi-stage sequential track progression with audio previews.
+---
+
+### 3. 4-Stage Mood Transition Journey
+
+```mermaid
+flowchart TD
+  START["Select Starting Mood<br/>(e.g., Anxious)"] --> DEST["Select Destination Mood<br/>(e.g., Energized)"]
+  DEST --> PLAN["POST /api/transition/plan<br/>Gemini synthesizes 4 emotional stages"]
+  
+  subgraph STAGES["4-Stage Psychological Progression"]
+    S1["Stage 1: Grounding & Acceptance<br/>(Slow cadence, warm analog texture)"]
+    S2["Stage 2: Gentle Shift<br/>(Moderate tempo, melodic acoustic bridge)"]
+    S3["Stage 3: Energy Elevation<br/>(Uplifting harmony, rhythmic groove)"]
+    S4["Stage 4: Target Vibe Achievement<br/>(Driving cadence, full musical richness)"]
+    S1 --> S2 --> S3 --> S4
+  end
+
+  PLAN --> STAGES
+  STAGES --> ASSEMBLE["POST /api/transition/generate-music<br/>Spotify Assembler + Stage Intent Generator"]
+  ASSEMBLE --> QUEUE["Continuous 20-Song Ordered Queue<br/>(In-App Sequential Playback without Loop)"]
+```
 
 ---
 
-## Compliance & Privacy by Design
+## ⚡ UI Performance Architecture
 
-- **Strict One-Way Pipeline:** Gemini interprets *only* user natural-language queries. No Spotify track content, artist catalog data, or user listening histories are ever fed into or stored by AI models.
-- **No Scraping or AI Profiling:** Spotify content is queried in real time purely for immediate playback previews, track metadata, and direct attribution links.
-- **Client-Side Privacy:** Camera frame capture and voice transcription run locally using browser-native APIs without transmitting raw biometric video or voice feeds to external servers.
+ECHORA places extreme emphasis on high-frame-rate interaction and layout stability:
+
+1. **Zero-Rerender 3D Liquid Tilt:**
+   * Instead of storing 3D tilt coordinates in React component state (`useState`), `TrackCard` calculates cursor offset on `requestAnimationFrame` and writes directly to CSS variables (`--rx`, `--ry`).
+   * Results in smooth **60fps hardware-accelerated animations** without invalidating virtual DOM nodes.
+2. **Component Isolation with `React.memo` & `useCallback`:**
+   * Heavy components (`TopBar`, `TrackCard`, `TrackGrid`, `LayeredPlaylistView`) are wrapped in `React.memo`.
+   * Event handlers are bound with `useCallback` to ensure that keystrokes in the composer do not cause render cascades across the 25+ rendered cards.
+3. **Web Vitals Telemetry:**
+   * Built-in `initPerfMetrics()` initializes non-intrusive `PerformanceObserver` instances tracking **First Contentful Paint (FCP)**, **Cumulative Layout Shift (CLS)**, and **Long Tasks**.
 
 ---
 
-## Repository Structure
+## 📁 Repository Structure
 
 ```text
 EchoRa/
-├── package.json               # Root workspace configuration
-├── frontend/                  # React 19 + TypeScript + Vite + Tailwind CSS
+├── backend/                       # Node.js + Express API Backend
 │   ├── src/
-│   │   ├── api/               # API clients & Mock providers
-│   │   ├── components/        # UI components (SearchBar, IntentDisplay, TrackCard, Aurora...)
-│   │   └── App.tsx            # Root application layout & state
-│   └── tests/                 # Frontend component and integration tests
-├── backend/                   # Node.js + Express + TypeScript
-│   ├── scripts/setup.ts       # Interactive setup wizard for API credentials
-│   ├── src/
+│   │   ├── controllers/           # HTTP route handlers (Music, Transition, Camera)
+│   │   ├── routes/                # Express endpoint definitions
 │   │   ├── services/
-│   │   │   ├── gemini/        # Gemini intent extraction & transition planner
-│   │   │   ├── spotify/       # Spotify OAuth 2.0 & catalog search
-│   │   │   └── music/         # Query generation & mode filtering pipeline
-│   │   ├── routes/            # REST API endpoints
-│   │   ├── controllers/       # Controller handlers
-│   │   └── app.ts             # Express application initialization
-│   └── tests/
-│       ├── unit/              # Backend service unit tests
-│       └── integration/       # Supertest route tests
-└── README.md                  # Project documentation & architecture
+│   │   │   ├── gemini/            # Intent extraction, sonic profiles & system instructions
+│   │   │   ├── music/             # Multi-query fusion, audio streaming & YouTube resolvers
+│   │   │   ├── spotify/           # Spotify Web API client & OAuth helpers
+│   │   │   └── transition/        # Stage trajectory generator & playlist assembler
+│   │   ├── types/                 # Shared TypeScript interfaces & schemas
+│   │   └── server.ts              # Express server entry point
+│   └── tests/                     # 20 test suites (Unit & Supertest Integration)
+│
+├── frontend/                      # React 19 + TypeScript + Vite Client
+│   ├── src/
+│   │   ├── api/                   # API clients & network error boundaries
+│   │   ├── components/            # UI components (Composer, Hero, TrackCard, BottomPlayerBar...)
+│   │   │   ├── auth/              # Supabase Auth Landing & OAuth Dialogs
+│   │   │   └── transition/        # Mood Transition interactive visualizer
+│   │   ├── context/               # React Contexts (AudioPlayerContext, AuthContext)
+│   │   ├── hooks/                 # Custom hooks (useSearch, useMoodTheme, useSpeechRecognition)
+│   │   ├── lib/                   # Supabase client, formatting helpers, and themes
+│   │   └── App.tsx                # Main application orchestrator & layout
+│   └── tests/                     # 12 test suites (Vitest + Testing Library)
+│
+├── package.json                   # Monorepo workspaces definition
+└── README.md                      # Architecture documentation
 ```
 
 ---
 
-## Getting Started
+## 🛠️ Getting Started
 
 ### Prerequisites
 
 - **Node.js** `>= 20.0.0`
 - **npm** `>= 9.0.0`
-- *(Optional for Live Mode)* **Google Gemini API Key** and a **Spotify Developer Account**.
 
 ### Installation
 
-Clone the repository and install dependencies across the monorepo:
+Clone the repository and install all dependencies:
 
 ```bash
-git clone https://github.com/your-username/EchoRa.git
+git clone https://github.com/Echo-Ra/EchoRa.git
 cd EchoRa
 npm install
 ```
 
-### Running in Mock Mode (Zero Config)
+---
 
-EchoRa provides a full **Mock Mode** with realistic canned intent extraction and tracks, requiring **no API keys** to run:
+### Running in Zero-Config Mock Mode
+
+EchoRa includes a comprehensive mock mode with realistic intent extraction, pre-packaged acoustic profiles, and audio previews requiring **no external credentials**:
 
 ```bash
 npm run dev
 ```
 
-Navigate to `http://127.0.0.1:5173`. The status bar will show `Mock Mode`.
-
-### Configuring Live Mode (Gemini + Spotify)
-
-1. Obtain a **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. Create an application in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard):
-   - Set Redirect URI to: `http://127.0.0.1:4000/api/spotify/callback`
-3. Launch the interactive credential setup wizard:
-   ```bash
-   npm run setup
-   ```
-4. Start the application:
-   ```bash
-   npm run dev
-   ```
-5. Click **Connect Spotify** in the UI to complete the OAuth 2.0 handshake. The status bar will switch to **Live Mode**.
+* **Frontend:** [http://127.0.0.1:5173/](http://127.0.0.1:5173/)
+* **Backend:** [http://127.0.0.1:4000/](http://127.0.0.1:4000/)
 
 ---
 
-## Testing
+### Configuring Live Mode (Production)
 
-Run unit, integration, and type checks across all workspaces:
+Create a `.env` file in both `backend/` and `frontend/` folders:
+
+The YouTube Music fallback uses the community, unofficial `ytmusicapi` Python package. It searches without a user login, but YouTube Music changes can break the client. Install it once with Python 3.10 or newer:
 
 ```bash
-# Run all test suites
-npm test
+npm run setup:ytmusic
+```
 
-# Run backend tests only
-npm run test:backend
+Catalog search is unauthenticated; ECHORA's existing YouTube stream resolver continues to handle in-app playback.
 
-# Run frontend tests only
-npm run test:frontend
+#### `backend/.env`
+```ini
+PORT=4000
+NODE_ENV=development
 
-# Run TypeScript typechecks
-npm run typecheck
+# Google Gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Spotify Web API
+SPOTIFY_CLIENT_ID=your_spotify_client_id_here
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:4000/api/spotify/callback
+```
+
+#### `frontend/.env`
+```ini
+# Supabase OAuth
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+```
+
+Launch the development servers:
+```bash
+npm run dev
 ```
 
 ---
 
-## License
+## 🧪 Testing & Verification
 
-This project is open-source under the [MIT License](LICENSE).
+Run the comprehensive test suite across the monorepo:
+
+```bash
+# Run all backend and frontend tests
+npm test
+
+# Run backend unit and integration tests (20 files, 111 tests)
+npm run test:backend
+
+# Run frontend UI and context tests (12 files, 60 tests)
+npm run test:frontend
+
+# Run strict TypeScript typechecking
+npm run typecheck
+
+# Production build verification
+npm run build
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

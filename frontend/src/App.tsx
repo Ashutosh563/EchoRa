@@ -21,12 +21,14 @@ import { useSearch } from './hooks/useSearch';
 import { useMoodTheme } from './hooks/useMoodTheme';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import { loadMoreMusic, refineVibeMusic } from './api/client';
+import { createMockClient } from './api/mockClient';
 import {
   getStoredProfile,
   setDiscoveryMode,
   subscribeToProfile,
 } from './services/preferenceStorage';
 import { initPerfMetrics } from './utils/perfMetrics';
+import { collectBrowserContext } from './utils/browserContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthLandingView } from './components/auth/AuthLandingView';
 import { Wordmark } from './components/Wordmark';
@@ -44,12 +46,21 @@ function AppContent({ api }: AppProps = {}) {
   const reduceMotion = useReducedMotion();
   const { user, isGuest, isLoading: isAuthLoading } = useAuth();
   const [forceShowAuth, setForceShowAuth] = useState(false);
-  const { status } = useStatus();
-  const { status: searchStatus, data, error, lastPrompt, search } = useSearch(
-    api ? { searchFn: (p, s) => api.search(p, s) } : undefined
+  const { status, refetch: refreshStatus } = useStatus();
+  const [isMockMode, setIsMockMode] = useState(false);
+  const mockClient = useMemo(() => createMockClient(), []);
+  const searchOptions = useMemo(
+    () =>
+      isMockMode
+        ? { searchFn: (p: string, s?: AbortSignal) => mockClient.search(p, undefined, s) }
+        : api
+        ? { searchFn: (p: string, s?: AbortSignal) => api.search(p, s) }
+        : undefined,
+    [api, isMockMode, mockClient]
   );
+  const { status: searchStatus, data, error, lastPrompt, search, reset: resetSearch } = useSearch(searchOptions);
   const [profile, setProfile] = useState<StoredProfile>(getStoredProfile);
-  const { closePlayer, appendQueue } = useAudioPlayer();
+  const { appendQueue } = useAudioPlayer();
   const [prompt, setPrompt] = useState('');
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -70,9 +81,13 @@ function AppContent({ api }: AppProps = {}) {
     if (data?.tracks) {
       setCumulativeTracks(data.tracks);
       setCurrentPage(1);
-      setHasMorePages(true);
+      setHasMorePages(data.hasMore !== undefined ? data.hasMore : data.mode !== 'mock' && data.tracks.length >= 10);
     }
   }, [data]);
+
+  useEffect(() => {
+    if (data) void refreshStatus();
+  }, [data, refreshStatus]);
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -85,13 +100,6 @@ function AppContent({ api }: AppProps = {}) {
   useEffect(() => {
     return subscribeToProfile((updated) => setProfile(updated));
   }, []);
-
-  // Stop native player if user navigates to Mood Transition tab
-  useEffect(() => {
-    if (activeTab === 'transition') {
-      closePlayer();
-    }
-  }, [activeTab, closePlayer]);
 
   // Aurora mood theme retints smoothly based on intent
   const theme = useMoodTheme(data?.intent, activeTab === 'transition' ? transitionMood : undefined);
@@ -119,6 +127,21 @@ function AppContent({ api }: AppProps = {}) {
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const handleToggleMockMode = useCallback(() => {
+    const nextMode = !isMockMode;
+    setIsMockMode(nextMode);
+    resetSearch();
+    setCumulativeTracks([]);
+    setCurrentPage(1);
+    setHasMorePages(false);
+    addToast(
+      nextMode
+        ? 'Mock sample data enabled for searches in this browser.'
+        : 'Using the server-selected search mode.',
+      'info'
+    );
+  }, [isMockMode, resetSearch, addToast]);
 
   // Voice speech-to-text integration
   const speech = useSpeechRecognition({
@@ -171,6 +194,17 @@ function AppContent({ api }: AppProps = {}) {
     setIsCameraOpen(true);
   }, []);
 
+  const handleBrandClick = useCallback(() => {
+    resetSearch();
+    setPrompt('');
+    setRecentSearches([]);
+    setCumulativeTracks([]);
+    setCurrentPage(1);
+    setHasMorePages(false);
+    setActiveTab('discover');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [resetSearch]);
+
   const handleCopyNotice = useCallback(() => {
     addToast('Search query copied to clipboard!', 'success');
   }, [addToast]);
@@ -202,6 +236,7 @@ function AppContent({ api }: AppProps = {}) {
         excludeTrackIds: cumulativeTracks.map((t) => t.id),
         cumulativeArtistCounts: counts,
         discoveryMode: profile.discoveryMode,
+        browserContext: collectBrowserContext(),
       });
 
       if (res && res.tracks && res.tracks.length > 0) {
@@ -209,16 +244,18 @@ function AppContent({ api }: AppProps = {}) {
         setCumulativeTracks((prev) => {
           const existingIds = new Set(prev.map((t) => t.id));
           const fresh = res.tracks.filter((t) => !existingIds.has(t.id));
-          const updated = [...prev, ...fresh];
+          const remainingSlots = Math.max(0, 25 - prev.length);
+          const tracksToAdd = fresh.slice(0, remainingSlots);
+          const updated = [...prev, ...tracksToAdd];
           totalCount = updated.length;
           return updated;
         });
         appendQueue(res.tracks);
         setCurrentPage(nextPage);
 
-        // Continue allowing Load More until at least 25 tracks are assembled
+        // Stop Load More once 25 tracks are assembled
         const hasReachedLimit = totalCount >= 25;
-        setHasMorePages(!hasReachedLimit && res.tracks.length > 0);
+        setHasMorePages(!hasReachedLimit && res.hasMore);
       } else {
         setHasMorePages(false);
       }
@@ -231,7 +268,7 @@ function AppContent({ api }: AppProps = {}) {
   }, [data, isLoadingMore, cumulativeTracks, currentPage, lastPrompt, prompt, profile.discoveryMode, appendQueue, addToast]);
 
   const handleRefineVibe = useCallback(async (type: string, label: string, delta: string) => {
-    if (!data?.intent || isRefiningVibe || isLoadingMore) return;
+    if (!data?.intent || data.mode === 'mock' || isMockMode || isRefiningVibe || isLoadingMore) return;
     setIsRefiningVibe(true);
 
     try {
@@ -244,6 +281,7 @@ function AppContent({ api }: AppProps = {}) {
           delta,
         },
         discoveryMode: profile.discoveryMode,
+        browserContext: collectBrowserContext(),
       });
 
       if (res && res.tracks && res.tracks.length > 0) {
@@ -256,7 +294,7 @@ function AppContent({ api }: AppProps = {}) {
     } finally {
       setIsRefiningVibe(false);
     }
-  }, [data, isRefiningVibe, isLoadingMore, lastPrompt, prompt, profile.discoveryMode, appendQueue, addToast]);
+  }, [data, isMockMode, isRefiningVibe, isLoadingMore, lastPrompt, prompt, profile.discoveryMode, appendQueue, addToast]);
 
   // Smooth scroll into results when search finishes
   useEffect(() => {
@@ -296,9 +334,13 @@ function AppContent({ api }: AppProps = {}) {
       {/* Sticky Glass Top Bar */}
       <TopBar
         status={status}
+        isMockMode={isMockMode}
+        onToggleMockMode={handleToggleMockMode}
         onOpenPreferences={handleOpenPreferences}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        onBrandClick={handleBrandClick}
+        onOpenAccountMenu={() => { void refreshStatus(); }}
         onOpenSignIn={() => setForceShowAuth(true)}
       />
 
@@ -376,7 +418,7 @@ function AppContent({ api }: AppProps = {}) {
                     totalTracks={cumulativeTracks.length}
                     activeMood={data.intent.mood}
                     onRefine={handleRefineVibe}
-                    disabled={isLoadingMore || isRefiningVibe}
+                    disabled={data.mode === 'mock' || isMockMode || isLoadingMore || isRefiningVibe}
                   />
 
                   {/* Tracks Grid with Continuous Discovery */}

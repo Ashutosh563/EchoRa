@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Music, ExternalLink, Play, Pause, Loader2 } from 'lucide-react';
+import { Music, Music2, ExternalLink, Play, Pause, Loader2, Sparkles } from 'lucide-react';
 import type { Track } from '../types';
 import { formatDuration } from '../lib/format';
 import { SpotifyIcon } from './ConnectSpotifyButton';
@@ -136,17 +136,15 @@ export const TrackCard = memo(function TrackCard({
       onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className={`relative group${shouldReduceMotion ? '' : ' tilt-card'}${
-        isPreviewPlaying ? ' conic-active' : ''
-      }`}
+      className={`relative group${shouldReduceMotion ? '' : ' tilt-card'}${isPreviewPlaying ? ' conic-active' : ''
+        }`}
     >
       {/* Rotating Conic Aurora Glow Behind Card on Hover / Playing (Paused when idle) */}
       <div
-        className={`absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none transition-all duration-500 group-hover:-translate-y-1 ${
-          isPreviewPlaying
-            ? 'opacity-50'
-            : 'opacity-0 group-hover:opacity-40'
-        }`}
+        className={`absolute -inset-[1.5px] rounded-[22px] overflow-hidden -z-10 pointer-events-none transition-all duration-500 group-hover:-translate-y-1 ${isPreviewPlaying
+          ? 'opacity-50'
+          : 'opacity-0 group-hover:opacity-40'
+          }`}
       >
         <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[6px]" />
       </div>
@@ -167,11 +165,10 @@ export const TrackCard = memo(function TrackCard({
       >
         {/* Soft Moving Mood-Responsive Aurora Animation in Card Background on Hover / Playing */}
         <div
-          className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[20px] transition-opacity duration-500 ${
-            isPreviewPlaying
-              ? 'opacity-30'
-              : 'opacity-0 group-hover:opacity-25'
-          }`}
+          className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[20px] transition-opacity duration-500 ${isPreviewPlaying
+            ? 'opacity-30'
+            : 'opacity-0 group-hover:opacity-25'
+            }`}
         >
           <div className="w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 animate-conic mood-conic-aurora blur-[16px]" />
         </div>
@@ -189,9 +186,8 @@ export const TrackCard = memo(function TrackCard({
               decoding="async"
               onLoad={() => setArtLoaded(true)}
               onError={() => setArtFailed(true)}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${
-                artLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`w-full h-full object-cover transition-opacity duration-300 ${artLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-tr from-violet/30 to-cyan/30 flex items-center justify-center">
@@ -213,12 +209,28 @@ export const TrackCard = memo(function TrackCard({
         <div className="flex-1 min-w-0 flex flex-col justify-between h-[88px] py-0.5 z-10">
           <div>
             {/* Track Name */}
-            <h3
-              className="font-display font-semibold text-sm sm:text-base text-text truncate group-hover:text-white transition-colors"
-              title={track.name}
-            >
-              {track.name}
-            </h3>
+            <div className="flex items-center gap-2 min-w-0">
+              <h3
+                className="font-display font-semibold text-sm sm:text-base text-text truncate group-hover:text-white transition-colors min-w-0 flex-1"
+                title={track.name}
+              >
+                {track.name}
+              </h3>
+              {typeof track.matchScore === 'number' && (
+                <span
+                  className="shrink-0 px-1.5 py-0.5 rounded-md text-[9px] font-mono font-semibold text-violet-light bg-violet/15 border border-violet/25"
+                  aria-label={`Gemini match confidence ${Math.round(track.matchScore)} percent`}
+                  title="Gemini estimate of how well this song matches your original request"
+                >
+                  {Math.round(track.matchScore)}%
+                </span>
+              )}
+              {track.aiRecommended && (
+                <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-semibold text-cyan bg-cyan/10 border border-cyan/20" aria-label="Gemini recommended track" title="Suggested by Gemini and verified in the music catalog">
+                  <Sparkles className="w-2.5 h-2.5" /> AI pick
+                </span>
+              )}
+            </div>
 
             {/* Artists */}
             <p className="text-xs text-text-dim truncate mt-0.5 group-hover:text-text transition-colors" title={artistText}>
@@ -237,7 +249,7 @@ export const TrackCard = memo(function TrackCard({
             </div>
           </div>
 
-          {/* Bottom Actions: Play Here / Open in Spotify buttons */}
+          {/* Bottom Actions: Play Here / Open in catalog buttons */}
           <div className="flex items-center justify-end gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-1.5 shrink-0">
               {handlePlayNative && (
@@ -248,11 +260,10 @@ export const TrackCard = memo(function TrackCard({
                     handlePlayNative!(track);
                   }}
                   aria-label={isThisTrackPlaying ? `Pause "${track.name}"` : `Play "${track.name}" here`}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shadow-sm cursor-pointer ${
-                    isThisTrackPlaying
-                      ? 'bg-cyan text-ink border-cyan shadow-cyan/30'
-                      : 'bg-cyan/15 hover:bg-cyan/25 text-cyan border-cyan/30 hover:border-cyan/50 hover:scale-[1.03] active:scale-[0.98]'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border shadow-sm cursor-pointer ${isThisTrackPlaying
+                    ? 'bg-cyan text-ink border-cyan shadow-cyan/30'
+                    : 'bg-cyan/15 hover:bg-cyan/25 text-cyan border-cyan/30 hover:border-cyan/50 hover:scale-[1.03] active:scale-[0.98]'
+                    }`}
                 >
                   {isThisTrackBuffering ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -266,14 +277,14 @@ export const TrackCard = memo(function TrackCard({
               )}
 
               <a
-                href={track.spotifyUrl}
+                href={track.catalogUrl || track.spotifyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`Open "${track.name}" on Spotify`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-spotify/15 hover:bg-spotify/25 text-spotify text-[11px] font-semibold transition-all border border-spotify/30 hover:border-spotify/50 hover:scale-[1.03] active:scale-[0.98] shadow-sm"
+                aria-label={`Open "${track.name}" on ${track.catalogSource === 'youtube_music' ? 'YouTube Music' : 'Spotify'}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border hover:scale-[1.03] active:scale-[0.98] shadow-sm ${track.catalogSource === 'youtube_music' ? 'bg-red-500/15 hover:bg-red-500/25 text-red-300 border-red-400/30 hover:border-red-400/50' : 'bg-spotify/15 hover:bg-spotify/25 text-spotify border-spotify/30 hover:border-spotify/50'}`}
               >
-                <SpotifyIcon className="w-3 h-3 text-spotify" />
-                <span>Spotify</span>
+                {track.catalogSource === 'youtube_music' ? <Music2 className="w-3 h-3" /> : <SpotifyIcon className="w-3 h-3 text-spotify" />}
+                <span>{track.catalogSource === 'youtube_music' ? 'YouTube Music' : 'Spotify'}</span>
                 <ExternalLink className="w-2.5 h-2.5 opacity-70" />
               </a>
             </div>

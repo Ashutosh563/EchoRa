@@ -70,6 +70,7 @@ export async function searchMusic(
         discoveryMode: options?.discoveryMode,
         preferences: options?.preferences,
         historySignals: options?.historySignals,
+        browserContext: options?.browserContext,
       }),
       signal,
     });
@@ -89,6 +90,7 @@ export interface LoadMoreRequestParams {
   excludeSongSignatures?: string[];
   cumulativeArtistCounts?: Record<string, number>;
   discoveryMode?: string;
+  browserContext?: SearchOptions['browserContext'];
 }
 
 export interface LoadMoreResult {
@@ -128,6 +130,7 @@ export interface RefineVibeRequestParams {
     delta?: string;
   };
   discoveryMode?: string;
+  browserContext?: SearchOptions['browserContext'];
 }
 
 export interface RefineVibeResult {

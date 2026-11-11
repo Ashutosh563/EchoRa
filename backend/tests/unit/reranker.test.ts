@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createSemanticReranker } from "../../src/services/gemini/reranker.js";
+import { createSemanticReranker, isLanguageMatch } from "../../src/services/gemini/reranker.js";
 import type { GeminiClient } from "../../src/services/gemini/geminiClient.js";
 import type { MusicIntent } from "../../src/types/intent.js";
 import type { Track } from "../../src/types/track.js";
@@ -26,6 +26,70 @@ const makeTrack = (id: string, name: string): Track => ({
 });
 
 describe("Semantic Reranker (reranker.ts)", () => {
+  it("returns catalog-searchable Gemini song recommendations", async () => {
+    const fakeClient: GeminiClient = {
+      generateJson: vi.fn().mockResolvedValue(JSON.stringify({
+        recommendations: [
+          { title: "Falling Slowly", artist: "Glen Hansard" },
+          { title: "Cherry Wine", artist: "Hozier" },
+        ],
+      })),
+    };
+    const reranker = createSemanticReranker(fakeClient);
+
+    const recommendations = await reranker.suggestTrackRecommendations?.(
+      "sad acoustic songs",
+      mockIntent,
+      [],
+      62,
+      false,
+    );
+
+    expect(recommendations).toEqual([
+      { title: "Falling Slowly", artist: "Glen Hansard" },
+      { title: "Cherry Wine", artist: "Hozier" },
+    ]);
+    expect(fakeClient.generateJson).toHaveBeenCalledWith(expect.objectContaining({
+      jsonSchema: expect.objectContaining({ properties: expect.objectContaining({ recommendations: expect.any(Object) }) }),
+    }));
+  });
+
+  it("returns Gemini match scores with the ordered tracks", async () => {
+    const candidates = [makeTrack("t1", "Fast Rap"), makeTrack("t2", "Slow Ambient Piano")];
+    const fakeClient: GeminiClient = {
+      generateJson: vi.fn().mockResolvedValue(JSON.stringify({
+        rankedTracks: [
+          { id: "t2", matchReason: "Slow texture suits the request.", matchScore: 93 },
+          { id: "t1", matchReason: "The mood and tempo are a weaker fit.", matchScore: 42 },
+        ],
+      })),
+    };
+
+    const result = await createSemanticReranker(fakeClient).rerank("slow calm piano", mockIntent, candidates);
+
+    expect(result[0]).toMatchObject({ id: "t2", matchScore: 93 });
+    expect(result[1]).toMatchObject({ id: "t1", matchScore: 42 });
+  });
+
+  it("suggests a bounded query refinement from low-scoring catalog results", async () => {
+    const generateJson = vi.fn().mockResolvedValue(JSON.stringify({
+      searchQueries: ['artist:"Arijit Singh" sad slow Hindi songs'],
+    }));
+    const fakeClient: GeminiClient = { generateJson };
+    const reranker = createSemanticReranker(fakeClient);
+    const intent = { ...mockIntent, artist: "Arijit Singh", language: "hindi" };
+
+    const queries = await reranker.suggestRefinementQueries!(
+      "Arijit Singh sad slow songs",
+      intent,
+      [{ ...makeTrack("t1", "Wrong Song"), matchScore: 32 }],
+    );
+
+    expect(queries).toEqual(['artist:"Arijit Singh" sad slow Hindi songs']);
+    expect(generateJson.mock.calls[0]?.[0].userText).toContain('"originalUserPrompt":"Arijit Singh sad slow songs"');
+    expect(generateJson.mock.calls[0]?.[0].systemInstruction).toContain("Never invent a replacement artist");
+  });
+
   it("reorders candidates and assigns matchReason based on LLM output", async () => {
     const candidates = [makeTrack("t1", "Fast Rap"), makeTrack("t2", "Slow Ambient Piano"), makeTrack("t3", "Acoustic Guitar")];
 
@@ -504,6 +568,353 @@ describe("Semantic Reranker (reranker.ts)", () => {
     expect(resultIds).not.toContain("t1"); // Rihanna Russian Roulette
     expect(resultIds).not.toContain("t2"); // Red Velvet Russian Roulette
     expect(resultIds).not.toContain("t5"); // Sidhu Moose Wala
+  });
+
+  describe("Explicit Artist & 'Dil Raaz' Curation Rules", () => {
+    it("allocates top 5 to requested artist (Dil Raaz) and remaining 5 to vibe companions", async () => {
+      const candidates: Track[] = [
+        // 6 tracks by Dil Raaz
+        { ...makeTrack("dr1", "Dil Deewane"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr2", "Tanhai Ke Lamhe"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr3", "Khushboo Teri"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr4", "Raste Juda"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr5", "Yaad Aayi"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr6", "Ek Ehsaas"), artists: ["Dil Raaz"] },
+        // Companion tracks in same vibe (Sachin-Jigar, Papon, Mohit Chauhan)
+        { ...makeTrack("c1", "Jeena Jeena"), artists: ["Sachin-Jigar"] },
+        { ...makeTrack("c2", "Moh Moh Ke Dhaage"), artists: ["Papon"] },
+        { ...makeTrack("c3", "Tum Ho"), artists: ["Mohit Chauhan"] },
+        { ...makeTrack("c4", "Saibo"), artists: ["Sachin-Jigar"] },
+        { ...makeTrack("c5", "Phir Se Ud Chala"), artists: ["Mohit Chauhan"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Matches emotional vibe." })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        mood: "romantic",
+        language: "hindi",
+        artist: "Dil Raaz",
+      };
+
+      const result = await reranker.rerank("songs by Dil Raaz", intent, candidates);
+
+      expect(result.length).toBe(10);
+      // Top 5 tracks must belong to Dil Raaz
+      const top5Artists = result.slice(0, 5).map((t) => t.artists[0]);
+      expect(top5Artists.every((a) => a === "Dil Raaz")).toBe(true);
+
+      // Remaining tracks must be companion tracks from vibe peers
+      const bottom5Artists = result.slice(5, 10).map((t) => t.artists[0]);
+      expect(bottom5Artists).toContain("Sachin-Jigar");
+      expect(bottom5Artists).toContain("Papon");
+      expect(bottom5Artists).toContain("Mohit Chauhan");
+    });
+
+    it("ensures 'only Dil Raaz' prompt fills 100% of the playlist with Dil Raaz", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("dr1", "Song 1"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr2", "Song 2"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr3", "Song 3"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr4", "Song 4"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr5", "Song 5"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr6", "Song 6"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr7", "Song 7"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr8", "Song 8"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr9", "Song 9"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr10", "Song 10"), artists: ["Dil Raaz"] },
+        { ...makeTrack("c1", "Peer Track"), artists: ["Papon"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Catalog match." })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        mood: "romantic",
+        language: "hindi",
+        artist: "Dil Raaz",
+      };
+
+      const result = await reranker.rerank("only songs by Dil Raaz", intent, candidates);
+
+      expect(result.length).toBe(10);
+      expect(result.every((t) => t.artists.includes("Dil Raaz"))).toBe(true);
+      expect(result.some((t) => t.artists.includes("Papon"))).toBe(false);
+    });
+
+    it("puts specific song title at Rank #1 when requested with artist", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("dr1", "Normal Dil Raaz Track"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr2", "Mulaqat (Special Acoustic)"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr3", "Another Track"), artists: ["Dil Raaz"] },
+        { ...makeTrack("c1", "Companion Song"), artists: ["Papon"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Fit" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        trackTitle: "Mulaqat",
+        artist: "Dil Raaz",
+      };
+
+      const result = await reranker.rerank("Mulaqat by Dil Raaz", intent, candidates);
+
+      expect(result[0]?.name).toBe("Mulaqat (Special Acoustic)");
+      expect(result[0]?.artists[0]).toBe("Dil Raaz");
+    });
+
+    it("allocates tracks between multiple requested artists and prioritizes mutual duets (Edge Case A)", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("collab1", "Challa (Collab)"), artists: ["Diljit Dosanjh", "Karan Aujla"] },
+        { ...makeTrack("d1", "G.O.A.T."), artists: ["Diljit Dosanjh"] },
+        { ...makeTrack("d2", "Lover"), artists: ["Diljit Dosanjh"] },
+        { ...makeTrack("d3", "Born to Shine"), artists: ["Diljit Dosanjh"] },
+        { ...makeTrack("k1", "Softly"), artists: ["Karan Aujla"] },
+        { ...makeTrack("k2", "White Brown Black"), artists: ["Karan Aujla"] },
+        { ...makeTrack("k3", "Admirin' You"), artists: ["Karan Aujla"] },
+        { ...makeTrack("c1", "Companion 1"), artists: ["Sidhu Moose Wala"] },
+        { ...makeTrack("c2", "Companion 2"), artists: ["AP Dhillon"] },
+        { ...makeTrack("c3", "Companion 3"), artists: ["Shubh"] },
+        { ...makeTrack("c4", "Companion 4"), artists: ["Gurinder Gill"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Fit" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        artist: "Diljit Dosanjh and Karan Aujla",
+        language: "punjabi",
+      };
+
+      const result = await reranker.rerank("songs by Diljit Dosanjh and Karan Aujla", intent, candidates);
+
+      expect(result.length).toBe(10);
+      // Joint collaboration should be ranked first
+      expect(result[0].id).toBe("collab1");
+
+      const diljitTracks = result.filter((t) => t.artists.includes("Diljit Dosanjh"));
+      const karanTracks = result.filter((t) => t.artists.includes("Karan Aujla"));
+      expect(diljitTracks.length).toBeGreaterThanOrEqual(3);
+      expect(karanTracks.length).toBeGreaterThanOrEqual(3);
+
+      // Remaining tracks come from companion peers
+      const companionTracks = result.filter(
+        (t) => !t.artists.includes("Diljit Dosanjh") && !t.artists.includes("Karan Aujla"),
+      );
+      expect(companionTracks.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("rejects foreign homonym tracks sharing the same artist name on regional queries (Edge Case B)", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("in1", "1 Se 23"), artists: ["Karma"] },
+        { ...makeTrack("in2", "Fateh"), artists: ["Karma", "Raftaar"] },
+        { ...makeTrack("fi1", "Hyvää Päivää"), artists: ["Karma"], album: "Finnish Rock Classics" },
+        { ...makeTrack("fi2", "Helsinki Nights"), artists: ["Karma"], album: "Suomi Pop Hits" },
+        { ...makeTrack("c1", "Aathma Raama"), artists: ["Brodha V"] },
+        { ...makeTrack("c2", "Kohinoor"), artists: ["DIVINE"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Hip hop match" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        artist: "Karma",
+        language: "hindi",
+        genre: ["hip hop"],
+      };
+
+      const result = await reranker.rerank("hindi hip hop songs by Karma", intent, candidates);
+      const resultIds = result.map((t) => t.id);
+
+      // Indian Karma tracks accepted
+      expect(resultIds).toContain("in1");
+      expect(resultIds).toContain("in2");
+
+      // Finnish Karma tracks rejected by disambiguation guard
+      expect(resultIds).not.toContain("fi1");
+      expect(resultIds).not.toContain("fi2");
+    });
+
+    it("strictly returns small discography without pulling unwanted artists on 'only' prompt (Edge Case C)", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("indie1", "First Song"), artists: ["Underground Indie Artist"] },
+        { ...makeTrack("indie2", "Second Song"), artists: ["Underground Indie Artist"] },
+        { ...makeTrack("indie3", "Third Song"), artists: ["Underground Indie Artist"] },
+        { ...makeTrack("other1", "Popular Song 1"), artists: ["Arijit Singh"] },
+        { ...makeTrack("other2", "Popular Song 2"), artists: ["Pritam"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Fit" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const intent: MusicIntent = {
+        ...mockIntent,
+        artist: "Underground Indie Artist",
+      };
+
+      const result = await reranker.rerank("only Underground Indie Artist", intent, candidates);
+
+      // Should return strictly the 3 songs that exist, never pulling Arijit Singh or Pritam
+      expect(result.length).toBe(3);
+      expect(result.every((t) => t.artists.includes("Underground Indie Artist"))).toBe(true);
+      expect(result[0].matchReason).toContain("complete discography");
+    });
+
+    it("matches lowercase and punctuation-variant indie artists (e.g. 'dilraaz' -> 'Dil Raaz', 'krsna' -> 'KR$NA')", async () => {
+      const candidates: Track[] = [
+        { ...makeTrack("dr1", "Dil Ki Baat"), artists: ["Dil Raaz"] },
+        { ...makeTrack("dr2", "Tanhai"), artists: ["Dil Raaz"] },
+        { ...makeTrack("kr1", "Vyanjan"), artists: ["KR$NA"] },
+        { ...makeTrack("c1", "Peer Track"), artists: ["Papon"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Fit" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+
+      // Test 1: "dilraaz" lowercase without space matches "Dil Raaz"
+      const resultDilraaz = await reranker.rerank(
+        "songs by dilraaz",
+        { ...mockIntent, artist: "dilraaz" },
+        candidates,
+      );
+      expect(resultDilraaz[0].artists[0]).toBe("Dil Raaz");
+
+      // Test 2: "krsna" without dollar symbol matches "KR$NA"
+      const resultKrsna = await reranker.rerank(
+        "songs by krsna",
+        { ...mockIntent, artist: "krsna" },
+        candidates,
+      );
+      expect(resultKrsna[0].artists[0]).toBe("KR$NA");
+    });
+
+    it("preserves strict general mood diversity when no artist is searched (e.g. 'chill songs by the ocean')", async () => {
+      // 5 tracks from one artist, 4 from others
+      const candidates: Track[] = [
+        { ...makeTrack("a1", "Ocean Breeze 1"), artists: ["The Waves"] },
+        { ...makeTrack("a2", "Ocean Breeze 2"), artists: ["The Waves"] },
+        { ...makeTrack("a3", "Ocean Breeze 3"), artists: ["The Waves"] },
+        { ...makeTrack("a4", "Ocean Breeze 4"), artists: ["The Waves"] },
+        { ...makeTrack("b1", "Tide Song"), artists: ["Sea Spray"] },
+        { ...makeTrack("b2", "Coastline"), artists: ["Sea Spray"] },
+        { ...makeTrack("c1", "Seaside"), artists: ["Coastal Acoustic"] },
+        { ...makeTrack("c2", "Dunes"), artists: ["Coastal Acoustic"] },
+        { ...makeTrack("d1", "Shore"), artists: ["Pacific Calm"] },
+      ];
+
+      const fakeClient: GeminiClient = {
+        generateJson: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            rankedTracks: candidates.map((t) => ({ id: t.id, matchReason: "Ocean chill vibe" })),
+          }),
+        ),
+      };
+
+      const reranker = createSemanticReranker(fakeClient);
+      const generalIntent: MusicIntent = {
+        ...mockIntent,
+        mood: "calm",
+        artist: undefined, // No artist! General mood search
+      };
+
+      const result = await reranker.rerank("chill songs by the ocean", generalIntent, candidates);
+
+      // Must strictly cap "The Waves" to maximum 2 tracks (preserving general mood multi-artist diversity)
+      const wavesTracks = result.filter((t) => t.artists.includes("The Waves"));
+      expect(wavesTracks.length).toBeLessThanOrEqual(2);
+      expect(result.length).toBeGreaterThanOrEqual(7);
+    });
+
+    it("Edge Case E: preserves regional indie tracks with English titles under Hindi context (code-switching)", () => {
+      // 1. Regional indie artists with English or alphanumeric titles must PASS under Hindi context
+      const krsnaTrack: Track = {
+        ...makeTrack("k1", "Say My Name"),
+        artists: ["KR$NA"],
+      };
+      const tabaTrack: Track = {
+        ...makeTrack("t1", "Walk With Me"),
+        artists: ["Taba Chake"],
+      };
+      const dilRaazTrack: Track = {
+        ...makeTrack("d1", "Still In Love"),
+        artists: ["Dil Raaz", "Skyd 6ix"],
+      };
+      const seedheMautTrack: Track = {
+        ...makeTrack("s1", "101"),
+        artists: ["Seedhe Maut"],
+      };
+
+      expect(isLanguageMatch(krsnaTrack, "hindi")).toBe(true);
+      expect(isLanguageMatch(tabaTrack, "hindi")).toBe(true);
+      expect(isLanguageMatch(dilRaazTrack, "hindi")).toBe(true);
+      expect(isLanguageMatch(seedheMautTrack, "hindi")).toBe(true);
+
+      // 2. Pure Western artists must still be blocked under Hindi context
+      const drakeTrack: Track = {
+        ...makeTrack("w1", "God's Plan"),
+        artists: ["Drake"],
+      };
+      expect(isLanguageMatch(drakeTrack, "hindi")).toBe(false);
+
+      // 3. Regional indie artists must NOT leak into foreign language queries (e.g. Spanish)
+      expect(isLanguageMatch(krsnaTrack, "spanish")).toBe(false);
+
+      // 4. English queries accept English indie tracks freely
+      const clairoTrack: Track = {
+        ...makeTrack("c1", "Sofia"),
+        artists: ["Clairo"],
+      };
+      expect(isLanguageMatch(clairoTrack, "english")).toBe(true);
+    });
   });
 });
 
