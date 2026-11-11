@@ -1,5 +1,6 @@
 import type { SearchResponse, StatusResponse, Track } from '../types';
 import type { CameraAnalysisResponse } from '../types/camera';
+import type { UserPreferences } from '../types/discovery';
 import type { SearchOptions } from './musicApi';
 
 export const SPOTIFY_AUTH_URL = 'http://127.0.0.1:4000/api/spotify/auth';
@@ -89,6 +90,7 @@ export interface LoadMoreRequestParams {
   excludeSongSignatures?: string[];
   cumulativeArtistCounts?: Record<string, number>;
   discoveryMode?: string;
+  preferences?: UserPreferences;
 }
 
 export interface LoadMoreResult {

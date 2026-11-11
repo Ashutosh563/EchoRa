@@ -41,7 +41,7 @@ export function ModeSelector({ currentMode, onChange, disabled }: ModeSelectorPr
     <div
       role="radiogroup"
       aria-label="Discovery Mode Selector"
-      className="inline-flex items-center gap-1.5 p-1.5 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md shadow-glass"
+      className="glass-pill inline-flex items-center gap-1.5 p-1.5 shadow-glass"
     >
       {MODES.map((mode) => {
         const isSelected = currentMode === mode.id;

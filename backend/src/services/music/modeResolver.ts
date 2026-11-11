@@ -17,7 +17,8 @@ export function resolveAppMode(
   const geminiConfigured = Boolean(config.geminiApiKey);
   const openaiConfigured = Boolean(config.openaiApiKey);
   const aiReady = (geminiConfigured && credState.geminiValid !== false) || (openaiConfigured && credState.openaiValid !== false);
-  const spotifyConfigured = Boolean(config.spotifyClientId && config.spotifyClientSecret);
+  const hasDedicatedSearch = Boolean(config.spotifySearchClientId && config.spotifySearchClientSecret);
+  const spotifyConfigured = Boolean(config.spotifyClientId && config.spotifyClientSecret) || hasDedicatedSearch;
   const spotifyAuthorized = Boolean(spotifyAuth?.isAuthorized());
 
   const missing: string[] = [];
@@ -33,12 +34,12 @@ export function resolveAppMode(
     missing.push("Spotify Client ID / Secret are not configured.");
   } else if (credState.spotifyValid === false) {
     missing.push("Spotify credentials were rejected by Spotify.");
-  } else if (!spotifyAuthorized) {
+  } else if (!hasDedicatedSearch && !spotifyAuthorized) {
     missing.push("Spotify authorization required. Click 'Connect Spotify'.");
   }
 
   const geminiReady = aiReady;
-  const spotifyReady = spotifyConfigured && credState.spotifyValid !== false && spotifyAuthorized;
+  const spotifyReady = hasDedicatedSearch || (spotifyConfigured && credState.spotifyValid !== false && spotifyAuthorized);
 
   const interpretMode: AppMode = geminiReady ? "live" : "mock";
   const searchMode: AppMode = geminiReady && spotifyReady ? "live" : "mock";

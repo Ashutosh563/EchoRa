@@ -163,10 +163,7 @@ export function matchesNegativeConstraints(track: Track, intent: MusicIntent): b
     for (const excluded of neg.excludedArtists) {
       const ex = excluded.toLowerCase().trim();
       if (!ex) continue;
-      if (track.artists.some((a) => a.toLowerCase().includes(ex))) {
-        return true;
-      }
-      if (fullText.includes(ex)) {
+      if (track.artists.some((a) => a.toLowerCase().trim() === ex)) {
         return true;
       }
     }
@@ -177,7 +174,8 @@ export function matchesNegativeConstraints(track: Track, intent: MusicIntent): b
     for (const genre of neg.excludedGenres) {
       const g = genre.toLowerCase().trim();
       if (!g) continue;
-      const regex = new RegExp(`\\b${g}\\b`, "i");
+      const escapedGenre = g.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`\\b${escapedGenre}\\b`, "i");
       if (regex.test(fullText)) {
         return true;
       }
@@ -679,10 +677,10 @@ export function balanceTracks(
 function buildRerankerSystemInstruction(discoveryMode: DiscoveryMode = "FAMILIAR"): string {
   const modeContext =
     discoveryMode === "EXPLORE"
-      ? "Discovery Mode is EXPLORE: Prioritize fresh, lesser-known, textured tracks, and hidden gems that nail the emotional nuance over obvious top-40 chart hits."
+      ? "Discovery Mode is EXPLORE: Prioritize fresh, lesser-known, textured tracks, and hidden gems that nail the emotional nuance over obvious top-40 chart hits. Give saved favorites less influence, while honoring saved dislikes and explicit requests."
       : discoveryMode === "BALANCED"
-        ? "Discovery Mode is BALANCED: Balance well-loved iconic tracks with tasteful, high-quality adjacent discoveries."
-        : "Discovery Mode is FAMILIAR: Prioritize definitive, widely celebrated, and iconic staples of that mood and style.";
+        ? "Discovery Mode is BALANCED: Mix candidates connected to the user's saved favorites with tasteful, high-quality adjacent discoveries."
+        : "Discovery Mode is FAMILIAR: Give the user's saved favorite artists and genres the strongest preference influence while keeping the current prompt primary.";
 
   return `You are ECHORA's Semantic Music Reranker.
 Given a user prompt, semantic listening intent (mood, persona, energy, tempo, vocals preference, time context, language, era), sonic texture profile (instruments, production, tempo feel, emotional subtext), active discovery mode, and a candidate pool of tracks, select and rank the TOP 10 tracks that best embody the emotional and acoustic nuance.
@@ -697,6 +695,7 @@ STRICT SELECTION RULES:
 2. ARTIST DIVERSITY & SATURATION LIMIT:
    - Unless the user explicitly requested a specific artist (e.g. 'Arijit Singh', 'Coldplay'), select AT MOST 2 tracks per artist across the entire top 10.
    - NEVER allow a single artist to dominate the recommendation list; give the user a rich, balanced variety of different artists.
+   - Apply supplied userPreferences according to the active discovery mode. Never let a saved favorite override an explicit request or saved dislike.
 3. NEGATIVE CONSTRAINTS & EXCLUSIONS:
    - Strictly inspect each candidate against the user's negative constraints (excluded artists, excluded genres, negative keywords like 'no rap', 'except Arijit Singh', 'without heavy beats').
    - Immediately DISQUALIFY and REJECT any candidate matching those exclusions!
@@ -757,7 +756,9 @@ interface RerankerResponse {
 }
 
 export interface PreferenceProfile {
+  favoriteGenres?: string[];
   favoriteArtists?: string[];
+  dislikedGenres?: string[];
   dislikedArtists?: string[];
   familiarityWeight?: number;
 }

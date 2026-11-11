@@ -30,7 +30,7 @@ export const AuroraBackground = memo(function AuroraBackground({ theme }: Aurora
           background: getOrbGradient(theme.blobs[0]),
           opacity: theme.opacity,
           willChange: shouldReduceMotion ? 'auto' : 'transform',
-          transition: 'opacity 1.2s ease-in-out, background 1.2s ease-in-out',
+          transition: 'opacity 2s ease-in-out, background 2.2s ease-in-out',
           animation: shouldReduceMotion
             ? 'none'
             : `aurora-drift-1 ${(duration * 0.95).toFixed(1)}s ease-in-out infinite`,
@@ -48,7 +48,7 @@ export const AuroraBackground = memo(function AuroraBackground({ theme }: Aurora
           background: getOrbGradient(theme.blobs[1]),
           opacity: theme.opacity * 0.9,
           willChange: shouldReduceMotion ? 'auto' : 'transform',
-          transition: 'opacity 1.2s ease-in-out, background 1.2s ease-in-out',
+          transition: 'opacity 2s ease-in-out, background 2.2s ease-in-out',
           animation: shouldReduceMotion
             ? 'none'
             : `aurora-drift-2 ${(duration * 1.1).toFixed(1)}s ease-in-out infinite`,
@@ -66,7 +66,7 @@ export const AuroraBackground = memo(function AuroraBackground({ theme }: Aurora
           background: getOrbGradient(theme.blobs[2]),
           opacity: theme.opacity * 0.8,
           willChange: shouldReduceMotion ? 'auto' : 'transform',
-          transition: 'opacity 1.2s ease-in-out, background 1.2s ease-in-out',
+          transition: 'opacity 2s ease-in-out, background 2.2s ease-in-out',
           animation: shouldReduceMotion
             ? 'none'
             : `aurora-drift-3 ${(duration * 1.05).toFixed(1)}s ease-in-out infinite`,
@@ -84,7 +84,7 @@ export const AuroraBackground = memo(function AuroraBackground({ theme }: Aurora
           background: getOrbGradient(theme.blobs[3]),
           opacity: theme.opacity * 0.85,
           willChange: shouldReduceMotion ? 'auto' : 'transform',
-          transition: 'opacity 1.2s ease-in-out, background 1.2s ease-in-out',
+          transition: 'opacity 2s ease-in-out, background 2.2s ease-in-out',
           animation: shouldReduceMotion
             ? 'none'
             : `aurora-drift-4 ${(duration * 0.9).toFixed(1)}s ease-in-out infinite`,

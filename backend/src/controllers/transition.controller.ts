@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { TransitionPlanner } from "../services/transition/transitionPlanner.js";
 import type { StageIntentGenerator } from "../services/transition/stageIntentGenerator.js";
 import type { PlaylistAssembler } from "../services/transition/playlistAssembler.js";
+import type { TransitionIntentExtractor } from "../services/transition/transitionIntentExtractor.js";
 import type {
   GenerateTransitionMusicRequest,
   TransitionPlanRequest,
@@ -11,8 +12,17 @@ export function createTransitionController(
   transitionPlanner: TransitionPlanner,
   stageIntentGenerator: StageIntentGenerator,
   playlistAssembler: PlaylistAssembler,
+  intentExtractor: TransitionIntentExtractor,
 ) {
   return {
+    async interpret(req: Request<unknown, unknown, { prompt: string }>, res: Response, next: NextFunction) {
+      try {
+        const result = await intentExtractor.interpret(req.body.prompt, req.signal);
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
     async plan(
       req: Request<unknown, unknown, TransitionPlanRequest>,
       res: Response,

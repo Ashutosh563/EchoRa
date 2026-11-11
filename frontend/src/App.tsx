@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { AuroraBackground } from './components/AuroraBackground';
 import { TopBar } from './components/TopBar';
 import { Hero } from './components/Hero';
@@ -41,6 +41,7 @@ interface AppProps {
 }
 
 function AppContent({ api }: AppProps = {}) {
+  const reduceMotion = useReducedMotion();
   const { user, isGuest, isLoading: isAuthLoading } = useAuth();
   const [forceShowAuth, setForceShowAuth] = useState(false);
   const { status } = useStatus();
@@ -188,9 +189,13 @@ function AppContent({ api }: AppProps = {}) {
 
     try {
       const counts: Record<string, number> = {};
+      const songSigs: string[] = [];
       for (const t of cumulativeTracks) {
         const primary = (t.artists[0] || '').toLowerCase().trim();
         counts[primary] = (counts[primary] || 0) + 1;
+        const norm = (t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
+        const art = (t.artists[0] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        songSigs.push(`${norm}::${art}`);
       }
 
       const nextPage = currentPage + 1;
@@ -199,15 +204,28 @@ function AppContent({ api }: AppProps = {}) {
         intent: data.intent,
         page: nextPage,
         excludeTrackIds: cumulativeTracks.map((t) => t.id),
+        excludeSongSignatures: songSigs,
         cumulativeArtistCounts: counts,
         discoveryMode: profile.discoveryMode,
+        preferences: profile.preferences,
       });
 
       if (res && res.tracks && res.tracks.length > 0) {
         let totalCount = cumulativeTracks.length;
         setCumulativeTracks((prev) => {
           const existingIds = new Set(prev.map((t) => t.id));
-          const fresh = res.tracks.filter((t) => !existingIds.has(t.id));
+          const existingSigs = new Set(
+            prev.map((t) => {
+              const norm = (t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
+              const art = (t.artists[0] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              return `${norm}::${art}`;
+            })
+          );
+          const fresh = res.tracks.filter((t) => {
+            if (existingIds.has(t.id)) return false;
+            const sig = `${(t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)}::${(t.artists[0] || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+            return !existingSigs.has(sig);
+          });
           const remainingSlots = Math.max(0, 25 - prev.length);
           const tracksToAdd = fresh.slice(0, remainingSlots);
           const updated = [...prev, ...tracksToAdd];
@@ -297,32 +315,35 @@ function AppContent({ api }: AppProps = {}) {
       {/* Sticky Glass Top Bar */}
       <TopBar
         status={status}
-        onOpenPreferences={activeTab === 'discover' ? handleOpenPreferences : undefined}
+        onOpenPreferences={handleOpenPreferences}
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onOpenSignIn={() => setForceShowAuth(true)}
       />
 
-      {/* Main Content Area with Fluid Tab Switching Animation */}
+      {/* Main content hands off smoothly between the two feature modules. */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 flex flex-col pb-16">
-        {activeTab === 'transition' ? (
-          <motion.div
-            key="transition-view"
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full flex-1 flex flex-col"
-          >
-            <MoodTransitionPage onMoodChange={setTransitionMood} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="discover-view"
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full flex-1 flex flex-col"
-          >
+        <AnimatePresence mode="wait" initial={false}>
+          {activeTab === 'transition' ? (
+            <motion.div
+              key="transition-view"
+              initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full flex-1 flex flex-col"
+            >
+              <MoodTransitionPage onMoodChange={setTransitionMood} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="discover-view"
+              initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full flex-1 flex flex-col"
+            >
             {/* Hero Section & Composer */}
             <Hero
               hasSearched={hasSearched}
@@ -394,8 +415,9 @@ function AppContent({ api }: AppProps = {}) {
                 </>
               )}
             </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Camera Modal - mounted only when open to avoid idle hook overhead */}
