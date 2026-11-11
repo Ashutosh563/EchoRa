@@ -1,7 +1,7 @@
 import { memo, useState, useRef, useEffect } from 'react';
 import { Wordmark } from './Wordmark';
-import { SlidersHorizontal, LogOut, LogIn, UserRound, ChevronDown } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { SlidersHorizontal, LogOut, LogIn, UserRound, ChevronDown, FlaskConical } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import type { StatusResponse } from '../types';
 
@@ -11,6 +11,8 @@ interface TopBarProps {
   activeTab?: 'discover' | 'transition';
   onTabChange?: (tab: 'discover' | 'transition') => void;
   onOpenSignIn?: () => void;
+  isMockMode: boolean;
+  onToggleMockMode: () => void;
 }
 
 export const TopBar = memo(function TopBar({
@@ -19,10 +21,29 @@ export const TopBar = memo(function TopBar({
   activeTab = 'discover',
   onTabChange,
   onOpenSignIn,
+  isMockMode,
+  onToggleMockMode,
 }: TopBarProps) {
   const { user, profile, isGuest, signOut } = useAuth();
+  const reduceMotion = useReducedMotion();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDocked, setIsDocked] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateDockState = () => {
+      const scrollY = window.scrollY;
+      setIsDocked((currentlyDocked) => {
+        if (!currentlyDocked && scrollY > 28) return true;
+        if (currentlyDocked && scrollY < 12) return false;
+        return currentlyDocked;
+      });
+    };
+
+    updateDockState();
+    window.addEventListener('scroll', updateDockState, { passive: true });
+    return () => window.removeEventListener('scroll', updateDockState);
+  }, []);
 
   // Close dropdown menu when clicking outside
   useEffect(() => {
@@ -45,32 +66,42 @@ export const TopBar = memo(function TopBar({
   }, [isMenuOpen]);
 
   return (
-    <header className="site-topbar sticky top-0 z-40 w-full h-16 border-b transition-colors">
+    <header className={`site-topbar sticky top-0 z-40 w-full h-16 border-b transition-colors${isDocked ? ' is-docked' : ''}`}>
       <div className="site-topbar-content max-w-6xl mx-auto h-full px-4 sm:px-6 grid grid-cols-[1fr_auto_1fr] items-center">
         {/* Left: Brand */}
-        <Wordmark />
+        <motion.div
+          className="site-topbar-brand"
+          initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.38, delay: reduceMotion ? 0 : 0.02, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Wordmark />
+        </motion.div>
 
         {/* Center: Navigation Tabs with Fluid Pill Animation */}
         {onTabChange && (
-          <nav
+          <motion.nav
             role="tablist"
             aria-label="Navigation"
-            className="glass-pill flex items-center gap-1 p-1 relative"
+            className="glass-pill site-topbar-control flex items-center gap-1 p-1 relative"
+            initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.38, delay: reduceMotion ? 0 : 0.08, ease: [0.22, 1, 0.36, 1] }}
           >
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === 'discover'}
               onClick={() => onTabChange('discover')}
-              className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
+              className={`site-topbar-button px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
                 activeTab === 'discover' ? 'text-white' : 'text-text-dim hover:text-text'
               }`}
             >
               {activeTab === 'discover' && (
                 <motion.span
                   layoutId="activeTabBadge"
-                  className="absolute inset-0 rounded-full mood-gradient shadow-md shadow-violet/20"
-                  transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
+                  className="site-topbar-active-tab absolute inset-0 rounded-full mood-gradient"
+                  transition={reduceMotion ? { duration: 0 } : { type: 'spring', bounce: 0.14, duration: 0.4 }}
                 />
               )}
               <span className="relative z-10">Discover</span>
@@ -81,24 +112,29 @@ export const TopBar = memo(function TopBar({
               aria-label="Mood Transition"
               aria-selected={activeTab === 'transition'}
               onClick={() => onTabChange('transition')}
-              className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
+              className={`site-topbar-button px-3 sm:px-4 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer relative ${
                 activeTab === 'transition' ? 'text-white' : 'text-text-dim hover:text-text'
               }`}
             >
               {activeTab === 'transition' && (
                 <motion.span
                   layoutId="activeTabBadge"
-                  className="absolute inset-0 rounded-full mood-gradient shadow-md shadow-cyan/20"
-                  transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
+                  className="site-topbar-active-tab absolute inset-0 rounded-full mood-gradient"
+                  transition={reduceMotion ? { duration: 0 } : { type: 'spring', bounce: 0.14, duration: 0.4 }}
                 />
               )}
               <span className="relative z-10"><span className="sm:hidden">Transition</span><span className="hidden sm:inline">Mood Transition</span></span>
             </button>
-          </nav>
+          </motion.nav>
         )}
 
         {/* Right: Account menu */}
-        <div className="justify-self-end">
+        <motion.div
+          className="justify-self-end"
+          initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.38, delay: reduceMotion ? 0 : 0.14, ease: [0.22, 1, 0.36, 1] }}
+        >
           {user || isGuest ? (
             <div className="relative" ref={menuRef}>
               <button
@@ -107,7 +143,7 @@ export const TopBar = memo(function TopBar({
                 aria-label="Open account menu"
                 aria-haspopup="true"
                 aria-expanded={isMenuOpen}
-                className="glass-pill flex items-center gap-2 p-1 pl-1.5 pr-2 transition-all cursor-pointer hover:border-white/35 hover:brightness-110"
+                className="glass-pill site-topbar-control site-topbar-button flex items-center gap-2 p-1 pl-1.5 pr-2 transition-all cursor-pointer hover:border-white/35 hover:brightness-110"
                 title={profile?.display_name || user?.email || 'Account'}
               >
                 {user && profile?.avatar_url ? (
@@ -151,6 +187,30 @@ export const TopBar = memo(function TopBar({
                           via {profile?.auth_provider || 'OAuth'}
                         </span>}
                       </div>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isMockMode}
+                        onClick={() => {
+                          onToggleMockMode();
+                          setIsMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-text hover:bg-white/[0.1] transition-colors cursor-pointer text-left"
+                      >
+                        <FlaskConical className={`w-4 h-4 ${isMockMode ? 'text-mock-status' : 'text-text-dim'}`} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block font-medium">Use mock data</span>
+                          <span className="block text-[10px] text-text-faint mt-0.5">Only affects searches in this browser</span>
+                        </span>
+                        <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-1 rounded-full border ${
+                          isMockMode
+                            ? 'text-mock-status bg-mock-status/10 border-mock-status/25'
+                            : 'text-text-faint bg-white/[0.04] border-white/[0.08]'
+                        }`}>
+                          {isMockMode ? 'On' : 'Off'}
+                        </span>
+                      </button>
 
                       {onOpenPreferences && (
                         <button
@@ -197,7 +257,7 @@ export const TopBar = memo(function TopBar({
               </AnimatePresence>
             </div>
           ) : null}
-        </div>
+        </motion.div>
       </div>
     </header>
   );
