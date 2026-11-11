@@ -31,8 +31,12 @@ Categorization Rules:
    - Attributes directly stated by the user in words.
    - language: If user specifies or writes in a language/culture (e.g. "hindi", "punjabi", "spanish", "japanese", "french", "korean"), extract it into explicit.language.
    - era: If user specifies a decade or time period (e.g. "90s", "80s", "70s", "2000s", "retro", "vintage"), extract it into explicit.era.
-   - track_title: If user names a specific song title (e.g. "Tum Hi Ho", "Kesariya", "Starboy"), extract it into explicit.track_title.
-   - artist: If user names an artist or band (e.g. "Arijit Singh", "Coldplay", "Molchat Doma"), extract it into explicit.artist.
+   - track_title: If user names a specific song title (e.g. "Tum Hi Ho", "Kesariya", "Starboy", "still in love"), extract it into explicit.track_title.
+   - artist: If user names an artist, band, or indie creator (e.g. "Arijit Singh", "Coldplay", "Dil Raaz", "Lifafa", "The Local Train", "KR$NA"), extract it into explicit.artist.
+   - LOWERCASE & INDIE ARTIST RECOGNITION:
+     * Users frequently type indie, regional, or niche artists and songs in all-lowercase (e.g. "songs by dil raaz", "only lifafa", "taba chake", "chaar diwaari", "krsna", "tum hi ho").
+     * Recognize words following prepositions like "by", "from", "artist", or words like "only", "just" in music contexts as artist names, even if lowercase. Convert them to Title Case (e.g. "dil raaz" -> "Dil Raaz").
+     * STRICT GENERAL MOOD SHIELD: NEVER confuse environmental places/activities (e.g. "by the ocean", "by the fire", "by the beach", "by myself") or general mood descriptors (e.g. "only acoustic", "only chill vibes", "only 90s") as artists! For those, explicit.artist MUST remain null.
    - vocals: STRICT NO-INSTRUMENTAL BY DEFAULT. People dislike instrumental songs unless explicitly requested. ONLY set explicit.vocals = "instrumental_preferred" if the user explicitly demands instrumental or score music (e.g. "instrumental", "bgm", "piano only", "lofi beats", "no lyrics", "without words"). Otherwise, set explicit.vocals = "vocals_preferred".
    - negative_constraints:
      * If user explicitly states exclusions using words like "no", "without", "except", "not", "skip", "don't want" (e.g. "no rap", "except arijit singh", "without heavy drums", "not acoustic"):
@@ -99,6 +103,10 @@ Categorization Rules:
      * forbiddenInstruments: 2-4 instruments strictly banned from this vibe (e.g. ["phonk cowbells", "trap 808s", "loud brass fanfare"]).
      * forbiddenVibes: 2-4 musical energies strictly banned. Unless user explicitly asked for instrumental music, ALWAYS include "pure instrumental", "karaoke", and "background movie score" in forbiddenVibes! (e.g. ["pure instrumental", "karaoke", "background score", "party dance track"]).
 
+6. BESPOKE MOOD PERSONA:
+   - persona: An evocative, poetic 2-4 word title capturing the exact emotional atmosphere of the user's prompt (e.g. "Warm Vinyl & Raindrops", "Neon Horizon Velocity", "Cathartic Bedroom Melancholy", "Stormy Chai Sanctuary").
+   - If the user only searched for an artist or song title without mood words (e.g. "only Dil Raaz", "tum hi ho"), use an authentic catalog title (e.g. "Essential Discography" or "Signature Sound").
+
 Schema Output Requirements:
 Output JSON with this exact structure:
 {
@@ -160,7 +168,8 @@ Output JSON with this exact structure:
       "forbiddenInstruments": ["banned instrument 1", "banned instrument 2"],
       "forbiddenVibes": ["banned vibe 1", "banned vibe 2"]
     }
-  }
+  },
+  "persona": "evocative 2-4 word mood persona title"
 }
 
 Do not recommend specific tracks or artists. Do not add commentary. Output valid JSON only.`;

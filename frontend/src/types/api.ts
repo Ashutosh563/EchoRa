@@ -13,6 +13,7 @@ export type TimeContext = "morning" | "afternoon" | "evening" | "late_night" | "
 
 export interface MusicIntent {
   mood: string;
+  persona?: string | null;
   activity: string | null;
   energy: Energy;
   tempo: Tempo;
@@ -76,6 +77,7 @@ export interface SearchResponse {
   tracks: Track[];
   /** Optional human-readable notice, e.g. why the app is in mock mode. */
   notice?: string;
+  hasMore?: boolean;
 }
 
 export interface StatusResponse {

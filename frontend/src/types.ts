@@ -12,6 +12,7 @@ export interface CategorizedPreference<T> {
 
 export interface MusicIntent {
   mood: string;
+  persona?: string | null;
   activity: string | null;
   energy: Energy;
   tempo: Tempo;
@@ -78,6 +79,7 @@ export interface SearchResponse {
   };
   tracks: Track[];
   notice?: string;
+  hasMore?: boolean;
 }
 
 export interface StatusResponse {

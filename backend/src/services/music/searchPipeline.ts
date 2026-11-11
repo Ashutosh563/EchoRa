@@ -8,59 +8,13 @@ import { generateQueries } from "./queryGenerator.js";
 import { defaultDiscoveryProcessor } from "./discoveryProcessor.js";
 import { BACKEND_MOCK_TRACKS, getMockIntent } from "./mockMusic.js";
 import { fuseTrackLists, getSongSignature } from "./fusion.js";
-import { createSemanticReranker, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
+import { createSemanticReranker, parseTargetArtists, type SemanticReranker } from "../gemini/reranker.js";
 import { logger } from "../../utils/logger.js";
 
 export interface SearchPipelineOptions {
   intentExtractor: IntentExtractor | null;
   spotifySearch: SpotifySearch | null;
   reranker?: SemanticReranker | null;
-}
-
-function discoveryQueries(
-  intent: MusicIntent,
-  result: ReturnType<typeof defaultDiscoveryProcessor.process>,
-  context: DiscoveryContext,
-): string[] {
-  const preferredTerm = result.injectedArtist || result.injectedGenre;
-  const contextTerms = [
-    intent.mood && intent.mood !== "any" ? intent.mood : null,
-    intent.activity,
-  ].filter((term): term is string => Boolean(term));
-  const queries: string[] = [];
-
-  if (preferredTerm) {
-    queries.push(result.injectedArtist
-      ? [`artist:"${result.injectedArtist}"`, ...contextTerms].join(" ")
-      : [...contextTerms, result.injectedGenre!].join(" "));
-  }
-
-  const prompt = context.rawPrompt.toLowerCase();
-  const hasExplicitGenre = intent.breakdown?.genre?.source === "explicit" ||
-    intent.genre.some((genre) => Boolean(genre.trim()) && prompt.includes(genre.toLowerCase()));
-  const favoriteGenre = context.preferences.favoriteGenres[0];
-  if (result.mode === "BALANCED" && favoriteGenre && !hasExplicitGenre && favoriteGenre.toLowerCase() !== result.injectedGenre?.toLowerCase()) {
-    queries.push([...contextTerms, favoriteGenre].join(" "));
-  }
-
-  const favoriteArtist = context.preferences.favoriteArtists[0];
-  if ((result.mode === "FAMILIAR" || result.mode === "BALANCED") && favoriteArtist && !intent.artist && !intent.trackTitle) {
-    queries.push([`artist:"${favoriteArtist}"`, ...contextTerms].join(" "));
-  }
-
-  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))];
-}
-
-function rerankerPreferences(
-  context: DiscoveryContext,
-  result: ReturnType<typeof defaultDiscoveryProcessor.process>,
-): PreferenceProfile {
-  return {
-    favoriteGenres: context.preferences.favoriteGenres,
-    favoriteArtists: context.preferences.favoriteArtists,
-    dislikedGenres: result.excludedGenres,
-    dislikedArtists: result.excludedArtists,
-  };
 }
 
 export function cleanSpotifyQuery(q: string, lang?: string | null): string {
@@ -70,6 +24,12 @@ export function cleanSpotifyQuery(q: string, lang?: string | null): string {
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
   if (!lang) return cleaned;
+
+  // Never prepend language or generic keywords if query is already an explicit Spotify fielded filter (artist: or track:)
+  if (/^(?:artist:|track:)/i.test(cleaned)) {
+    return cleaned;
+  }
+
   const normalizedLang = lang.toLowerCase().trim();
 
   if (normalizedLang === "spanish" || normalizedLang === "latin") {
@@ -249,13 +209,6 @@ export function createSearchPipeline({
         queryList.push(baseQueries.primary);
       }
 
-      // Keep Gemini's request facets, and add the selected Preferences-tab signal
-      // as its own retrieval facet so the active discovery mode affects live search.
-      const preferenceQueries = discoveryQueries(activeIntent, discoveryResult, fallbackContext);
-      for (const preferenceQuery of preferenceQueries) {
-        if (!queryList.some((q) => q.toLowerCase() === preferenceQuery.toLowerCase())) queryList.push(preferenceQuery);
-      }
-
       // If user specifically requested a song title, ensure exact song search query is prioritized
       if (activeIntent.trackTitle) {
         const titleQuery = activeIntent.artist
@@ -263,6 +216,26 @@ export function createSearchPipeline({
           : activeIntent.trackTitle;
         if (!queryList.some((q) => q.toLowerCase().includes(activeIntent.trackTitle!.toLowerCase()))) {
           queryList.unshift(titleQuery);
+        }
+      }
+
+      // If user specifically requested artist(s), ensure dedicated artist queries are prioritized
+      const targetArtists = parseTargetArtists(activeIntent.artist);
+      if (targetArtists.length > 1) {
+        for (const art of targetArtists) {
+          const artQuery = `artist:"${art}"`;
+          if (!queryList.includes(artQuery)) {
+            queryList.unshift(artQuery);
+          }
+        }
+        const jointQuery = targetArtists.map((a) => `"${a}"`).join(" ");
+        if (!queryList.includes(jointQuery)) {
+          queryList.unshift(jointQuery);
+        }
+      } else if (targetArtists.length === 1) {
+        const artistQuery = `artist:"${targetArtists[0]}"`;
+        if (!queryList.includes(artistQuery)) {
+          queryList.unshift(artistQuery);
         }
       }
 
@@ -274,33 +247,27 @@ export function createSearchPipeline({
         activeIntent.language,
       );
 
-      // 4. Parallel Spotify Retrieval across query facets (15 tracks per facet = 45 candidates)
-      const searchErrors: unknown[] = [];
+      // 4. Parallel Spotify Retrieval across query facets (25 tracks per facet = up to 75 candidates)
       const searchPromises = finalizedQueries.map(async (q) => {
         try {
-          const tracks = await spotifySearch.searchTracks(q, 15, signal);
+          const tracks = await spotifySearch.searchTracks(q, 25, signal);
           logger.info(`[SpotifySearch] Query "${q}" returned ${tracks.length} tracks. Top: ${tracks.slice(0, 3).map(t => t.name).join(", ")}`);
           return tracks;
         } catch (err) {
-          searchErrors.push(err);
           logger.warn(`Spotify search for "${q}" failed:`, err);
           return [] as Track[];
         }
       });
       const rawTrackLists = await Promise.all(searchPromises);
 
-      if (searchErrors.length === searchPromises.length && searchErrors.length > 0) {
-        throw searchErrors[0];
-      }
-
       // 5. In-Memory Reciprocal Rank Fusion (< 2ms)
-      let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 35 });
+      let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 50 });
 
-      // Safety fallback: if fused candidates are sparse (< 10), search master query
-      if (fusedCandidates.length < 10) {
+      // Safety fallback: if fused candidates are sparse (< 15), search master query
+      if (fusedCandidates.length < 15) {
         try {
           logger.info(`[SpotifySearch] Candidate pool sparse (${fusedCandidates.length}). Executing master fallback: "${masterQueryStr}"`);
-          const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 15, signal);
+          const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 25, signal);
           const seenIds = new Set(fusedCandidates.map((t) => t.id));
           for (const t of fallbackTracks) {
             if (!seenIds.has(t.id)) {
@@ -313,17 +280,19 @@ export function createSearchPipeline({
         }
       }
 
-      const candidatesToUse = fusedCandidates;
+      const candidatesToUse = fusedCandidates.length > 0 ? fusedCandidates : BACKEND_MOCK_TRACKS.slice(0, 10);
 
       // 6. Gemini Semantic Reranker (with safety timeout and mode awareness)
-      const finalTracks = candidatesToUse.length > 0 ? await activeReranker.rerank(
+      const finalTracks = await activeReranker.rerank(
         prompt,
         activeIntent,
         candidatesToUse,
         discoveryResult.mode,
         signal,
-        rerankerPreferences(fallbackContext, discoveryResult),
-      ) : [];
+      );
+
+      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+      const hasMoreInitial = isExclusiveArtist ? finalTracks.length >= 10 : finalTracks.length > 0;
 
       return {
         mode: "live",
@@ -334,9 +303,7 @@ export function createSearchPipeline({
           alternatives: finalizedQueries,
         },
         tracks: finalTracks,
-        ...(finalTracks.length === 0
-          ? { notice: "No Spotify tracks matched this request and its filters. Try broadening the prompt or adjusting your Preferences." }
-          : {}),
+        hasMore: hasMoreInitial,
       };
     },
 
@@ -371,108 +338,98 @@ export function createSearchPipeline({
       const excludeIdSet = new Set(excludeTrackIds);
       const excludeSigSet = new Set(excludeSongSignatures);
 
-      const activeContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
-      const discoveryResult = defaultDiscoveryProcessor.process(activeContext, intent);
-      const activeIntent = discoveryResult.adjustedIntent;
-
       if (mode === "mock" || !spotifySearch) {
         const available = BACKEND_MOCK_TRACKS.filter((t) => !excludeIdSet.has(t.id));
-        const nextBatch = available.slice(0, 10);
+        const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
+        const batchSize = Math.min(5, remainingSlots);
+        const nextBatch = available.slice(0, batchSize);
+        const totalAfter = excludeTrackIds.length + nextBatch.length;
         return {
           page,
           tracks: nextBatch,
-          hasMore: page < 4 && available.length > 10,
+          hasMore: totalAfter < 25 && available.length > batchSize,
           queriesUsed: ["mock-load-more"],
         };
       }
 
       // Live mode: 4-Tier Page Candidate Mining
       const queryList: { query: string; offset: number }[] = [];
+      const targetArtists = parseTargetArtists(intent.artist);
+      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
 
-      if (page === 2) {
+      if (isExclusiveArtist && targetArtists.length > 0) {
+        for (const art of targetArtists) {
+          queryList.push({ query: `artist:"${art}"`, offset: (page - 1) * 10 });
+          queryList.push({ query: art, offset: (page - 1) * 10 });
+        }
+      } else if (page === 2) {
         // Tier 2: Mood context, curator nuance, and genre offset
-        if (activeIntent.multiQueries?.contextQuery) {
-          queryList.push({ query: activeIntent.multiQueries.contextQuery, offset: 0 });
+        if (intent.multiQueries?.contextQuery) {
+          queryList.push({ query: intent.multiQueries.contextQuery, offset: 0 });
         }
-        if (activeIntent.multiQueries?.curatorQuery) {
-          queryList.push({ query: activeIntent.multiQueries.curatorQuery, offset: 0 });
+        if (intent.multiQueries?.curatorQuery) {
+          queryList.push({ query: intent.multiQueries.curatorQuery, offset: 0 });
         }
-        if (activeIntent.multiQueries?.genreQuery) {
-          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: 10 });
+        if (intent.multiQueries?.genreQuery) {
+          queryList.push({ query: intent.multiQueries.genreQuery, offset: 10 });
         }
-        if (activeIntent.multiQueries?.moodQuery) {
-          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: 10 });
+        if (intent.multiQueries?.moodQuery) {
+          queryList.push({ query: intent.multiQueries.moodQuery, offset: 10 });
         }
       } else if (page === 3) {
         // Tier 3: Subgenres or deep decade boundaries
-        if (activeIntent.subgenres && activeIntent.subgenres.length > 0) {
-          for (const sg of activeIntent.subgenres.slice(0, 3)) {
-            queryList.push({ query: `${sg} ${activeIntent.language || ""}`.trim(), offset: 0 });
+        if (intent.subgenres && intent.subgenres.length > 0) {
+          for (const sg of intent.subgenres.slice(0, 3)) {
+            queryList.push({ query: `${sg} ${intent.language || ""}`.trim(), offset: 0 });
           }
         }
-        if (activeIntent.multiQueries?.genreQuery) {
-          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: 20 });
+        if (intent.multiQueries?.genreQuery) {
+          queryList.push({ query: intent.multiQueries.genreQuery, offset: 20 });
         }
-        if (activeIntent.multiQueries?.contextQuery) {
-          queryList.push({ query: activeIntent.multiQueries.contextQuery, offset: 10 });
+        if (intent.multiQueries?.contextQuery) {
+          queryList.push({ query: intent.multiQueries.contextQuery, offset: 10 });
         }
-        if (activeIntent.multiQueries?.masterQuery) {
-          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: 10 });
+        if (intent.multiQueries?.masterQuery) {
+          queryList.push({ query: intent.multiQueries.masterQuery, offset: 10 });
         }
       } else {
         // Tier 4+: Seed artists graph queries
-        if (activeIntent.seedArtists && activeIntent.seedArtists.length >= 2) {
-          const pair1 = `artist:"${activeIntent.seedArtists[0]}" OR artist:"${activeIntent.seedArtists[1]}"`;
+        if (intent.seedArtists && intent.seedArtists.length >= 2) {
+          const pair1 = `artist:"${intent.seedArtists[0]}" OR artist:"${intent.seedArtists[1]}"`;
           queryList.push({ query: pair1, offset: 0 });
-          if (activeIntent.seedArtists.length >= 4) {
-            const pair2 = `artist:"${activeIntent.seedArtists[2]}" OR artist:"${activeIntent.seedArtists[3]}"`;
+          if (intent.seedArtists.length >= 4) {
+            const pair2 = `artist:"${intent.seedArtists[2]}" OR artist:"${intent.seedArtists[3]}"`;
             queryList.push({ query: pair2, offset: 0 });
           }
         }
-        if (activeIntent.multiQueries?.masterQuery) {
-          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: (page - 1) * 10 });
+        if (intent.multiQueries?.masterQuery) {
+          queryList.push({ query: intent.multiQueries.masterQuery, offset: (page - 1) * 10 });
         }
-        if (activeIntent.multiQueries?.moodQuery) {
-          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: 20 });
-        }
-      }
-
-      const preferenceQueries = discoveryQueries(activeIntent, discoveryResult, activeContext);
-      for (const preferenceQuery of preferenceQueries) {
-        if (!queryList.some((item) => item.query.toLowerCase() === preferenceQuery.toLowerCase())) {
-          queryList.push({ query: preferenceQuery, offset: 0 });
+        if (intent.multiQueries?.moodQuery) {
+          queryList.push({ query: intent.multiQueries.moodQuery, offset: 20 });
         }
       }
 
       if (queryList.length === 0) {
-        queryList.push({ query: activeIntent.multiQueries?.masterQuery || prompt, offset: (page - 1) * 10 });
+        queryList.push({ query: intent.multiQueries?.masterQuery || prompt, offset: (page - 1) * 10 });
       }
 
       const finalizedQueries = queryList.map((item) => ({
-        query: cleanSpotifyQuery(item.query, activeIntent.language),
+        query: cleanSpotifyQuery(item.query, intent.language),
         offset: item.offset,
       }));
 
       // Parallel fetch from Spotify (25 tracks per query facet to ensure wide candidate pool)
-      const searchErrors: unknown[] = [];
       const searchPromises = finalizedQueries.map(async ({ query, offset }) => {
         try {
           return await spotifySearch.searchTracks(query, 25, signal, offset);
         } catch (err) {
-          searchErrors.push(err);
           logger.warn(`[LoadMore] Spotify search for "${query}" failed:`, err);
           return [] as Track[];
         }
       });
 
       const trackLists = await Promise.all(searchPromises);
-      if (searchErrors.length === searchPromises.length && searchErrors.length > 0) {
-        throw searchErrors[0];
-      }
       let rawCandidates: Track[] = [];
       const seenRawIds = new Set<string>();
 
@@ -490,18 +447,43 @@ export function createSearchPipeline({
         (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
       ).length;
 
+      // Detect if the candidate pool belongs to a tight niche micro-scene (< 12 unique artists)
+      const rawUniqueArtists = new Set<string>();
+      for (const t of rawCandidates) {
+        if (t.artists?.[0]) rawUniqueArtists.add(t.artists[0].toLowerCase().trim());
+      }
+      const isNicheScene = rawUniqueArtists.size > 0 && rawUniqueArtists.size < 12;
+
       if (filteredCount < 30) {
         try {
-          const fallbackQuery = cleanSpotifyQuery(
-            activeIntent.multiQueries?.masterQuery || activeIntent.multiQueries?.moodQuery || prompt,
-            activeIntent.language,
-          );
-          logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}"`);
-          const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 30, signal, page * 10);
-          for (const t of cascadeTracks) {
-            if (!seenRawIds.has(t.id)) {
-              seenRawIds.add(t.id);
-              rawCandidates.push(t);
+          // If niche micro-scene has seed artists, query authentic scene artists first
+          if (isNicheScene && intent.seedArtists && intent.seedArtists.length >= 2) {
+            const seedQuery = intent.seedArtists.length >= 4 && page % 2 === 0
+              ? `artist:"${intent.seedArtists[2]}" OR artist:"${intent.seedArtists[3]}"`
+              : `artist:"${intent.seedArtists[0]}" OR artist:"${intent.seedArtists[1]}"`;
+            logger.info(`[LoadMore] Niche micro-scene sparse (${filteredCount} tracks, ${rawUniqueArtists.size} artists). Querying seed artist network: "${seedQuery}"`);
+            const seedTracks = await spotifySearch.searchTracks(seedQuery, 25, signal, 0);
+            for (const t of seedTracks) {
+              if (!seenRawIds.has(t.id)) {
+                seenRawIds.add(t.id);
+                rawCandidates.push(t);
+              }
+            }
+          }
+
+          // Fallback to master query if still low
+          if (rawCandidates.filter((t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t))).length < 25) {
+            const fallbackQuery = cleanSpotifyQuery(
+              intent.multiQueries?.masterQuery || intent.multiQueries?.moodQuery || prompt,
+              intent.language,
+            );
+            logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}"`);
+            const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 25, signal, page * 10);
+            for (const t of cascadeTracks) {
+              if (!seenRawIds.has(t.id)) {
+                seenRawIds.add(t.id);
+                rawCandidates.push(t);
+              }
             }
           }
         } catch (err) {
@@ -514,27 +496,54 @@ export function createSearchPipeline({
         (t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t)),
       );
 
-      // Gemini Call 2 Reranker with 2-batch / 6-cumulative artist limits
-      const finalTracks = await activeReranker.rerank(
+      // Edge Case C: If exclusive artist catalog is exhausted, exit gracefully immediately
+      if (isExclusiveArtist && candidatesToRerank.length === 0) {
+        logger.info(`[LoadMore] Exclusive catalog for "${intent.artist}" exhausted at page ${page}. Returning empty batch with hasMore: false.`);
+        return {
+          page,
+          tracks: [],
+          hasMore: false,
+          queriesUsed: finalizedQueries.map((q) => q.query),
+        };
+      }
+
+      // Re-evaluate artist density on deduplicated candidates
+      const rerankUniqueArtists = new Set<string>();
+      for (const t of candidatesToRerank) {
+        if (t.artists?.[0]) rerankUniqueArtists.add(t.artists[0].toLowerCase().trim());
+      }
+      // For tight niche micro-scenes on deep pages (Page 3/4), gracefully adapt maxPerArtist from 2 to 3
+      // For popular/dense scenes (rerankUniqueArtists >= 12), artist cap stays strictly at 2 (100% untouched)
+      const dynamicMaxPerArtist = (rerankUniqueArtists.size > 0 && rerankUniqueArtists.size < 12 && page >= 3) ? 3 : 2;
+
+      // Gemini Call 2 Reranker with dynamic artist limits
+      const rerankedTracks = await activeReranker.rerank(
         prompt,
-        activeIntent,
+        intent,
         candidatesToRerank,
-        activeContext.discoveryMode,
+        discoveryContext?.discoveryMode ?? "FAMILIAR",
         signal,
-        rerankerPreferences(activeContext, discoveryResult),
+        undefined,
         {
           cumulativeArtistCounts,
           maxCumulativePerArtist: 6,
-          maxPerArtist: 2,
+          maxPerArtist: dynamicMaxPerArtist,
           excludeTrackIds: excludeIdSet,
           excludeSignatures: excludeSigSet,
         },
       );
 
+      // Enforce clean 5-track batch size and hard session ceiling of 25 tracks
+      const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
+      const batchSize = Math.min(5, remainingSlots);
+      const finalTracks = rerankedTracks.slice(0, batchSize);
+      const totalAfter = excludeTrackIds.length + finalTracks.length;
+      const hasMore = totalAfter < 25 && finalTracks.length > 0;
+
       return {
         page,
         tracks: finalTracks,
-        hasMore: finalTracks.length > 0,
+        hasMore,
         queriesUsed: finalizedQueries.map((q) => q.query),
       };
     },
@@ -557,7 +566,7 @@ export function createSearchPipeline({
       const { prompt, intent, refinement, mode, discoveryContext, signal } = params;
 
       // 1. Clone intent: Base mood, language, era, artists, and primary genre stay locked
-      let refinedIntent: MusicIntent = JSON.parse(JSON.stringify(intent));
+      const refinedIntent: MusicIntent = JSON.parse(JSON.stringify(intent));
       const type = (refinement.type || "").toLowerCase();
       const deltaText = refinement.delta || "";
 
@@ -618,14 +627,6 @@ export function createSearchPipeline({
         }
       }
 
-      const activeContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
-      const discoveryResult = defaultDiscoveryProcessor.process(activeContext, refinedIntent);
-      refinedIntent = discoveryResult.adjustedIntent;
-
       if (mode === "mock" || !spotifySearch) {
         return {
           intent: refinedIntent,
@@ -638,46 +639,37 @@ export function createSearchPipeline({
       if (refinedIntent.multiQueries?.moodQuery) queryList.push(refinedIntent.multiQueries.moodQuery);
       if (refinedIntent.multiQueries?.genreQuery) queryList.push(refinedIntent.multiQueries.genreQuery);
       if (refinedIntent.multiQueries?.contextQuery) queryList.push(refinedIntent.multiQueries.contextQuery);
-      const preferenceQueries = discoveryQueries(refinedIntent, discoveryResult, activeContext);
-      for (const preferenceQuery of preferenceQueries) {
-        if (!queryList.some((q) => q.toLowerCase() === preferenceQuery.toLowerCase())) queryList.push(preferenceQuery);
-      }
       if (queryList.length === 0) {
         queryList.push(`${prompt} ${deltaText}`.trim());
       }
 
       const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, refinedIntent.language));
 
-      const searchErrors: unknown[] = [];
       const searchPromises = finalizedQueries.map(async (q) => {
         try {
-          return await spotifySearch.searchTracks(q, 15, signal);
+          return await spotifySearch.searchTracks(q, 25, signal);
         } catch (err) {
-          searchErrors.push(err);
           logger.warn(`[RefineVibe] Spotify search for "${q}" failed:`, err);
           return [] as Track[];
         }
       });
 
       const trackLists = await Promise.all(searchPromises);
-      if (searchErrors.length === searchPromises.length && searchErrors.length > 0) {
-        throw searchErrors[0];
-      }
-      const fusedCandidates = fuseTrackLists(trackLists, { maxCandidates: 35 });
-      const candidatesToUse = fusedCandidates;
+      const fusedCandidates = fuseTrackLists(trackLists, { maxCandidates: 50 });
+      const candidatesToUse = fusedCandidates.length > 0 ? fusedCandidates : BACKEND_MOCK_TRACKS.slice(0, 10);
 
       // 4. Gemini Call 2 Reranker scores candidate tracks against the refined sonic coordinates
-      const finalTracks = candidatesToUse.length > 0 ? await activeReranker.rerank(
+      const finalTracks = await activeReranker.rerank(
         prompt,
         refinedIntent,
         candidatesToUse,
-        activeContext.discoveryMode,
+        discoveryContext?.discoveryMode ?? "FAMILIAR",
         signal,
-        rerankerPreferences(activeContext, discoveryResult),
+        undefined,
         {
           maxPerArtist: 2,
         },
-      ) : [];
+      );
 
       return {
         intent: refinedIntent,
