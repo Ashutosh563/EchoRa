@@ -22,7 +22,7 @@
 
 ## 📖 Overview
 
-**ECHORA** is an intelligent, mood-aware music discovery ecosystem that bridges nuanced human emotion with global music catalogs. Users express how they feel through open-ended natural language (*"quiet rainy midnight in a neon Tokyo café"*), voice dictation, or facial expressions.
+**ECHORA** is an intelligent, mood-aware music discovery ecosystem that bridges nuanced human emotion with global music catalogs. Users express how they feel through open-ended natural language (*"quiet rainy midnight in a neon Tokyo café"*), voice dictation, or facial expressions. Spotify is the primary catalog; YouTube Music is used as a search fallback when Spotify is unavailable or returns too few candidates.
 
 ECHORA processes the psychological nuance through **Google Gemini 2.5 Flash**, builds deep sonic profiles (cadence, timbre, harmonic modes, and anti-sonic exclusions), resolves tracks through the **Spotify Web API**, and streams full-length audio in-app with zero subscription requirements.
 
@@ -33,6 +33,7 @@ ECHORA processes the psychological nuance through **Google Gemini 2.5 Flash**, b
 - **Multimodal Emotional Input:** Express vibe via natural language text, live browser speech-to-text (Web Speech API), or opt-in facial emotion recognition (MediaStream + Canvas).
 - **Deep Sonic Profiling & NLU:** Gemini analyzes psychological nuance to deduce tempo (BPM cadence), timbre textures (e.g. *warm tape saturation*, *cold post-punk reverb*), harmonic mode (*minor*, *major*, *modal*), and **Anti-Sonic Aura** (strict banning of disruptive instruments like phonk cowbells or aggressive trap 808s).
 - **Multi-Query Semantic Retrieval:** Generates 5 specialized query facets per intent (`moodQuery`, `genreQuery`, `contextQuery`, `masterQuery`, `curatorQuery`) with cultural anchoring (e.g. Bollywood/Hindi, Spanish, Russian, Japanese) and vintage slang translation.
+- **Intent-to-Track Scoring:** Gemini scores ranked songs against the original prompt. If the first set scores poorly, ECHORA requests up to two better search queries and reruns retrieval once while preserving explicit artist, title, language, and exclusion constraints.
 - **Native In-App Audio Playback:** Full-featured bottom player bar (`BottomPlayerBar`) with real-time scrubbing, buffering feedback, loop modes, and continuous track auto-advancement.
 - **Continuous Discovery Engine:** Infinite exploration via `/api/music/load-more` with dynamic track deduplication, artist frequency re-balancing, and interactive `<VibeRefinementBar />` controls.
 - **4-Stage Mood Transition Planner:** Synthesizes psychophysiological bridges between disparate emotional states (e.g., *Anxious* → *Grounded* → *Calm* → *Energized*), producing 20 curated tracks with seamless cross-stage queue progression.
@@ -269,6 +270,14 @@ npm run dev
 ### Configuring Live Mode (Production)
 
 Create a `.env` file in both `backend/` and `frontend/` folders:
+
+The YouTube Music fallback uses the community, unofficial `ytmusicapi` Python package. It searches without a user login, but YouTube Music changes can break the client. Install it once with Python 3.10 or newer:
+
+```bash
+npm run setup:ytmusic
+```
+
+Catalog search is unauthenticated; ECHORA's existing YouTube stream resolver continues to handle in-app playback.
 
 #### `backend/.env`
 ```ini

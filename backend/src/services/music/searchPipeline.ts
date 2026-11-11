@@ -4,16 +4,21 @@ import type { SearchResponse } from "../../types/api.js";
 import type { DiscoveryContext } from "../../types/discovery.js";
 import type { IntentExtractor } from "../gemini/intentExtractor.js";
 import type { SpotifySearch } from "../spotify/spotifySearch.js";
+import type { YouTubeMusicSearch } from "../youtubeMusic/ytmusicSearch.js";
 import { generateQueries } from "./queryGenerator.js";
 import { defaultDiscoveryProcessor } from "./discoveryProcessor.js";
 import { BACKEND_MOCK_TRACKS, getMockIntent } from "./mockMusic.js";
 import { fuseTrackLists, getSongSignature } from "./fusion.js";
-import { createSemanticReranker, parseTargetArtists, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
+import { balanceTracks, createSemanticReranker, getPrimaryArtistKey, parseTargetArtists, userWantsInstrumental, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
 import { logger } from "../../utils/logger.js";
+import { enrichTracksWithPreviews } from "../spotify/previewEnricher.js";
+
+const MIN_GEMINI_MATCH_SCORE = 55;
 
 export interface SearchPipelineOptions {
   intentExtractor: IntentExtractor | null;
   spotifySearch: SpotifySearch | null;
+  youtubeMusicSearch?: YouTubeMusicSearch | null;
   reranker?: SemanticReranker | null;
 }
 
@@ -170,6 +175,7 @@ export function cleanSpotifyQuery(q: string, lang?: string | null): string {
 export function createSearchPipeline({
   intentExtractor,
   spotifySearch,
+  youtubeMusicSearch = null,
   reranker,
 }: SearchPipelineOptions) {
   const activeReranker = reranker ?? createSemanticReranker(null);
@@ -217,7 +223,7 @@ export function createSearchPipeline({
         rawPrompt: prompt,
       };
 
-      if (mode === "mock" || !intentExtractor || !spotifySearch) {
+      if (mode === "mock" || !intentExtractor || (!spotifySearch && !youtubeMusicSearch)) {
         const rawIntent = getMockIntent(prompt);
         const discoveryResult = defaultDiscoveryProcessor.process(fallbackContext, rawIntent);
         const queries = generateQueries(discoveryResult.adjustedIntent, discoveryResult);
@@ -302,9 +308,9 @@ export function createSearchPipeline({
 
       // 4. Parallel Spotify Retrieval across query facets (25 tracks per facet = up to 75 candidates)
       const searchErrors: unknown[] = [];
-      const searchPromises = finalizedQueries.map(async (q) => {
+      const searchPromises = (spotifySearch ? finalizedQueries : []).map(async (q) => {
         try {
-          const tracks = await spotifySearch.searchTracks(q, 25, signal);
+          const tracks = await spotifySearch!.searchTracks(q, 25, signal);
           logger.info(`[SpotifySearch] Query "${q}" returned ${tracks.length} tracks. Top: ${tracks.slice(0, 3).map(t => t.name).join(", ")}`);
           return tracks;
         } catch (err) {
@@ -315,7 +321,7 @@ export function createSearchPipeline({
       });
       const rawTrackLists = await Promise.all(searchPromises);
 
-      if (searchErrors.length === searchPromises.length && searchErrors.length > 0) {
+      if (searchPromises.length > 0 && searchErrors.length === searchPromises.length && !youtubeMusicSearch) {
         throw searchErrors[0];
       }
 
@@ -323,7 +329,7 @@ export function createSearchPipeline({
       let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 50 });
 
       // Safety fallback: if fused candidates are sparse (< 15), search master query
-      if (fusedCandidates.length < 15) {
+      if (fusedCandidates.length < 15 && spotifySearch) {
         try {
           logger.info(`[SpotifySearch] Candidate pool sparse (${fusedCandidates.length}). Executing master fallback: "${masterQueryStr}"`);
           const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 25, signal);
@@ -339,10 +345,35 @@ export function createSearchPipeline({
         }
       }
 
-      const candidatesToUse = fusedCandidates;
+      let usedYouTubeMusicFallback = false;
+      let youtubeMusicFallbackFailed = false;
+      if (youtubeMusicSearch && (fusedCandidates.length < 10 || searchErrors.length > 0)) {
+        const fallbackQueries = finalizedQueries.slice(0, 5);
+        const fallbackResults = await Promise.all(
+          fallbackQueries.map(async (query) => {
+            try {
+              return await youtubeMusicSearch.searchTracks(query, 25, signal);
+            } catch (err) {
+              youtubeMusicFallbackFailed = true;
+              logger.warn(`[YTMusicFallback] Search for "${query}" failed:`, err);
+              return [] as Track[];
+            }
+          }),
+        );
+        const fallbackCandidates = fuseTrackLists(fallbackResults, { maxCandidates: 50 });
+        if (fallbackCandidates.length > 0) {
+          usedYouTubeMusicFallback = true;
+          fusedCandidates = fuseTrackLists([fusedCandidates, fallbackCandidates], { maxCandidates: 50 });
+          logger.info(`[YTMusicFallback] Added ${fallbackCandidates.length} YouTube Music candidates after Spotify returned a degraded catalog.`);
+        } else if (searchErrors.length === searchPromises.length && searchErrors.length > 0) {
+          throw searchErrors[0];
+        }
+      }
+
+      let candidatesToUse = fusedCandidates;
 
       // 6. Gemini Semantic Reranker (with safety timeout and mode awareness)
-      const finalTracks = candidatesToUse.length > 0 ? await activeReranker.rerank(
+      let rerankedTracks = candidatesToUse.length > 0 ? await activeReranker.rerank(
         prompt,
         activeIntent,
         candidatesToUse,
@@ -351,8 +382,128 @@ export function createSearchPipeline({
         rerankerPreferences(fallbackContext, discoveryResult),
       ) : [];
 
-      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
-      const hasMoreInitial = isExclusiveArtist ? finalTracks.length >= 10 : finalTracks.length > 0;
+      const averageScore = (tracks: Track[]) => {
+        const scored = tracks.filter((track): track is Track & { matchScore: number } => typeof track.matchScore === "number");
+        return scored.length ? scored.reduce((sum, track) => sum + track.matchScore, 0) / scored.length : null;
+      };
+      const firstPassScore = averageScore(rerankedTracks);
+      let refinementQueriesUsed: string[] = [];
+      const lowestScore = rerankedTracks.reduce<number | null>((lowest, track) => {
+        if (typeof track.matchScore !== "number") return lowest;
+        return lowest === null ? track.matchScore : Math.min(lowest, track.matchScore);
+      }, null);
+      if (
+        firstPassScore !== null &&
+        (firstPassScore < 75 || (lowestScore !== null && lowestScore < 55)) &&
+        activeReranker.suggestRefinementQueries
+      ) {
+        try {
+          const lowScoringTracks = rerankedTracks
+            .filter((track) => typeof track.matchScore === "number" && track.matchScore < 75)
+            .sort((a, b) => (a.matchScore ?? 0) - (b.matchScore ?? 0));
+          refinementQueriesUsed = await activeReranker.suggestRefinementQueries(prompt, activeIntent, lowScoringTracks, signal);
+          if (refinementQueriesUsed.length > 0) {
+            const refinementResults: Track[][] = await Promise.all(
+              refinementQueriesUsed.map(async (query) => {
+                const cleanQuery = cleanSpotifyQuery(query, activeIntent.language);
+                if (spotifySearch) {
+                  try {
+                    return await spotifySearch.searchTracks(cleanQuery, 25, signal);
+                  } catch (err) {
+                    logger.warn(`[SemanticRefine] Spotify search for "${cleanQuery}" failed:`, err);
+                  }
+                }
+                if (youtubeMusicSearch) {
+                  try {
+                    usedYouTubeMusicFallback = true;
+                    return await youtubeMusicSearch.searchTracks(cleanQuery, 25, signal);
+                  } catch (err) {
+                    logger.warn(`[SemanticRefine] YouTube Music search for "${cleanQuery}" failed:`, err);
+                  }
+                }
+                return [];
+              }),
+            );
+            const refinedCandidates = fuseTrackLists([candidatesToUse, ...refinementResults], { maxCandidates: 60 });
+            if (refinedCandidates.length > candidatesToUse.length) {
+              const refinedRanking = await activeReranker.rerank(
+                prompt,
+                activeIntent,
+                refinedCandidates,
+                discoveryResult.mode,
+                signal,
+                rerankerPreferences(fallbackContext, discoveryResult),
+              );
+              const refinedScore = averageScore(refinedRanking);
+              if (refinedScore !== null && refinedScore > (firstPassScore ?? 0)) {
+                candidatesToUse = refinedCandidates;
+                rerankedTracks = refinedRanking;
+                logger.info(`[SemanticRefine] Match score improved from ${Math.round(firstPassScore!)} to ${Math.round(refinedScore)} after one refined retrieval pass.`);
+              }
+            }
+          }
+        } catch (err) {
+          logger.warn("[SemanticRefine] Skipped query refinement after a Gemini/catalog error:", err);
+        }
+      }
+
+      // Keep the first page useful if the semantic model returns a short list.
+      // Fill from the already-fused retrieval pool, applying the same language,
+      // era, explicit request, negative constraint, and artist-balance rules.
+      const hasGeminiScores = rerankedTracks.some((track) => typeof track.matchScore === "number");
+      const confidenceCheckedTracks = hasGeminiScores
+        ? rerankedTracks.filter((track) => typeof track.matchScore !== "number" || track.matchScore >= MIN_GEMINI_MATCH_SCORE)
+        : rerankedTracks;
+      if (hasGeminiScores && confidenceCheckedTracks.length < rerankedTracks.length) {
+        logger.info(`[SemanticFilter] Removed ${rerankedTracks.length - confidenceCheckedTracks.length} tracks below the ${MIN_GEMINI_MATCH_SCORE}% Gemini fit threshold.`);
+      }
+
+      const pageArtistLimit = activeIntent.artist ? 10 : 2;
+      const locallyVerifiedTracks = balanceTracks(
+        confidenceCheckedTracks,
+        prompt.toLowerCase().includes("mashup") || prompt.toLowerCase().includes("mix") ? 10 : 2,
+        activeIntent.era,
+        activeIntent.language,
+        userWantsInstrumental(prompt, activeIntent),
+        pageArtistLimit,
+        activeIntent,
+        { maxPerArtist: pageArtistLimit, maxCumulativePerArtist: pageArtistLimit },
+      );
+      const rankedIds = new Set(locallyVerifiedTracks.map((track) => track.id));
+      const rankedSignatures = new Set(locallyVerifiedTracks.map(getSongSignature));
+      const rankedArtistCounts: Record<string, number> = {};
+      for (const track of rerankedTracks) {
+        const artistKey = getPrimaryArtistKey(track);
+        rankedArtistCounts[artistKey] = (rankedArtistCounts[artistKey] ?? 0) + 1;
+      }
+      const topUpCandidates = hasGeminiScores ? [] : candidatesToUse.filter(
+        (track) => !rankedIds.has(track.id) && !rankedSignatures.has(getSongSignature(track)),
+      );
+      const balancedTopUp = balanceTracks(
+        topUpCandidates,
+        prompt.toLowerCase().includes("mashup") || prompt.toLowerCase().includes("mix") ? 10 : 2,
+        activeIntent.era,
+        activeIntent.language,
+        userWantsInstrumental(prompt, activeIntent),
+        pageArtistLimit,
+        activeIntent,
+        {
+          maxPerArtist: pageArtistLimit,
+          maxCumulativePerArtist: pageArtistLimit,
+          cumulativeArtistCounts: rankedArtistCounts,
+        },
+      );
+      const finalTracks = [...locallyVerifiedTracks, ...balancedTopUp].slice(0, 10);
+
+      const enrichedTracks = await enrichTracksWithPreviews(finalTracks);
+
+      // ----- Enforce a fixed page size of 10 tracks -----
+      const PAGE_SIZE = 10;
+      const pageTracks = enrichedTracks.slice(0, PAGE_SIZE);
+      // A short first page is not evidence that the catalog is exhausted. Keep
+      // discovery available while there is at least one live result; load-more
+      // will set hasMore=false when Spotify returns no fresh tracks.
+      const hasMoreInitial = enrichedTracks.length > 0 && enrichedTracks.length < 25;
 
       return {
         mode: "live",
@@ -360,12 +511,17 @@ export function createSearchPipeline({
         intent: activeIntent,
         queries: {
           primary: masterQueryStr,
-          alternatives: finalizedQueries,
+          alternatives: [...finalizedQueries, ...refinementQueriesUsed],
         },
-        tracks: finalTracks,
+        tracks: pageTracks,
         hasMore: hasMoreInitial,
+        ...(usedYouTubeMusicFallback
+          ? { notice: "Spotify results were unavailable or incomplete. Showing YouTube Music catalog results." }
+          : youtubeMusicFallbackFailed && fusedCandidates.length === 0
+            ? { notice: "Spotify results were unavailable and YouTube Music could not be reached. Please try again." }
+            : {}),
         ...(finalTracks.length === 0
-          ? { notice: "No Spotify tracks matched this request and its filters. Try broadening the prompt or adjusting your Preferences." }
+          ? { notice: "No catalog tracks matched this request and its filters with enough confidence. Try broadening the prompt or adjusting your Preferences." }
           : {}),
       };
     },
@@ -409,10 +565,11 @@ export function createSearchPipeline({
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, intent);
       const activeIntent = discoveryResult.adjustedIntent;
 
-      if (mode === "mock" || !spotifySearch) {
+      if (mode === "mock" || (!spotifySearch && !youtubeMusicSearch)) {
         const available = BACKEND_MOCK_TRACKS.filter((t) => !excludeIdSet.has(t.id));
-        const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
-        const batchSize = Math.min(5, remainingSlots);
+        const PAGE_SIZE = 10;
+        const remainingSlots = Math.max(0, PAGE_SIZE - excludeTrackIds.length);
+        const batchSize = Math.min(PAGE_SIZE, remainingSlots);
         const nextBatch = available.slice(0, batchSize);
         const totalAfter = excludeTrackIds.length + nextBatch.length;
         return {
@@ -427,6 +584,14 @@ export function createSearchPipeline({
       const queryList: { query: string; offset: number }[] = [];
       const targetArtists = parseTargetArtists(intent.artist);
       const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+
+      // Continue an explicitly requested artist catalog on later pages even
+      // when the prompt also asks for mood/context matches.
+      if (!isExclusiveArtist && targetArtists.length > 0) {
+        for (const art of targetArtists) {
+          queryList.push({ query: `artist:"${art}"`, offset: (page - 1) * 10 });
+        }
+      }
 
       if (isExclusiveArtist && targetArtists.length > 0) {
         for (const art of targetArtists) {
@@ -499,9 +664,9 @@ export function createSearchPipeline({
 
       // Parallel fetch from Spotify (25 tracks per query facet to ensure wide candidate pool)
       const searchErrors: unknown[] = [];
-      const searchPromises = finalizedQueries.map(async ({ query, offset }) => {
+      const searchPromises = (spotifySearch ? finalizedQueries : []).map(async ({ query, offset }) => {
         try {
-          return await spotifySearch.searchTracks(query, 25, signal, offset);
+          return await spotifySearch!.searchTracks(query, 25, signal, offset);
         } catch (err) {
           searchErrors.push(err);
           logger.warn(`[LoadMore] Spotify search for "${query}" failed:`, err);
@@ -510,7 +675,7 @@ export function createSearchPipeline({
       });
 
       const trackLists = await Promise.all(searchPromises);
-      if (searchErrors.length === searchPromises.length && searchErrors.length > 0) {
+      if (searchPromises.length > 0 && searchErrors.length === searchPromises.length && !youtubeMusicSearch) {
         throw searchErrors[0];
       }
       let rawCandidates: Track[] = [];
@@ -537,7 +702,7 @@ export function createSearchPipeline({
       }
       const isNicheScene = rawUniqueArtists.size > 0 && rawUniqueArtists.size < 12;
 
-      if (filteredCount < 30) {
+      if (filteredCount < 30 && spotifySearch) {
         try {
           // If niche micro-scene has seed artists, query authentic scene artists first
           if (isNicheScene && intent.seedArtists && intent.seedArtists.length >= 2) {
@@ -555,7 +720,7 @@ export function createSearchPipeline({
           }
 
           // Fallback to master query if still low
-          if (rawCandidates.filter((t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t))).length < 25) {
+          if (spotifySearch && rawCandidates.filter((t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t))).length < 25) {
             const fallbackQuery = cleanSpotifyQuery(
               intent.multiQueries?.masterQuery || intent.multiQueries?.moodQuery || prompt,
               intent.language,
@@ -571,6 +736,39 @@ export function createSearchPipeline({
           }
         } catch (err) {
           logger.warn("[LoadMore] Cascade fallback failed:", err);
+        }
+      }
+
+      const remainingUniqueCount = () => rawCandidates.filter(
+        (track) => !excludeIdSet.has(track.id) && !excludeSigSet.has(getSongSignature(track)),
+      ).length;
+      if (youtubeMusicSearch && (remainingUniqueCount() < 5 || (searchPromises.length > 0 && searchErrors.length > 0))) {
+        const variantTerms = page % 3 === 2
+          ? ["album version", "official audio", "acoustic"]
+          : page % 3 === 0
+            ? ["live", "album version", "official audio"]
+            : ["official audio", "acoustic", "live"];
+        const youtubeQueries = finalizedQueries
+          .slice(0, 3)
+          .flatMap(({ query }) => [query, ...variantTerms.map((term) => `${query} ${term}`)])
+          .map((query) => cleanSpotifyQuery(query, activeIntent.language))
+          .filter((query, index, all) => Boolean(query) && all.indexOf(query) === index)
+          .slice(0, 8);
+        const fallbackResults = await Promise.all(
+          youtubeQueries.map(async (query) => {
+            try {
+              return await youtubeMusicSearch.searchTracks(query, 25, signal);
+            } catch (err) {
+              logger.warn(`[LoadMore][YTMusicFallback] Search for "${query}" failed:`, err);
+              return [] as Track[];
+            }
+          }),
+        );
+        for (const track of fuseTrackLists(fallbackResults, { maxCandidates: 50 })) {
+          if (!seenRawIds.has(track.id)) {
+            seenRawIds.add(track.id);
+            rawCandidates.push(track);
+          }
         }
       }
 
@@ -619,13 +817,34 @@ export function createSearchPipeline({
       // Enforce clean 5-track batch size and hard session ceiling of 25 tracks
       const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
       const batchSize = Math.min(5, remainingSlots);
-      const finalTracks = rerankedTracks.slice(0, batchSize);
-      const totalAfter = excludeTrackIds.length + finalTracks.length;
-      const hasMore = totalAfter < 25 && finalTracks.length > 0;
+      const hasGeminiScores = rerankedTracks.some((track) => typeof track.matchScore === "number");
+      const confidenceCheckedTracks = hasGeminiScores
+        ? rerankedTracks.filter((track) => typeof track.matchScore !== "number" || track.matchScore >= MIN_GEMINI_MATCH_SCORE)
+        : rerankedTracks;
+      const locallyVerifiedTracks = balanceTracks(
+        confidenceCheckedTracks,
+        2,
+        activeIntent.era,
+        activeIntent.language,
+        userWantsInstrumental(prompt, activeIntent),
+        activeIntent.artist ? 10 : dynamicMaxPerArtist,
+        activeIntent,
+        {
+          cumulativeArtistCounts,
+          maxCumulativePerArtist: 6,
+          maxPerArtist: activeIntent.artist ? 10 : dynamicMaxPerArtist,
+          excludeTrackIds: excludeIdSet,
+          excludeSignatures: excludeSigSet,
+        },
+      );
+      const finalTracks = locallyVerifiedTracks.slice(0, batchSize);
+      const enrichedTracks = await enrichTracksWithPreviews(finalTracks);
+      const totalAfter = excludeTrackIds.length + enrichedTracks.length;
+      const hasMore = totalAfter < 25 && enrichedTracks.length > 0;
 
       return {
         page,
-        tracks: finalTracks,
+        tracks: enrichedTracks,
         hasMore,
         queriesUsed: finalizedQueries.map((q) => q.query),
       };
@@ -771,9 +990,11 @@ export function createSearchPipeline({
         },
       ) : [];
 
+      const enrichedTracks = await enrichTracksWithPreviews(finalTracks);
+
       return {
         intent: refinedIntent,
-        tracks: finalTracks,
+        tracks: enrichedTracks,
       };
     },
   };

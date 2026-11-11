@@ -13,6 +13,7 @@ export function resolveAppMode(
   config: AppConfig,
   credState: CredentialState,
   spotifyAuth: SpotifyAuth | null,
+  youtubeMusicAvailable = false,
 ): ModeResolution {
   const geminiConfigured = Boolean(config.geminiApiKey);
   const openaiConfigured = Boolean(config.openaiApiKey);
@@ -29,11 +30,11 @@ export function resolveAppMode(
     missing.push("Gemini API key was rejected by the API.");
   }
 
-  if (!spotifyConfigured) {
+  if (!spotifyConfigured && !youtubeMusicAvailable) {
     missing.push("Spotify Client ID / Secret are not configured.");
-  } else if (credState.spotifyValid === false) {
+  } else if (spotifyConfigured && credState.spotifyValid === false && !youtubeMusicAvailable) {
     missing.push("Spotify credentials were rejected by Spotify.");
-  } else if (!spotifyAuthorized) {
+  } else if (spotifyConfigured && !spotifyAuthorized && !youtubeMusicAvailable) {
     missing.push("Spotify authorization required. Click 'Connect Spotify'.");
   }
 
@@ -41,7 +42,7 @@ export function resolveAppMode(
   const spotifyReady = spotifyConfigured && credState.spotifyValid !== false && spotifyAuthorized;
 
   const interpretMode: AppMode = geminiReady ? "live" : "mock";
-  const searchMode: AppMode = geminiReady && spotifyReady ? "live" : "mock";
+  const searchMode: AppMode = geminiReady && (spotifyReady || youtubeMusicAvailable) ? "live" : "mock";
 
   const status: StatusResponse = {
     mode: searchMode,
@@ -56,6 +57,7 @@ export function resolveAppMode(
       valid: credState.spotifyValid,
       authorized: spotifyAuthorized,
     },
+    youtubeMusic: { available: youtubeMusicAvailable },
     missing,
   };
 

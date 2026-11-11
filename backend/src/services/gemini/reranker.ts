@@ -746,8 +746,9 @@ STRICT SELECTION RULES:
 10. NO REPEATED / DUPLICATE SONGS:
    - NEVER select the exact same song more than once, even if Spotify lists it under different albums (e.g. single version vs movie soundtrack album vs compilation). Every selected track must be a distinct musical composition.
 11. Select up to 10 best-matching tracks in order of emotional and acoustic affinity.
-12. For each selected track, provide a concise, evocative 'matchReason' (1 brief sentence, max 15 words) explaining why its instrumentation, tempo, or texture fits the user's vibe and discovery mode.
-13. Output strict JSON matching the schema.`;
+12. For each selected track, provide a 'matchScore' from 0 to 100 comparing the actual song to the ORIGINAL userPrompt. Score the song itself, not title keyword overlap: 90-100 is an unusually direct match, 75-89 strong, 60-74 partial, below 60 weak. Use mood, artist, tempo, vocals, language, era, sonic profile, and explicit constraints. Preserve explicit artist/title requests; never lower their priority to improve vibe fit.
+13. For each selected track, provide a concise 'matchReason' (one sentence, max 15 words).
+14. Output strict JSON matching the schema.`;
 }
 
 const RERANKER_JSON_SCHEMA = {
@@ -760,8 +761,9 @@ const RERANKER_JSON_SCHEMA = {
         properties: {
           id: { type: "string" },
           matchReason: { type: "string", description: "Brief 1-sentence reason why this track fits the vibe" },
+          matchScore: { type: "integer", minimum: 0, maximum: 100 },
         },
-        required: ["id", "matchReason"],
+        required: ["id", "matchReason", "matchScore"],
       },
     },
   },
@@ -770,8 +772,17 @@ const RERANKER_JSON_SCHEMA = {
 } as const;
 
 interface RerankerResponse {
-  rankedTracks?: Array<{ id: string; matchReason: string }>;
+  rankedTracks?: Array<{ id: string; matchReason: string; matchScore?: number }>;
 }
+
+const REFINEMENT_QUERY_SCHEMA = {
+  type: "object",
+  properties: {
+    searchQueries: { type: "array", items: { type: "string" }, maxItems: 2 },
+  },
+  required: ["searchQueries"],
+  additionalProperties: false,
+} as const;
 
 export interface PreferenceProfile {
   favoriteGenres?: string[];
@@ -791,10 +802,49 @@ export interface SemanticReranker {
     userPreferences?: PreferenceProfile,
     balanceOptions?: BalanceOptions,
   ): Promise<Track[]>;
+  suggestRefinementQueries?(
+    prompt: string,
+    intent: MusicIntent,
+    lowScoringTracks: Track[],
+    signal?: AbortSignal,
+  ): Promise<string[]>;
 }
 
 export function createSemanticReranker(geminiClient: GeminiClient | null): SemanticReranker {
   return {
+    async suggestRefinementQueries(prompt, intent, lowScoringTracks, signal) {
+      if (!geminiClient || lowScoringTracks.length === 0) return [];
+      const raw = await geminiClient.generateJson({
+        userText: JSON.stringify({
+          originalUserPrompt: prompt,
+          extractedIntent: {
+            artist: intent.artist,
+            trackTitle: intent.trackTitle,
+            mood: intent.mood,
+            tempo: intent.tempo,
+            energy: intent.energy,
+            vocals: intent.vocals,
+            language: intent.language,
+            era: intent.era,
+            genres: intent.genre,
+            negativeConstraints: intent.negativeConstraints,
+            sonicProfile: intent.sonicProfile,
+          },
+          lowScoringCatalogResults: lowScoringTracks.slice(0, 10).map((track) => ({
+            title: track.name,
+            artists: track.artists,
+            score: track.matchScore,
+          })),
+        }),
+        systemInstruction: `You improve music catalog recall after the fetched songs scored poorly against the original request. Return at most two concise catalog search queries that find closer songs. Preserve explicit artist and title constraints exactly; preserve language, era, and negative constraints. Never invent a replacement artist or relax a hard constraint. Return only JSON.`,
+        jsonSchema: REFINEMENT_QUERY_SCHEMA,
+        signal,
+      });
+      const parsed = JSON.parse(raw) as { searchQueries?: unknown };
+      return Array.isArray(parsed.searchQueries)
+        ? [...new Set(parsed.searchQueries.filter((query): query is string => typeof query === "string").map((query) => query.trim()).filter(Boolean))].slice(0, 2)
+        : [];
+    },
     async rerank(
       prompt: string,
       intent: MusicIntent,
@@ -971,6 +1021,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
             rerankedList.push({
               ...matched,
               matchReason: item.matchReason?.trim() || `Matches ${intent.mood || "selected"} mood.`,
+              matchScore: typeof item.matchScore === "number" ? Math.max(0, Math.min(100, Math.round(item.matchScore))) : null,
             });
           }
         }

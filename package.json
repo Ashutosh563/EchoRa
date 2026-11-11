@@ -12,6 +12,7 @@
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
     "setup": "npm run setup -w backend",
+    "setup:ytmusic": "npm run setup:ytmusic -w backend",
     "test": "npm run test -w backend && npm run test -w frontend",
     "test:frontend": "npm run test -w frontend",
     "test:backend": "npm run test -w backend",

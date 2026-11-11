@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import type { Track } from '../types';
 
+const LAST_PLAYING_TRACK_KEY = 'echora:last-playing-track';
+
 interface AudioPlayerContextType {
   currentTrack: Track | null;
   isPlaying: boolean;
@@ -120,6 +122,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
       setCurrentTrack(track);
       currentTrackRef.current = track;
+      try {
+        sessionStorage.setItem(LAST_PLAYING_TRACK_KEY, JSON.stringify(track));
+      } catch {
+        // Playback should still work when browser storage is unavailable.
+      }
       setIsBuffering(true);
       setCurrentTime(0);
       setDuration(track.durationMs ? track.durationMs / 1000 : 0);
@@ -292,7 +299,34 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     setDuration(0);
     setQueue([]);
     queueRef.current = [];
+    try {
+      sessionStorage.removeItem(LAST_PLAYING_TRACK_KEY);
+    } catch {
+      // Ignore unavailable browser storage.
+    }
   }, []);
+
+  const restoredTrackRef = useRef(false);
+  useEffect(() => {
+    if (restoredTrackRef.current) return;
+    restoredTrackRef.current = true;
+    try {
+      const savedTrack = sessionStorage.getItem(LAST_PLAYING_TRACK_KEY);
+      if (!savedTrack) return;
+      const track = JSON.parse(savedTrack) as Track;
+      if (!track || typeof track.id !== 'string' || typeof track.name !== 'string') {
+        sessionStorage.removeItem(LAST_PLAYING_TRACK_KEY);
+        return;
+      }
+      void playTrack(track, [track]);
+    } catch {
+      try {
+        sessionStorage.removeItem(LAST_PLAYING_TRACK_KEY);
+      } catch {
+        // Ignore unavailable browser storage.
+      }
+    }
+  }, [playTrack]);
 
   // Set up OS media controls
   useEffect(() => {

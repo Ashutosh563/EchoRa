@@ -76,17 +76,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted) setIsLoading(false);
+    }, 1500);
+
     // 1. Initial Session Check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setIsGuest(false);
-        localStorage.removeItem(GUEST_STORAGE_KEY);
-        fetchProfile(session.user);
-      }
-      setIsLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (!isMounted) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          setIsGuest(false);
+          localStorage.removeItem(GUEST_STORAGE_KEY);
+          fetchProfile(session.user);
+        }
+        setIsLoading(false);
+        clearTimeout(safetyTimeout);
+      })
+      .catch((err) => {
+        console.warn('[Auth] Failed to retrieve session:', err);
+        if (isMounted) {
+          setIsLoading(false);
+          clearTimeout(safetyTimeout);
+        }
+      });
 
     // 2. Auth State Listener
     const {

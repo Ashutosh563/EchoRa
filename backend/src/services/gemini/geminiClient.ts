@@ -19,7 +19,6 @@ export interface GeminiClient {
   generateJson(request: GenerateJsonRequest): Promise<string>;
 }
 
-const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * Cascade of lighter/fallback models to try in descending order of cost/tier
@@ -108,13 +107,17 @@ export function createGeminiClient(apiKey: string, model: string): GeminiClient 
   return {
     async generateJson({ userText, systemInstruction, jsonSchema, signal }) {
       const candidateModels = getCandidateModels(model);
-      const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-      const abortSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
-
       let lastError: unknown;
 
       for (let i = 0; i < candidateModels.length; i++) {
+        if (signal?.aborted) {
+          throw mapGeminiError(new DOMException("The operation was aborted", "AbortError"));
+        }
+
         const currentModel = candidateModels[i]!;
+        const attemptTimeout = AbortSignal.timeout(8000);
+        const attemptSignal = signal ? AbortSignal.any([signal, attemptTimeout]) : attemptTimeout;
+
         try {
           const response = await ai.models.generateContent({
             model: currentModel,
@@ -124,7 +127,7 @@ export function createGeminiClient(apiKey: string, model: string): GeminiClient 
               responseMimeType: "application/json",
               responseJsonSchema: jsonSchema,
               temperature: 0.2,
-              abortSignal,
+              abortSignal: attemptSignal,
             },
           });
           return response.text ?? "";

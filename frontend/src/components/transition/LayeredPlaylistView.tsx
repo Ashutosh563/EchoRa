@@ -6,6 +6,7 @@ import {
   RotateCcw,
   ExternalLink,
   Music,
+  Music2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { TransitionJourneyResponse } from "../../types/transition";
@@ -183,7 +184,7 @@ export const LayeredPlaylistView = memo(function LayeredPlaylistView({ journey, 
 
                         <div className="min-w-0 flex-1">
                           <a
-                            href={track.spotifyUrl}
+                            href={track.catalogUrl || track.spotifyUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs sm:text-sm font-semibold truncate block text-text hover:text-emerald-400 transition-colors"
@@ -260,11 +261,11 @@ export const LayeredPlaylistView = memo(function LayeredPlaylistView({ journey, 
                             target="_blank"
                             rel="noopener noreferrer"
                             aria-label={`Play ${track.name} on Spotify`}
-                            title="Play on Spotify"
+                            title={`Play on ${track.catalogSource === 'youtube_music' ? 'YouTube Music' : 'Spotify'}`}
                             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer group-hover/track:scale-105"
                           >
-                            <SpotifyIcon className="w-3 h-3" />
-                            <span>Spotify</span>
+                            {track.catalogSource === 'youtube_music' ? <Music2 className="w-3 h-3" /> : <SpotifyIcon className="w-3 h-3" />}
+                            <span>{track.catalogSource === 'youtube_music' ? 'YouTube Music' : 'Spotify'}</span>
                             <ExternalLink className="w-3 h-3 opacity-70" />
                           </a>
                         </div>

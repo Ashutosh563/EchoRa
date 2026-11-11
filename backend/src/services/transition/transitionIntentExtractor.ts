@@ -57,6 +57,41 @@ export function parseTransitionIntent(rawText: string): TransitionIntentResponse
   return { status, startingMood, destinationMood, interpretation };
 }
 
+export function fallbackHeuristicExtract(prompt: string): TransitionIntentResponse | null {
+  const text = prompt.trim();
+  // Pattern: "from <start> to <dest>"
+  const fromToMatch = text.match(/\bfrom\s+([a-zA-Z\s]+?)\s+to\s+([a-zA-Z\s]+?)(?:[.!?]|$)/i);
+  if (fromToMatch) {
+    const start = cleanMood(fromToMatch[1]);
+    const dest = cleanMood(fromToMatch[2]);
+    if (start && dest && start.toLowerCase() !== dest.toLowerCase()) {
+      return { status: "ready", startingMood: start, destinationMood: dest, interpretation: `Transition from ${start} to ${dest}` };
+    }
+  }
+
+  // Pattern: "feeling/feel <start> ... want/need/wish to feel <dest>"
+  const feelWantMatch = text.match(/(?:feel|feeling|am)[ ]+(.+?)[ ]+(?:and[ ]+)?(?:i[ ]+)?(?:want|need|wish|would[ ]+like|like|hope)[ ]+(?:to[ ]+)?(?:feel|be)[ ]+(.+?)(?:[.!?]|$)/i);
+  if (feelWantMatch) {
+    const start = cleanMood(feelWantMatch[1].replace(/\b(?:tired|exhausted)\s+from\s+.*$/i, "").trim());
+    const dest = cleanMood(feelWantMatch[2]);
+    if (start && dest && start.toLowerCase() !== dest.toLowerCase()) {
+      return { status: "ready", startingMood: start, destinationMood: dest, interpretation: `Moving from ${start} to ${dest}` };
+    }
+  }
+
+  // Pattern: "<start> to <dest>" (e.g. "sad to happy", "stressed to calm")
+  const simpleMatch = text.match(/^([a-zA-Z\s]+?)\s+to\s+([a-zA-Z\s]+?)$/i);
+  if (simpleMatch) {
+    const start = cleanMood(simpleMatch[1]);
+    const dest = cleanMood(simpleMatch[2]);
+    if (start && dest && start.toLowerCase() !== dest.toLowerCase()) {
+      return { status: "ready", startingMood: start, destinationMood: dest, interpretation: `Transition from ${start} to ${dest}` };
+    }
+  }
+
+  return null;
+}
+
 export function createTransitionIntentExtractor(
   primary: GeminiClient | null,
   fallback: GeminiClient | null = null,
@@ -85,10 +120,21 @@ export function createTransitionIntentExtractor(
           });
           return parseTransitionIntent(raw);
         } catch (error) {
-          if (signal?.aborted) throw error;
+          if (signal?.aborted) {
+            const heuristic = fallbackHeuristicExtract(cleanPrompt);
+            if (heuristic) return heuristic;
+            throw error;
+          }
           lastError = error;
         }
       }
+
+      // If AI models encountered 503/timeout, attempt fallback heuristic before erroring out
+      const heuristic = fallbackHeuristicExtract(cleanPrompt);
+      if (heuristic) {
+        return heuristic;
+      }
+
       throw lastError instanceof AppError
         ? lastError
         : new AppError("GEMINI_UNAVAILABLE", { message: "Mood interpretation could not be completed. Please try again or choose moods manually.", cause: lastError });

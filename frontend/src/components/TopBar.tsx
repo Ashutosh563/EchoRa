@@ -11,6 +11,7 @@ interface TopBarProps {
   activeTab?: 'discover' | 'transition';
   onTabChange?: (tab: 'discover' | 'transition') => void;
   onOpenSignIn?: () => void;
+  onBrandClick?: () => void;
   isMockMode: boolean;
   onToggleMockMode: () => void;
 }
@@ -21,6 +22,7 @@ export const TopBar = memo(function TopBar({
   activeTab = 'discover',
   onTabChange,
   onOpenSignIn,
+  onBrandClick,
   isMockMode,
   onToggleMockMode,
 }: TopBarProps) {
@@ -69,14 +71,17 @@ export const TopBar = memo(function TopBar({
     <header className={`site-topbar sticky top-0 z-40 w-full h-16 border-b transition-colors${isDocked ? ' is-docked' : ''}`}>
       <div className="site-topbar-content max-w-6xl mx-auto h-full px-4 sm:px-6 grid grid-cols-[1fr_auto_1fr] items-center">
         {/* Left: Brand */}
-        <motion.div
-          className="site-topbar-brand"
+        <motion.button
+          type="button"
+          onClick={onBrandClick}
+          aria-label="ECHORA home"
+          className="site-topbar-brand cursor-pointer text-left"
           initial={reduceMotion ? false : { opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.38, delay: reduceMotion ? 0 : 0.02, ease: [0.22, 1, 0.36, 1] }}
         >
           <Wordmark />
-        </motion.div>
+        </motion.button>
 
         {/* Center: Navigation Tabs with Fluid Pill Animation */}
         {onTabChange && (

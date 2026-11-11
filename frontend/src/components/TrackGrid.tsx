@@ -173,7 +173,7 @@ export const TrackGrid = memo(function TrackGrid({
       {/* Attribution Footer */}
       <div className="mt-8 flex items-center justify-center gap-2 text-xs text-text-faint">
         <SpotifyIcon className="w-3.5 h-3.5 text-text-faint" />
-        <span>Track data and artwork provided by Spotify.</span>
+        <span>Track data and artwork provided by the source catalog.</span>
       </div>
       <AnimatePresence>
         {selectedTrack && (

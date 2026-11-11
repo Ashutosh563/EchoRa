@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Music, ExternalLink, Play, Pause, Loader2 } from 'lucide-react';
+import { Music, Music2, ExternalLink, Play, Pause, Loader2 } from 'lucide-react';
 import type { Track } from '../types';
 import { formatDuration } from '../lib/format';
 import { SpotifyIcon } from './ConnectSpotifyButton';
@@ -209,12 +209,23 @@ export const TrackCard = memo(function TrackCard({
         <div className="flex-1 min-w-0 flex flex-col justify-between h-[88px] py-0.5 z-10">
           <div>
             {/* Track Name */}
-            <h3
-              className="font-display font-semibold text-sm sm:text-base text-text truncate group-hover:text-white transition-colors"
-              title={track.name}
-            >
-              {track.name}
-            </h3>
+            <div className="flex items-center gap-2 min-w-0">
+              <h3
+                className="font-display font-semibold text-sm sm:text-base text-text truncate group-hover:text-white transition-colors min-w-0 flex-1"
+                title={track.name}
+              >
+                {track.name}
+              </h3>
+              {typeof track.matchScore === 'number' && (
+                <span
+                  className="shrink-0 px-1.5 py-0.5 rounded-md text-[9px] font-mono font-semibold text-violet-light bg-violet/15 border border-violet/25"
+                  aria-label={`Gemini match confidence ${Math.round(track.matchScore)} percent`}
+                  title="Gemini estimate of how well this song matches your original request"
+                >
+                  {Math.round(track.matchScore)}%
+                </span>
+              )}
+            </div>
 
             {/* Artists */}
             <p className="text-xs text-text-dim truncate mt-0.5 group-hover:text-text transition-colors" title={artistText}>
@@ -233,7 +244,7 @@ export const TrackCard = memo(function TrackCard({
             </div>
           </div>
 
-          {/* Bottom Actions: Play Here / Open in Spotify buttons */}
+          {/* Bottom Actions: Play Here / Open in catalog buttons */}
           <div className="flex items-center justify-end gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-1.5 shrink-0">
               {handlePlayNative && (
@@ -261,14 +272,14 @@ export const TrackCard = memo(function TrackCard({
               )}
 
               <a
-                href={track.spotifyUrl}
+                href={track.catalogUrl || track.spotifyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`Open "${track.name}" on Spotify`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-spotify/15 hover:bg-spotify/25 text-spotify text-[11px] font-semibold transition-all border border-spotify/30 hover:border-spotify/50 hover:scale-[1.03] active:scale-[0.98] shadow-sm"
+                aria-label={`Open "${track.name}" on ${track.catalogSource === 'youtube_music' ? 'YouTube Music' : 'Spotify'}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border hover:scale-[1.03] active:scale-[0.98] shadow-sm ${track.catalogSource === 'youtube_music' ? 'bg-red-500/15 hover:bg-red-500/25 text-red-300 border-red-400/30 hover:border-red-400/50' : 'bg-spotify/15 hover:bg-spotify/25 text-spotify border-spotify/30 hover:border-spotify/50'}`}
               >
-                <SpotifyIcon className="w-3 h-3 text-spotify" />
-                <span>Spotify</span>
+                {track.catalogSource === 'youtube_music' ? <Music2 className="w-3 h-3" /> : <SpotifyIcon className="w-3 h-3 text-spotify" />}
+                <span>{track.catalogSource === 'youtube_music' ? 'YouTube Music' : 'Spotify'}</span>
                 <ExternalLink className="w-2.5 h-2.5 opacity-70" />
               </a>
             </div>

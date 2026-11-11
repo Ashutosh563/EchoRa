@@ -6,6 +6,7 @@ import { createCredentialState } from "./services/credentialState.js";
 import { createFileTokenStore, type TokenStore } from "./services/spotify/tokenStore.js";
 import { createSpotifyAuth, type SpotifyAuth } from "./services/spotify/spotifyAuth.js";
 import { createSpotifySearch, type SpotifySearch } from "./services/spotify/spotifySearch.js";
+import { createYouTubeMusicSearch } from "./services/youtubeMusic/ytmusicSearch.js";
 import { createGeminiClient } from "./services/gemini/geminiClient.js";
 import { createOpenAIClient } from "./services/openai/openaiClient.js";
 import { createIntentExtractor, type IntentExtractor } from "./services/gemini/intentExtractor.js";
@@ -70,6 +71,7 @@ export function createApp(deps: AppDependencies = {}): Express {
   if (!spotifySearch && spotifyAuth) {
     spotifySearch = createSpotifySearch({ auth: spotifyAuth });
   }
+  const youtubeMusicSearch = createYouTubeMusicSearch();
 
   // Initialize Gemini Intent Extractor if key exists
   let intentExtractor: IntentExtractor | null = deps.intentExtractor ?? null;
@@ -127,10 +129,11 @@ export function createApp(deps: AppDependencies = {}): Express {
   const musicController = createMusicController(config, credState, spotifyAuth, {
     intentExtractor,
     spotifySearch,
+    youtubeMusicSearch,
     reranker: createSemanticReranker(geminiClient),
   });
   const spotifyController = createSpotifyController(config, spotifyAuth);
-  const statusController = createStatusController(config, credState, spotifyAuth);
+  const statusController = createStatusController(config, credState, spotifyAuth, true);
   const cameraController = createCameraController(config, visionService);
 
   const app = express();

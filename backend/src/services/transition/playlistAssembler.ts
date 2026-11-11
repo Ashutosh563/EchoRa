@@ -11,6 +11,7 @@ import {
   balanceTransitionTracks,
 } from "./transitionReranker.js";
 import { getSongSignature } from "../music/fusion.js";
+import { enrichTracksWithPreviews } from "../spotify/previewEnricher.js";
 
 const MAX_TRACKS_PER_STAGE = 5;
 
@@ -178,7 +179,9 @@ export function createPlaylistAssembler(
         }
 
         // Ensure exactly up to 5 tracks
-        const finalStageTracks = selectedTracks.slice(0, MAX_TRACKS_PER_STAGE);
+        const finalStageTracks = await enrichTracksWithPreviews(
+          selectedTracks.slice(0, MAX_TRACKS_PER_STAGE),
+        );
 
         // Update cross-stage tracking sets
         for (const track of finalStageTracks) {

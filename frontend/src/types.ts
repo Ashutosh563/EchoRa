@@ -65,9 +65,12 @@ export interface Track {
   albumArtUrl: string | null;
   durationMs: number | null;
   spotifyUrl: string;
+  catalogSource?: 'spotify' | 'youtube_music';
+  catalogUrl?: string;
   previewUrl: string | null;
   releaseYear?: number | null;
   matchReason?: string | null;
+  matchScore?: number | null;
 }
 
 export interface SearchResponse {
@@ -94,6 +97,7 @@ export interface StatusResponse {
     valid: boolean | null;
     authorized: boolean;
   };
+  youtubeMusic?: { available: boolean };
   missing: string[];
 }
 

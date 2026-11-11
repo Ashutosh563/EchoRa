@@ -26,6 +26,42 @@ const makeTrack = (id: string, name: string): Track => ({
 });
 
 describe("Semantic Reranker (reranker.ts)", () => {
+  it("returns Gemini match scores with the ordered tracks", async () => {
+    const candidates = [makeTrack("t1", "Fast Rap"), makeTrack("t2", "Slow Ambient Piano")];
+    const fakeClient: GeminiClient = {
+      generateJson: vi.fn().mockResolvedValue(JSON.stringify({
+        rankedTracks: [
+          { id: "t2", matchReason: "Slow texture suits the request.", matchScore: 93 },
+          { id: "t1", matchReason: "The mood and tempo are a weaker fit.", matchScore: 42 },
+        ],
+      })),
+    };
+
+    const result = await createSemanticReranker(fakeClient).rerank("slow calm piano", mockIntent, candidates);
+
+    expect(result[0]).toMatchObject({ id: "t2", matchScore: 93 });
+    expect(result[1]).toMatchObject({ id: "t1", matchScore: 42 });
+  });
+
+  it("suggests a bounded query refinement from low-scoring catalog results", async () => {
+    const generateJson = vi.fn().mockResolvedValue(JSON.stringify({
+      searchQueries: ['artist:"Arijit Singh" sad slow Hindi songs'],
+    }));
+    const fakeClient: GeminiClient = { generateJson };
+    const reranker = createSemanticReranker(fakeClient);
+    const intent = { ...mockIntent, artist: "Arijit Singh", language: "hindi" };
+
+    const queries = await reranker.suggestRefinementQueries!(
+      "Arijit Singh sad slow songs",
+      intent,
+      [{ ...makeTrack("t1", "Wrong Song"), matchScore: 32 }],
+    );
+
+    expect(queries).toEqual(['artist:"Arijit Singh" sad slow Hindi songs']);
+    expect(generateJson.mock.calls[0]?.[0].userText).toContain('"originalUserPrompt":"Arijit Singh sad slow songs"');
+    expect(generateJson.mock.calls[0]?.[0].systemInstruction).toContain("Never invent a replacement artist");
+  });
+
   it("reorders candidates and assigns matchReason based on LLM output", async () => {
     const candidates = [makeTrack("t1", "Fast Rap"), makeTrack("t2", "Slow Ambient Piano"), makeTrack("t3", "Acoustic Guitar")];
 

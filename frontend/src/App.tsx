@@ -59,7 +59,7 @@ function AppContent({ api }: AppProps = {}) {
   );
   const { status: searchStatus, data, error, lastPrompt, search, reset: resetSearch } = useSearch(searchOptions);
   const [profile, setProfile] = useState<StoredProfile>(getStoredProfile);
-  const { closePlayer, appendQueue } = useAudioPlayer();
+  const { appendQueue } = useAudioPlayer();
   const [prompt, setPrompt] = useState('');
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -96,13 +96,6 @@ function AppContent({ api }: AppProps = {}) {
     return subscribeToProfile((updated) => setProfile(updated));
   }, []);
 
-  // Stop native player if user navigates to Mood Transition tab
-  useEffect(() => {
-    if (activeTab === 'transition') {
-      closePlayer();
-    }
-  }, [activeTab, closePlayer]);
-
   // Aurora mood theme retints smoothly based on intent
   const theme = useMoodTheme(data?.intent, activeTab === 'transition' ? transitionMood : undefined);
   const moodStyle = useMemo(
@@ -137,14 +130,13 @@ function AppContent({ api }: AppProps = {}) {
     setCumulativeTracks([]);
     setCurrentPage(1);
     setHasMorePages(false);
-    closePlayer();
     addToast(
       nextMode
         ? 'Mock sample data enabled for searches in this browser.'
         : 'Using the server-selected search mode.',
       'info'
     );
-  }, [isMockMode, resetSearch, closePlayer, addToast]);
+  }, [isMockMode, resetSearch, addToast]);
 
   // Voice speech-to-text integration
   const speech = useSpeechRecognition({
@@ -196,6 +188,17 @@ function AppContent({ api }: AppProps = {}) {
   const handleOpenCamera = useCallback(() => {
     setIsCameraOpen(true);
   }, []);
+
+  const handleBrandClick = useCallback(() => {
+    resetSearch();
+    setPrompt('');
+    setRecentSearches([]);
+    setCumulativeTracks([]);
+    setCurrentPage(1);
+    setHasMorePages(false);
+    setActiveTab('discover');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [resetSearch]);
 
   const handleCopyNotice = useCallback(() => {
     addToast('Search query copied to clipboard!', 'success');
@@ -329,6 +332,7 @@ function AppContent({ api }: AppProps = {}) {
         onOpenPreferences={handleOpenPreferences}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        onBrandClick={handleBrandClick}
         onOpenSignIn={() => setForceShowAuth(true)}
       />
 
