@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createSemanticReranker, isLanguageMatch } from "../../src/services/gemini/reranker.js";
+import { applyCase6CQuotas, createSemanticReranker, isLanguageMatch } from "../../src/services/gemini/reranker.js";
 import type { GeminiClient } from "../../src/services/gemini/geminiClient.js";
 import type { MusicIntent } from "../../src/types/intent.js";
 import type { Track } from "../../src/types/track.js";
@@ -914,6 +914,120 @@ describe("Semantic Reranker (reranker.ts)", () => {
         artists: ["Clairo"],
       };
       expect(isLanguageMatch(clairoTrack, "english")).toBe(true);
+    });
+  });
+
+  describe("Case 6 C Quotas & Universal Fallback", () => {
+    it("Song Name Only: returns #1 song + 1 artist track + 8 companions on Page 1, and 5 companions on Page 2", () => {
+      const pool: Track[] = [
+        { ...makeTrack("c1", "Mood Track 1"), artists: ["Companion A"] },
+        { ...makeTrack("s1", "Kesariya"), artists: ["Arijit Singh"] },
+        { ...makeTrack("a2", "Apna Bana Le"), artists: ["Arijit Singh"] },
+        ...Array.from({ length: 10 }, (_, i) => ({
+          ...makeTrack(`comp-${i}`, `Vibe Companion ${i}`),
+          artists: [`Other Artist ${i}`],
+        })),
+      ];
+      const songIntent: MusicIntent = { ...mockIntent, trackTitle: "Kesariya", artist: null };
+
+      const p1 = applyCase6CQuotas(pool, pool, songIntent, { page: 1, maxResults: 10, isExclusive: false });
+      expect(p1).toHaveLength(10);
+      expect(p1[0].name).toBe("Kesariya");
+      expect(p1[1].artists[0]).toBe("Arijit Singh");
+      expect(p1.slice(2).every((t) => t.artists[0] !== "Arijit Singh")).toBe(true);
+
+      const p2 = applyCase6CQuotas(pool.slice(3), pool.slice(3), songIntent, { page: 2, maxResults: 5 });
+      expect(p2).toHaveLength(5);
+    });
+
+    it("Artist + Song (no only): returns #1 song + 6 more artist + 3 companions on P1, and 2 artist + 3 companions on P2", () => {
+      const artistTracks = [
+        { ...makeTrack("t1", "Kesariya"), artists: ["Arijit Singh"] },
+        ...Array.from({ length: 10 }, (_, i) => ({
+          ...makeTrack(`ar-${i}`, `Arijit Song ${i}`),
+          artists: ["Arijit Singh"],
+        })),
+      ];
+      const companions = Array.from({ length: 8 }, (_, i) => ({
+        ...makeTrack(`co-${i}`, `Companion ${i}`),
+        artists: [`Comp ${i}`],
+      }));
+      const pool = [...companions.slice(0, 4), ...artistTracks, ...companions.slice(4)];
+      const intent: MusicIntent = { ...mockIntent, artist: "Arijit Singh", trackTitle: "Kesariya" };
+
+      const p1 = applyCase6CQuotas(pool, pool, intent, { page: 1, maxResults: 10, isExclusive: false });
+      expect(p1).toHaveLength(10);
+      expect(p1[0].name).toBe("Kesariya");
+      expect(p1.filter((t) => t.artists.includes("Arijit Singh"))).toHaveLength(7);
+      expect(p1.filter((t) => !t.artists.includes("Arijit Singh"))).toHaveLength(3);
+
+      const p2 = applyCase6CQuotas(pool.slice(8), pool.slice(8), intent, { page: 2, maxResults: 5, isExclusive: false });
+      expect(p2).toHaveLength(5);
+      expect(p2.filter((t) => t.artists.includes("Arijit Singh"))).toHaveLength(2);
+      expect(p2.filter((t) => !t.artists.includes("Arijit Singh"))).toHaveLength(3);
+    });
+
+    it("Artist + Song + only: returns #1 song + 9 artist tracks on P1, and +5 artist tracks on P2", () => {
+      const pool = [
+        ...Array.from({ length: 16 }, (_, i) => ({
+          ...makeTrack(`ar-${i}`, i === 5 ? "Kesariya" : `Arijit Only ${i}`),
+          artists: ["Arijit Singh"],
+        })),
+        ...Array.from({ length: 5 }, (_, i) => ({
+          ...makeTrack(`co-${i}`, `Outside ${i}`),
+          artists: [`Outside ${i}`],
+        })),
+      ];
+      const intent: MusicIntent = { ...mockIntent, artist: "Arijit Singh", trackTitle: "Kesariya" };
+
+      const p1 = applyCase6CQuotas(pool, pool, intent, { page: 1, maxResults: 10, isExclusive: true });
+      expect(p1).toHaveLength(10);
+      expect(p1[0].name).toBe("Kesariya");
+      expect(p1.every((t) => t.artists.includes("Arijit Singh"))).toBe(true);
+
+      const p2 = applyCase6CQuotas(pool.slice(10), pool.slice(10), intent, { page: 2, maxResults: 5, isExclusive: true });
+      expect(p2).toHaveLength(5);
+      expect(p2.every((t) => t.artists.includes("Arijit Singh"))).toBe(true);
+    });
+
+    it("Two Artists (A and B): prioritizes collabs up to 8 + 2 companions on P1, and 3 combined + 2 companions on P2", () => {
+      const pool: Track[] = [
+        { ...makeTrack("d1", "Duet 1"), artists: ["Diljit Dosanjh", "Karan Aujla"] },
+        { ...makeTrack("d2", "Duet 2"), artists: ["Karan Aujla", "Diljit Dosanjh"] },
+        ...Array.from({ length: 6 }, (_, i) => ({ ...makeTrack(`a-${i}`, `Diljit ${i}`), artists: ["Diljit Dosanjh"] })),
+        ...Array.from({ length: 6 }, (_, i) => ({ ...makeTrack(`b-${i}`, `Karan ${i}`), artists: ["Karan Aujla"] })),
+        ...Array.from({ length: 6 }, (_, i) => ({ ...makeTrack(`c-${i}`, `Comp ${i}`), artists: [`Comp ${i}`] })),
+      ];
+      const intent: MusicIntent = { ...mockIntent, artist: "Diljit Dosanjh and Karan Aujla" };
+
+      const p1 = applyCase6CQuotas(pool, pool, intent, { page: 1, maxResults: 10, isExclusive: false });
+      expect(p1).toHaveLength(10);
+      expect(p1[0].id).toBe("d1");
+      expect(p1[1].id).toBe("d2");
+      expect(p1.slice(0, 8).every((t) => t.artists.includes("Diljit Dosanjh") || t.artists.includes("Karan Aujla"))).toBe(true);
+      expect(p1.slice(8).every((t) => !t.artists.includes("Diljit Dosanjh") && !t.artists.includes("Karan Aujla"))).toBe(true);
+
+      const p2 = applyCase6CQuotas(pool.slice(8), pool.slice(8), intent, { page: 2, maxResults: 5, isExclusive: false });
+      expect(p2).toHaveLength(5);
+      expect(p2.slice(0, 3).every((t) => t.artists.includes("Diljit Dosanjh") || t.artists.includes("Karan Aujla"))).toBe(true);
+      expect(p2.slice(3).every((t) => !t.artists.includes("Diljit Dosanjh") && !t.artists.includes("Karan Aujla"))).toBe(true);
+    });
+
+    it("Two Artists (A and B only): puts collabs first, equal ratio, and continues with remaining artist if one ends", () => {
+      const pool: Track[] = [
+        { ...makeTrack("d1", "Duet 1"), artists: ["Artist A", "Artist B"] },
+        { ...makeTrack("a1", "A Solo 1"), artists: ["Artist A"] },
+        { ...makeTrack("a2", "A Solo 2"), artists: ["Artist A"] },
+        ...Array.from({ length: 9 }, (_, i) => ({ ...makeTrack(`b-${i}`, `B Solo ${i}`), artists: ["Artist B"] })),
+        { ...makeTrack("ext", "Outside Track"), artists: ["Outside"] },
+      ];
+      const intent: MusicIntent = { ...mockIntent, artist: "Artist A and Artist B" };
+
+      const p1 = applyCase6CQuotas(pool, pool, intent, { page: 1, maxResults: 10, isExclusive: true });
+      expect(p1).toHaveLength(10);
+      expect(p1[0].id).toBe("d1");
+      expect(p1.every((t) => t.artists.includes("Artist A") || t.artists.includes("Artist B"))).toBe(true);
+      expect(p1.some((t) => t.id === "ext")).toBe(false);
     });
   });
 });

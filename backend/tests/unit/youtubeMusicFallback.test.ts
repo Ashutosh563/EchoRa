@@ -80,7 +80,7 @@ describe("YouTube Music catalog fallback", () => {
   });
 
   it("keeps low-confidence results when the local explicit-artist filter passes", async () => {
-    const prompt = "Karan Aujla guilty songs";
+    const prompt = "only Karan Aujla guilty songs";
     const matching = { ...makeYouTubeTrack("match", "Guilty Song"), artists: ["Karan Aujla"] };
     const wrongArtist = { ...makeYouTubeTrack("artist", "Guilty Song 2"), artists: ["Another Artist"] };
     const wrongVibe = { ...makeYouTubeTrack("vibe", "Happy Song"), artists: ["Karan Aujla"] };
@@ -146,6 +146,7 @@ describe("YouTube Music catalog fallback", () => {
       90,
       true,
       undefined,
+      10,
     );
     expect(result.tracks).toHaveLength(10);
     expect(result.aiRecommendationsAdded).toBe(9);

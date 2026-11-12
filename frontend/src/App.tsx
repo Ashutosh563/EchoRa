@@ -36,6 +36,18 @@ import type { ToastInfo, Track } from './types';
 import type { CameraAnalysisResponse } from './types/camera';
 import type { DiscoveryMode, StoredProfile } from './types/discovery';
 
+function getTrackSignature(t: { name?: string; artists?: string[] }): string {
+  const raw = (t.name || '').toLowerCase();
+  const cleaned = raw
+    .replace(/\s*[\(\[][^\)\]]*[\)\]]/gi, '')
+    .replace(/\s+-\s+(from|original|soundtrack|remastered|movie|theme|title track|single|deluxe|version|official|live|acoustic).*/gi, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+  const norm = cleaned || raw.replace(/[^a-z0-9]/g, '').slice(0, 20);
+  const art = (t.artists?.[0] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `${norm}::${art}`;
+}
+
 interface AppProps {
   api?: {
     search: (prompt: string, signal?: AbortSignal) => Promise<any>;
@@ -223,9 +235,11 @@ function AppContent({ api }: AppProps = {}) {
 
     try {
       const counts: Record<string, number> = {};
+      const songSigs: string[] = [];
       for (const t of cumulativeTracks) {
         const primary = (t.artists[0] || '').toLowerCase().trim();
         counts[primary] = (counts[primary] || 0) + 1;
+        songSigs.push(getTrackSignature(t));
       }
 
       const nextPage = currentPage + 1;
@@ -234,6 +248,7 @@ function AppContent({ api }: AppProps = {}) {
         intent: data.intent,
         page: nextPage,
         excludeTrackIds: cumulativeTracks.map((t) => t.id),
+        excludeSongSignatures: songSigs,
         cumulativeArtistCounts: counts,
         discoveryMode: profile.discoveryMode,
         browserContext: collectBrowserContext(),
@@ -243,7 +258,11 @@ function AppContent({ api }: AppProps = {}) {
         let totalCount = cumulativeTracks.length;
         setCumulativeTracks((prev) => {
           const existingIds = new Set(prev.map((t) => t.id));
-          const fresh = res.tracks.filter((t) => !existingIds.has(t.id));
+          const existingSigs = new Set(prev.map((t) => getTrackSignature(t)));
+          const fresh = res.tracks.filter((t) => {
+            if (existingIds.has(t.id)) return false;
+            return !existingSigs.has(getTrackSignature(t));
+          });
           const remainingSlots = Math.max(0, 25 - prev.length);
           const tracksToAdd = fresh.slice(0, remainingSlots);
           const updated = [...prev, ...tracksToAdd];

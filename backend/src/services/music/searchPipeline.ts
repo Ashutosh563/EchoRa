@@ -21,6 +21,21 @@ export interface SearchPipelineOptions {
   reranker?: SemanticReranker | null;
 }
 
+function resolveDiscoveryContext(prompt: string, context?: DiscoveryContext): DiscoveryContext {
+  return {
+    discoveryMode: context?.discoveryMode ?? "FAMILIAR",
+    preferences: {
+      favoriteGenres: context?.preferences?.favoriteGenres ?? [],
+      favoriteArtists: context?.preferences?.favoriteArtists ?? [],
+      dislikedGenres: context?.preferences?.dislikedGenres ?? [],
+      dislikedArtists: context?.preferences?.dislikedArtists ?? [],
+    },
+    historySignals: context?.historySignals,
+    browserContext: context?.browserContext,
+    rawPrompt: context?.rawPrompt ?? prompt,
+  };
+}
+
 function discoveryQueries(
   intent: MusicIntent,
   result: ReturnType<typeof defaultDiscoveryProcessor.process>,
@@ -41,15 +56,15 @@ function discoveryQueries(
   }
   if (contextualQuery) queries.push([...contextTerms, contextualQuery].filter(Boolean).join(" "));
 
-  const prompt = context.rawPrompt.toLowerCase();
+  const prompt = (context.rawPrompt || "").toLowerCase();
   const hasExplicitGenre = intent.breakdown?.genre?.source === "explicit" ||
     intent.genre.some((genre) => Boolean(genre.trim()) && prompt.includes(genre.toLowerCase()));
-  const favoriteGenre = context.preferences.favoriteGenres[0];
+  const favoriteGenre = context.preferences?.favoriteGenres?.[0];
   if (result.mode === "BALANCED" && favoriteGenre && !hasExplicitGenre && favoriteGenre.toLowerCase() !== result.injectedGenre?.toLowerCase()) {
     queries.push([...contextTerms, favoriteGenre].join(" "));
   }
 
-  const favoriteArtist = context.preferences.favoriteArtists[0];
+  const favoriteArtist = context.preferences?.favoriteArtists?.[0];
   if ((result.mode === "FAMILIAR" || result.mode === "BALANCED") && favoriteArtist && !intent.artist && !intent.trackTitle) {
     queries.push([`artist:"${favoriteArtist}"`, ...contextTerms].join(" "));
   }
@@ -62,8 +77,8 @@ function rerankerPreferences(
   result: ReturnType<typeof defaultDiscoveryProcessor.process>,
 ): PreferenceProfile {
   return {
-    favoriteGenres: context.preferences.favoriteGenres,
-    favoriteArtists: context.preferences.favoriteArtists,
+    favoriteGenres: context.preferences?.favoriteGenres ?? [],
+    favoriteArtists: context.preferences?.favoriteArtists ?? [],
     dislikedGenres: result.excludedGenres,
     dislikedArtists: result.excludedArtists,
   };
@@ -101,20 +116,46 @@ export function relatedSongRequest(prompt: string): { requested: boolean; relate
   return { requested, relatedCount: Math.max(1, Math.min(24, parsedCount ?? 10)) };
 }
 
-export function cleanSpotifyQuery(q: string, lang?: string | null): string {
+export function getEraYearFilter(era?: string | null): string | null {
+  if (!era) return null;
+  const e = era.toLowerCase().trim();
+  if (e.includes("90") || e.includes("1990")) return "year:1989-2001";
+  if (e.includes("80") || e.includes("1980")) return "year:1979-1991";
+  if (e.includes("70") || e.includes("1970")) return "year:1969-1981";
+  if (e.includes("2000") || e.includes("00s")) return "year:1999-2011";
+  return null;
+}
+
+export function cleanYouTubeQuery(q: string, lang?: string | null, era?: string | null): string {
+  let cleaned = q
+    .replace(/\bNOT\s+("[^"]*"|[^\s]+)/gi, "")
+    .replace(/\b(?:artist|track|album|genre|year):("[^"]*"|[^\s]+)/gi, (_, val: string) =>
+      val.replace(/^"|"$/g, ""),
+    )
+    .replace(/\bOR\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const base = cleanSpotifyQuery(cleaned, lang, null);
+  if (era && !/\b(19)?[789]0s?\b|\b2000s?\b/i.test(base)) {
+    return `${base} ${era}`.trim();
+  }
+  return base;
+}
+
+export function cleanSpotifyQuery(q: string, lang?: string | null, era?: string | null): string {
   let cleaned = q.replace(/\bNOT\s+("[^"]*"|[^\s]+)/gi, "").trim();
   cleaned = cleaned.replace(/genre:"bollywood"/gi, "bollywood");
   cleaned = cleaned.replace(/genre:bollywood/gi, "bollywood");
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
-  if (!lang) return cleaned;
-
-  // Never prepend language or generic keywords if query is already an explicit Spotify fielded filter (artist: or track:)
+  // Never prepend language or era filters if query is already an explicit Spotify fielded filter (artist: or track:)
   if (/^(?:artist:|track:)/i.test(cleaned)) {
     return cleaned;
   }
 
-  const normalizedLang = lang.toLowerCase().trim();
+  if (lang) {
+    const normalizedLang = lang.toLowerCase().trim();
 
   if (normalizedLang === "spanish" || normalizedLang === "latin") {
     // Translate English search words to Spanish so Spotify finds authentic Spanish tracks
@@ -202,6 +243,12 @@ export function cleanSpotifyQuery(q: string, lang?: string | null): string {
   } else if (normalizedLang !== "english" && !cleaned.toLowerCase().includes(normalizedLang)) {
     cleaned = `${normalizedLang} ${cleaned}`;
   }
+  }
+
+  const eraFilter = getEraYearFilter(era);
+  if (eraFilter && !cleaned.includes("year:")) {
+    cleaned = `${cleaned} ${eraFilter}`.trim();
+  }
   return cleaned;
 }
 
@@ -220,11 +267,7 @@ export function createSearchPipeline({
       discoveryContext?: DiscoveryContext,
       signal?: AbortSignal,
     ): Promise<{ mode: "mock" | "live"; intent: MusicIntent; notice?: string }> {
-      const fallbackContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const fallbackContext: DiscoveryContext = resolveDiscoveryContext(prompt, discoveryContext);
 
       if (mode === "mock" || !intentExtractor) {
         const rawIntent = getMockIntent(prompt);
@@ -250,11 +293,7 @@ export function createSearchPipeline({
       discoveryContext?: DiscoveryContext,
       signal?: AbortSignal,
     ): Promise<SearchResponse> {
-      const fallbackContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const fallbackContext: DiscoveryContext = resolveDiscoveryContext(prompt, discoveryContext);
 
       if (mode === "mock" || !intentExtractor || (!spotifySearch && !youtubeMusicSearch)) {
         const rawIntent = getMockIntent(prompt);
@@ -316,7 +355,8 @@ export function createSearchPipeline({
       }
 
       // If user specifically requested artist(s), ensure dedicated artist queries are prioritized
-      const targetArtists = parseTargetArtists(activeIntent.artist);
+      const targetArtists = relatedSongsRequested ? [] : parseTargetArtists(activeIntent.artist);
+      const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
       if (targetArtists.length > 1) {
         for (const art of targetArtists) {
           const artQuery = `artist:"${art}"`;
@@ -329,18 +369,21 @@ export function createSearchPipeline({
           queryList.unshift(jointQuery);
         }
       } else if (targetArtists.length === 1) {
+        const artistSongsQuery = `${targetArtists[0]} songs`;
+        if (isExclusiveArtist && !queryList.includes(artistSongsQuery)) {
+          queryList.unshift(artistSongsQuery);
+        }
         const artistQuery = `artist:"${targetArtists[0]}"`;
         if (!queryList.includes(artistQuery)) {
           queryList.unshift(artistQuery);
         }
       }
 
-
-
-      const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, activeIntent.language));
+      const finalizedQueries = queryList.map((q) => cleanSpotifyQuery(q, activeIntent.language, activeIntent.era));
       const masterQueryStr = cleanSpotifyQuery(
         activeIntent.multiQueries?.masterQuery || baseQueries.primary,
         activeIntent.language,
+        activeIntent.era,
       );
 
       // 4. Parallel Spotify Retrieval across query facets (25 tracks per facet = up to 75 candidates)
@@ -365,8 +408,8 @@ export function createSearchPipeline({
       // 5. In-Memory Reciprocal Rank Fusion (< 2ms)
       let fusedCandidates = fuseTrackLists(rawTrackLists, { maxCandidates: 50 });
 
-      // Safety fallback: if fused candidates are sparse (< 15), search master query
-      if (fusedCandidates.length < 15 && spotifySearch) {
+      // Safety fallback: if fused candidates are sparse (< 20), search master / core query
+      if (fusedCandidates.length < 20 && spotifySearch && !isExclusiveArtist) {
         try {
           logger.info(`[SpotifySearch] Candidate pool sparse (${fusedCandidates.length}). Executing master fallback: "${masterQueryStr}"`);
           const fallbackTracks = await spotifySearch.searchTracks(masterQueryStr, 25, signal);
@@ -377,6 +420,22 @@ export function createSearchPipeline({
               seenIds.add(t.id);
             }
           }
+          if (fusedCandidates.length < 20 && (activeIntent.language || activeIntent.era)) {
+            const coreFallback = cleanSpotifyQuery(
+              `${activeIntent.language || ""} ${(activeIntent.genre && activeIntent.genre[0]) || activeIntent.mood || "songs"}`.trim(),
+              activeIntent.language,
+              activeIntent.era,
+            );
+            if (coreFallback && coreFallback !== masterQueryStr) {
+              const coreTracks = await spotifySearch.searchTracks(coreFallback, 25, signal);
+              for (const t of coreTracks) {
+                if (!seenIds.has(t.id)) {
+                  fusedCandidates.push(t);
+                  seenIds.add(t.id);
+                }
+              }
+            }
+          }
         } catch (err) {
           logger.warn(`[SpotifySearch] Master fallback search for "${masterQueryStr}" failed:`, err);
         }
@@ -385,7 +444,10 @@ export function createSearchPipeline({
       let usedYouTubeMusicFallback = false;
       let youtubeMusicFallbackFailed = false;
       if (youtubeMusicSearch && (fusedCandidates.length < 10 || searchErrors.length > 0)) {
-        const fallbackQueries = finalizedQueries.slice(0, 5);
+        const fallbackQueries = finalizedQueries
+          .slice(0, 5)
+          .map((q) => cleanYouTubeQuery(q, activeIntent.language, activeIntent.era))
+          .filter((q, idx, arr) => Boolean(q) && arr.indexOf(q) === idx);
         const fallbackResults = await Promise.all(
           fallbackQueries.map(async (query) => {
             try {
@@ -454,7 +516,7 @@ export function createSearchPipeline({
         discoveryResult.mode,
         signal,
         rerankerPreferences(fallbackContext, discoveryResult),
-        { relatedSongsRequested, maxResults: requestedResultLimit },
+        { relatedSongsRequested, maxResults: requestedResultLimit, isExclusive: isExclusiveArtist, page: 1 },
         contextualSignals,
       ) : [];
 
@@ -481,7 +543,7 @@ export function createSearchPipeline({
           if (refinementQueriesUsed.length > 0) {
             const refinementResults: Track[][] = await Promise.all(
               refinementQueriesUsed.map(async (query) => {
-                const cleanQuery = cleanSpotifyQuery(query, activeIntent.language);
+                const cleanQuery = cleanSpotifyQuery(query, activeIntent.language, activeIntent.era);
                 if (spotifySearch) {
                   try {
                     return await spotifySearch.searchTracks(cleanQuery, 25, signal);
@@ -492,7 +554,8 @@ export function createSearchPipeline({
                 if (youtubeMusicSearch) {
                   try {
                     usedYouTubeMusicFallback = true;
-                    return await youtubeMusicSearch.searchTracks(cleanQuery, 25, signal);
+                    const ytQuery = cleanYouTubeQuery(query, activeIntent.language, activeIntent.era);
+                    return await youtubeMusicSearch.searchTracks(ytQuery, 25, signal);
                   } catch (err) {
                     logger.warn(`[SemanticRefine] YouTube Music search for "${cleanQuery}" failed:`, err);
                   }
@@ -509,7 +572,7 @@ export function createSearchPipeline({
                 discoveryResult.mode,
                 signal,
                 rerankerPreferences(fallbackContext, discoveryResult),
-                { relatedSongsRequested, maxResults: requestedResultLimit },
+                { relatedSongsRequested, maxResults: requestedResultLimit, isExclusive: isExclusiveArtist, page: 1 },
                 contextualSignals,
               );
               const refinedScore = averageScore(refinedRanking);
@@ -544,7 +607,9 @@ export function createSearchPipeline({
         activeIntent,
         {
           maxPerArtist: pageArtistLimit,
-          maxCumulativePerArtist: pageArtistLimit,
+          maxCumulativePerArtist: isExclusiveArtist ? 25 : pageArtistLimit,
+          isExclusive: isExclusiveArtist,
+          page: 1,
           relatedSongsRequested,
           maxResults: initialResultLimit,
         },
@@ -569,8 +634,10 @@ export function createSearchPipeline({
         activeIntent,
         {
           maxPerArtist: pageArtistLimit,
-          maxCumulativePerArtist: pageArtistLimit,
+          maxCumulativePerArtist: isExclusiveArtist ? 25 : pageArtistLimit,
           cumulativeArtistCounts: rankedArtistCounts,
+          isExclusive: isExclusiveArtist,
+          page: 1,
           relatedSongsRequested,
           maxResults: initialResultLimit,
         },
@@ -623,10 +690,14 @@ export function createSearchPipeline({
             // Preserve the parsed intent and let the reranker treat the title/artist
             // as a reference seed instead of hard filters for related candidates.
             const recommendationIntent = activeIntent;
-            const combinedCatalog = fuseTrackLists(
-              [candidatesToUse.slice(0, 30), verifiedRecommendations],
-              { maxCandidates: 40 },
-            );
+            const recIds = new Set(verifiedRecommendations.map((t) => t.id));
+            const combinedCatalog = relatedSongsRequested
+              ? [
+                  ...(referenceTrack ? [referenceTrack] : []),
+                  ...verifiedRecommendations,
+                  ...candidatesToUse.filter((t) => t.id !== referenceTrack?.id && !recIds.has(t.id)).slice(0, 30),
+                ].slice(0, 40)
+              : fuseTrackLists([candidatesToUse.slice(0, 30), verifiedRecommendations], { maxCandidates: 40 });
             const recommendationRanking = await activeReranker.rerank(
               prompt,
               recommendationIntent,
@@ -751,17 +822,12 @@ export function createSearchPipeline({
       const excludeIdSet = new Set(excludeTrackIds);
       const excludeSigSet = new Set(excludeSongSignatures);
 
-      const activeContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const activeContext: DiscoveryContext = resolveDiscoveryContext(prompt, discoveryContext);
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, intent);
       const activeIntent = discoveryResult.adjustedIntent;
       const contextualSignals = enrichListeningContext(activeIntent, activeContext.browserContext);
       const relatedRequest = relatedSongRequest(prompt);
       const relatedSongsRequested = relatedRequest.requested;
-      const requestedResultLimit = relatedSongsRequested ? relatedRequest.relatedCount + 1 : 10;
 
       if (mode === "mock" || (!spotifySearch && !youtubeMusicSearch)) {
         const available = BACKEND_MOCK_TRACKS.filter((t) => !excludeIdSet.has(t.id));
@@ -782,19 +848,27 @@ export function createSearchPipeline({
       const queryList: { query: string; offset: number }[] = [];
       const targetArtists = relatedSongsRequested ? [] : parseTargetArtists(intent.artist);
       const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
+      const safeOffset = Math.min(10, Math.max(0, (page - 1) * 5));
 
       // Continue an explicitly requested artist catalog on later pages even
       // when the prompt also asks for mood/context matches.
       if (!isExclusiveArtist && targetArtists.length > 0) {
         for (const art of targetArtists) {
-          queryList.push({ query: `artist:"${art}"`, offset: (page - 1) * 10 });
+          queryList.push({ query: `artist:"${art}"`, offset: safeOffset });
+          if (page >= 3) {
+            queryList.push({ query: `${art} songs`, offset: 0 });
+          }
         }
       }
 
       if (isExclusiveArtist && targetArtists.length > 0) {
         for (const art of targetArtists) {
-          queryList.push({ query: `artist:"${art}"`, offset: (page - 1) * 10 });
-          queryList.push({ query: art, offset: (page - 1) * 10 });
+          queryList.push({ query: `artist:"${art}"`, offset: safeOffset });
+          queryList.push({ query: `${art} songs`, offset: safeOffset });
+          queryList.push({ query: `${art} album`, offset: 0 });
+          if (activeIntent.genre?.[0]) {
+            queryList.push({ query: `${art} ${activeIntent.genre[0]}`, offset: 0 });
+          }
         }
       } else if (page === 2) {
         // Tier 2: Mood context, curator nuance, and genre offset
@@ -805,10 +879,10 @@ export function createSearchPipeline({
           queryList.push({ query: activeIntent.multiQueries.curatorQuery, offset: 0 });
         }
         if (activeIntent.multiQueries?.genreQuery) {
-          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: 10 });
+          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: safeOffset });
         }
         if (activeIntent.multiQueries?.moodQuery) {
-          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: 10 });
+          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: safeOffset });
         }
       } else if (page === 3) {
         // Tier 3: Subgenres or deep decade boundaries
@@ -818,13 +892,13 @@ export function createSearchPipeline({
           }
         }
         if (activeIntent.multiQueries?.genreQuery) {
-          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: 20 });
+          queryList.push({ query: activeIntent.multiQueries.genreQuery, offset: safeOffset });
         }
         if (activeIntent.multiQueries?.contextQuery) {
-          queryList.push({ query: activeIntent.multiQueries.contextQuery, offset: 10 });
+          queryList.push({ query: activeIntent.multiQueries.contextQuery, offset: safeOffset });
         }
         if (activeIntent.multiQueries?.masterQuery) {
-          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: 10 });
+          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: safeOffset });
         }
       } else {
         // Tier 4+: Seed artists graph queries
@@ -837,10 +911,10 @@ export function createSearchPipeline({
           }
         }
         if (activeIntent.multiQueries?.masterQuery) {
-          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: (page - 1) * 10 });
+          queryList.push({ query: activeIntent.multiQueries.masterQuery, offset: safeOffset });
         }
         if (activeIntent.multiQueries?.moodQuery) {
-          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: 20 });
+          queryList.push({ query: activeIntent.multiQueries.moodQuery, offset: safeOffset });
         }
       }
 
@@ -852,11 +926,11 @@ export function createSearchPipeline({
       }
 
       if (queryList.length === 0) {
-        queryList.push({ query: activeIntent.multiQueries?.masterQuery || prompt, offset: (page - 1) * 10 });
+        queryList.push({ query: activeIntent.multiQueries?.masterQuery || prompt, offset: safeOffset });
       }
 
       const finalizedQueries = queryList.map((item) => ({
-        query: cleanSpotifyQuery(item.query, activeIntent.language),
+        query: cleanSpotifyQuery(item.query, activeIntent.language, activeIntent.era),
         offset: item.offset,
       }));
 
@@ -900,7 +974,7 @@ export function createSearchPipeline({
       }
       const isNicheScene = rawUniqueArtists.size > 0 && rawUniqueArtists.size < 12;
 
-      if (filteredCount < 30 && spotifySearch) {
+      if (filteredCount < 30 && spotifySearch && !isExclusiveArtist) {
         try {
           // If niche micro-scene has seed artists, query authentic scene artists first
           if (isNicheScene && intent.seedArtists && intent.seedArtists.length >= 2) {
@@ -917,14 +991,18 @@ export function createSearchPipeline({
             }
           }
 
-          // Fallback to master query if still low
+          // Fallback to core / master query if still low (safe low offset)
           if (spotifySearch && rawCandidates.filter((t) => !excludeIdSet.has(t.id) && !excludeSigSet.has(getSongSignature(t))).length < 25) {
+            const langPart = activeIntent.language || "";
+            const genrePart = (activeIntent.genre && activeIntent.genre[0]) || "";
+            const moodPart = activeIntent.mood && activeIntent.mood !== "any" ? activeIntent.mood : "songs";
             const fallbackQuery = cleanSpotifyQuery(
-              intent.multiQueries?.masterQuery || intent.multiQueries?.moodQuery || prompt,
-              intent.language,
+              intent.multiQueries?.masterQuery || intent.multiQueries?.moodQuery || `${langPart} ${genrePart || moodPart}`.trim() || prompt,
+              activeIntent.language,
+              activeIntent.era,
             );
-            logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}"`);
-            const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 25, signal, page * 10);
+            logger.info(`[LoadMore] Pool low (${filteredCount} tracks). Triggering cascade fallback: "${fallbackQuery}" (offset ${safeOffset})`);
+            const cascadeTracks = await spotifySearch.searchTracks(fallbackQuery, 25, signal, safeOffset);
             for (const t of cascadeTracks) {
               if (!seenRawIds.has(t.id)) {
                 seenRawIds.add(t.id);
@@ -948,8 +1026,8 @@ export function createSearchPipeline({
             : ["official audio", "acoustic", "live"];
         const youtubeQueries = finalizedQueries
           .slice(0, 3)
-          .flatMap(({ query }) => [query, ...variantTerms.map((term) => `${query} ${term}`)])
-          .map((query) => cleanSpotifyQuery(query, activeIntent.language))
+          .map(({ query }) => cleanYouTubeQuery(query, activeIntent.language, activeIntent.era))
+          .flatMap((query) => [query, ...variantTerms.map((term) => `${query} ${term}`)])
           .filter((query, index, all) => Boolean(query) && all.indexOf(query) === index)
           .slice(0, 8);
         const fallbackResults = await Promise.all(
@@ -995,6 +1073,10 @@ export function createSearchPipeline({
       // For popular/dense scenes (rerankUniqueArtists >= 12), artist cap stays strictly at 2 (100% untouched)
       const dynamicMaxPerArtist = (rerankUniqueArtists.size > 0 && rerankUniqueArtists.size < 12 && page >= 3) ? 3 : 2;
 
+      // Enforce clean 5-track batch size and hard session ceiling of 25 tracks
+      const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
+      const batchSize = Math.min(5, remainingSlots);
+
       // Gemini Call 2 Reranker with dynamic artist limits
       const rerankedTracks = await activeReranker.rerank(
         prompt,
@@ -1005,19 +1087,18 @@ export function createSearchPipeline({
         rerankerPreferences(activeContext, discoveryResult),
         {
           cumulativeArtistCounts,
-          maxCumulativePerArtist: 6,
+          maxCumulativePerArtist: isExclusiveArtist ? 25 : 6,
           maxPerArtist: dynamicMaxPerArtist,
           excludeTrackIds: excludeIdSet,
           excludeSignatures: excludeSigSet,
           relatedSongsRequested,
-          maxResults: requestedResultLimit,
+          maxResults: batchSize,
+          isExclusive: isExclusiveArtist,
+          page,
         },
         contextualSignals,
       );
 
-      // Enforce clean 5-track batch size and hard session ceiling of 25 tracks
-      const remainingSlots = Math.max(0, 25 - excludeTrackIds.length);
-      const batchSize = Math.min(5, remainingSlots);
       // Low confidence affects ordering and the displayed score, not eligibility.
       const confidenceCheckedTracks = rerankedTracks;
       const locallyVerifiedTracks = balanceTracks(
@@ -1030,12 +1111,14 @@ export function createSearchPipeline({
         activeIntent,
         {
           cumulativeArtistCounts,
-          maxCumulativePerArtist: 6,
+          maxCumulativePerArtist: isExclusiveArtist ? 25 : 6,
           maxPerArtist: activeIntent.artist ? 10 : dynamicMaxPerArtist,
           excludeTrackIds: excludeIdSet,
           excludeSignatures: excludeSigSet,
           relatedSongsRequested,
-          maxResults: requestedResultLimit,
+          maxResults: batchSize,
+          isExclusive: isExclusiveArtist,
+          page,
         },
       );
       const finalTracks = locallyVerifiedTracks.slice(0, batchSize);
@@ -1130,11 +1213,7 @@ export function createSearchPipeline({
         }
       }
 
-      const activeContext: DiscoveryContext = discoveryContext ?? {
-        discoveryMode: "FAMILIAR",
-        preferences: { favoriteGenres: [], favoriteArtists: [], dislikedGenres: [], dislikedArtists: [] },
-        rawPrompt: prompt,
-      };
+      const activeContext: DiscoveryContext = resolveDiscoveryContext(prompt, discoveryContext);
       const discoveryResult = defaultDiscoveryProcessor.process(activeContext, refinedIntent);
       refinedIntent = discoveryResult.adjustedIntent;
       const contextualSignals = enrichListeningContext(refinedIntent, activeContext.browserContext);

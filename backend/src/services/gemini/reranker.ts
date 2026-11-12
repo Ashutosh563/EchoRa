@@ -107,23 +107,6 @@ export function getPrimaryArtistKey(track: Track): string {
   return track.artists[0].toLowerCase().trim();
 }
 
-function matchesExplicitRequest(track: Track, intent?: MusicIntent): boolean {
-  if (!intent) return true;
-
-  if (intent.artist?.trim()) {
-    const requestedArtist = intent.artist.toLowerCase().trim();
-    if (!track.artists.some((artist) => artist.toLowerCase().trim() === requestedArtist)) return false;
-  }
-
-  if (intent.trackTitle?.trim()) {
-    const requestedTitle = normalizeSongTitle(intent.trackTitle);
-    const candidateTitle = normalizeSongTitle(track.name);
-    if (!requestedTitle || candidateTitle !== requestedTitle) return false;
-  }
-
-  return true;
-}
-
 /**
  * Splits multi-artist query strings (e.g. "Diljit Dosanjh and Karan Aujla", "Arijit Singh & Shreya Ghoshal")
  * into distinct artist names.
@@ -614,6 +597,248 @@ export interface BalanceOptions {
   /** The named artist/title is a seed for related-track discovery, not a filter for every candidate. */
   relatedSongsRequested?: boolean;
   maxResults?: number;
+  page?: number;
+}
+
+function trackMatchesAnyTarget(track: Track, targetArtists: string[]): boolean {
+  return targetArtists.some((ta) => track.artists.some((a) => isArtistMatch(a, ta)));
+}
+
+function countMatchingTargets(track: Track, targetArtists: string[]): number {
+  return targetArtists.filter((ta) => track.artists.some((a) => isArtistMatch(a, ta))).length;
+}
+
+function isExactTitleMatch(track: Track, title: string): boolean {
+  const reqNorm = normalizeSongTitle(title);
+  const candNorm = normalizeSongTitle(track.name);
+  if (reqNorm && candNorm && candNorm === reqNorm) return true;
+  return track.name.toLowerCase().includes(title.toLowerCase().trim());
+}
+
+/**
+ * Orders multi-artist tracks by placing mutual collaborations/duets first,
+ * then alternating individual tracks in equal ratio (considering prior cumulative counts).
+ * If one artist's catalog runs out, continues smoothly with the remaining artist(s).
+ */
+function orderBalancedArtistTracks(
+  pool: Track[],
+  targetArtists: string[],
+  cumulativeCounts?: Record<string, number>,
+): Track[] {
+  if (targetArtists.length <= 1) return pool;
+
+  const collabs: Track[] = [];
+  const remaining: Track[] = [];
+  for (const t of pool) {
+    if (countMatchingTargets(t, targetArtists) > 1) {
+      collabs.push(t);
+    } else {
+      remaining.push(t);
+    }
+  }
+
+  const buckets = new Map<string, Track[]>();
+  const pickedCounts = new Map<string, number>();
+  for (const ta of targetArtists) {
+    buckets.set(ta, []);
+    const key = ta.toLowerCase().trim();
+    const normKey = normalizeEntityName(ta);
+    let prior = 0;
+    if (cumulativeCounts) {
+      for (const [k, v] of Object.entries(cumulativeCounts)) {
+        if (k.toLowerCase().trim() === key || (normKey && normalizeEntityName(k) === normKey)) {
+          prior += v;
+        }
+      }
+    }
+    pickedCounts.set(ta, prior);
+  }
+
+  for (const t of remaining) {
+    const owner = targetArtists.find((ta) => t.artists.some((a) => isArtistMatch(a, ta)));
+    if (owner) buckets.get(owner)!.push(t);
+  }
+
+  const balancedIndividuals: Track[] = [];
+  const usedIds = new Set<string>(collabs.map((c) => c.id));
+  while (true) {
+    let bestArtist: string | null = null;
+    let bestCount = Infinity;
+    for (const ta of targetArtists) {
+      const list = buckets.get(ta)!;
+      while (list.length > 0 && usedIds.has(list[0].id)) list.shift();
+      if (list.length === 0) continue;
+      const cnt = pickedCounts.get(ta) ?? 0;
+      if (cnt < bestCount) {
+        bestCount = cnt;
+        bestArtist = ta;
+      }
+    }
+    if (!bestArtist) break;
+    const nextTrack = buckets.get(bestArtist)!.shift()!;
+    usedIds.add(nextTrack.id);
+    balancedIndividuals.push(nextTrack);
+    pickedCounts.set(bestArtist, (pickedCounts.get(bestArtist) ?? 0) + 1);
+  }
+
+  return [...collabs, ...balancedIndividuals];
+}
+
+function dedupeTrackPool(
+  primary: Track[],
+  secondary: Track[],
+  intent?: MusicIntent,
+  options?: BalanceOptions,
+): Track[] {
+  const out: Track[] = [];
+  const seenIds = new Set<string>();
+  const seenSigs = new Set<string>();
+  const seenTitles = new Set<string>();
+  for (const t of [...primary, ...secondary]) {
+    if (seenIds.has(t.id)) continue;
+    if (options?.excludeTrackIds?.has(t.id)) continue;
+    const sig = getSongSignature(t);
+    if (seenSigs.has(sig) || options?.excludeSignatures?.has(sig)) continue;
+    const norm = normalizeSongTitle(t.name) || t.name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15);
+    if (seenTitles.has(norm)) continue;
+    if (intent && matchesNegativeConstraints(t, intent)) continue;
+    if (intent && !isLanguageMatch(t, intent.language, intent)) continue;
+    seenIds.add(t.id);
+    seenSigs.add(sig);
+    seenTitles.add(norm);
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * Applies Case 6 C quotas across Page 1 (10 tracks) and Pages 2-4 (5 tracks):
+ * - Song name only: P1 = #1 song + 1 artist song + 8 mood companions; P2-4 = 5 mood companions ("song only" removed)
+ * - Artist only: 100% artist up to 25 (no companion padding)
+ * - Artist (no only): P1 = 5 artist + 5 companions; P2-4 = 2 artist + 3 companions
+ * - Artist + Song (no only): P1 = #1 song + 6 artist + 3 companions; P2-4 = 2 artist + 3 companions
+ * - Artist + Song + only: P1 = #1 song + 9 artist; P2-4 = +5 artist up to 25
+ * - Two Artists (A and B): P1 = top 8 (collabs first, balanced A/B) + 2 companions; P2-4 = 3 combined A/B + 2 companions
+ * - Two Artists (A and B only): 100% A & B (collabs first, equal individual ratio; continues with remaining artist if one ends)
+ * - Non-only universal fallback: if any artist quota falls short, fill remaining slots with companions or remaining artists.
+ */
+export function applyCase6CQuotas(
+  orderedTracks: Track[],
+  fallbackPool: Track[],
+  intent?: MusicIntent,
+  options?: BalanceOptions,
+): Track[] {
+  const page = options?.page ?? 1;
+  const limit = options?.maxResults ?? (page > 1 ? 5 : 10);
+  if (options?.relatedSongsRequested || !intent) {
+    return orderedTracks.slice(0, limit);
+  }
+
+  const targetArtists = parseTargetArtists(intent.artist);
+  const trackTitle = intent.trackTitle?.trim() || "";
+  const isExclusive = Boolean(options?.isExclusive && targetArtists.length > 0);
+  const pool = dedupeTrackPool(orderedTracks, fallbackPool, intent, options);
+
+  // Case 1: Song name only (no artist specified)
+  if (targetArtists.length === 0 && trackTitle) {
+    if (page > 1) {
+      return pool.slice(0, limit);
+    }
+    const exactIdx = pool.findIndex((t) => isExactTitleMatch(t, trackTitle));
+    const result: Track[] = [];
+    const usedIds = new Set<string>();
+    let seedArtist: string | null = null;
+    if (exactIdx >= 0) {
+      const exact = pool[exactIdx];
+      result.push(exact);
+      usedIds.add(exact.id);
+      seedArtist = exact.artists?.[0] ?? null;
+    }
+    if (seedArtist) {
+      const oneArtistTrack = pool.find(
+        (t) => !usedIds.has(t.id) && t.artists.some((a) => isArtistMatch(a, seedArtist!)),
+      );
+      if (oneArtistTrack) {
+        result.push(oneArtistTrack);
+        usedIds.add(oneArtistTrack.id);
+      }
+    }
+    for (const t of pool) {
+      if (result.length >= limit) break;
+      if (!usedIds.has(t.id)) {
+        result.push(t);
+        usedIds.add(t.id);
+      }
+    }
+    return result.slice(0, limit);
+  }
+
+  if (targetArtists.length === 0) {
+    return orderedTracks.slice(0, limit);
+  }
+
+  const artistPool = pool.filter((t) => trackMatchesAnyTarget(t, targetArtists));
+  const companionPool = pool.filter((t) => !trackMatchesAnyTarget(t, targetArtists));
+
+  let pinnedTitleTrack: Track | null = null;
+  let remainingArtists = artistPool;
+  if (trackTitle && page === 1) {
+    const exactIdx = artistPool.findIndex((t) => isExactTitleMatch(t, trackTitle));
+    if (exactIdx >= 0) {
+      pinnedTitleTrack = artistPool[exactIdx];
+      remainingArtists = artistPool.filter((_, idx) => idx !== exactIdx);
+    }
+  }
+
+  const orderedRemainingArtists = orderBalancedArtistTracks(
+    remainingArtists,
+    targetArtists,
+    options?.cumulativeArtistCounts,
+  );
+  const orderedArtists = pinnedTitleTrack
+    ? [pinnedTitleTrack, ...orderedRemainingArtists]
+    : orderedRemainingArtists;
+
+  // Exclusive ("only") cases: 100% requested artist(s) only, never pad with outside companions
+  if (isExclusive) {
+    const isSmallCatalog = orderedArtists.length < limit && page === 1;
+    const notice = isSmallCatalog
+      ? `Official release by ${intent.artist} (complete discography on Spotify).`
+      : `Featured track from ${intent.artist}'s catalog.`;
+    return orderedArtists.slice(0, limit).map((t) => ({
+      ...t,
+      matchReason: isSmallCatalog ? notice : (t.matchReason || notice),
+    }));
+  }
+
+  // Non-exclusive cases: exact quotas with universal fallback to companions (or remaining artist)
+  let artistQuota: number;
+  if (targetArtists.length > 1) {
+    artistQuota = page === 1 ? 8 : 3;
+  } else if (trackTitle) {
+    artistQuota = page === 1 ? 7 : 2;
+  } else {
+    artistQuota = page === 1 ? 5 : 2;
+  }
+
+  const selectedArtists = orderedArtists.slice(0, Math.min(artistQuota, limit));
+  const neededCompanions = Math.max(0, limit - selectedArtists.length);
+  const selectedCompanions = companionPool.slice(0, neededCompanions);
+  const assembled = [...selectedArtists, ...selectedCompanions];
+
+  // Universal fallback: if companions ran short, fill remaining slots with extra artist tracks
+  if (assembled.length < limit) {
+    const usedIds = new Set(assembled.map((t) => t.id));
+    for (const t of [...orderedArtists, ...companionPool]) {
+      if (assembled.length >= limit) break;
+      if (!usedIds.has(t.id)) {
+        assembled.push(t);
+        usedIds.add(t.id);
+      }
+    }
+  }
+
+  return assembled.slice(0, limit);
 }
 
 export function balanceTracks(
@@ -636,11 +861,12 @@ export function balanceTracks(
   const maxCumulativeArtist = options?.maxCumulativePerArtist ?? 6;
   const resultLimit = options?.maxResults ?? 10;
 
+  const targetArtists = !options?.relatedSongsRequested ? parseTargetArtists(negativeIntent?.artist) : [];
+
   for (const t of tracks) {
     if (options?.excludeTrackIds && options.excludeTrackIds.has(t.id)) continue;
     const songSig = getSongSignature(t);
     if (options?.excludeSignatures && options.excludeSignatures.has(songSig)) continue;
-    if (!options?.relatedSongsRequested && !matchesExplicitRequest(t, negativeIntent)) continue;
 
     if (!allowInstrumental && isInstrumentalTrack(t)) continue;
     if (negativeIntent && matchesNegativeConstraints(t, negativeIntent)) continue;
@@ -649,12 +875,13 @@ export function balanceTracks(
     const norm = normalizeSongTitle(t.name) || t.name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15);
     if (seenTitles.has(norm)) continue;
 
+    const isExplicitTargetTrack = targetArtists.length > 0 && trackMatchesAnyTarget(t, targetArtists);
     const artistKey = getPrimaryArtistKey(t);
     const count = artistCounts.get(artistKey) || 0;
-    if (count >= maxAllowedArtist) continue;
+    if (!isExplicitTargetTrack && count >= maxAllowedArtist) continue;
 
     const cumulativeCount = options?.cumulativeArtistCounts ? (options.cumulativeArtistCounts[artistKey] || 0) : 0;
-    if (cumulativeCount + count >= maxCumulativeArtist) continue;
+    if (!isExplicitTargetTrack && cumulativeCount + count >= maxCumulativeArtist) continue;
 
     const isMash = isMashupOrMix(t);
     if (isMash && mashupCount >= maxMashups) continue;
@@ -671,30 +898,19 @@ export function balanceTracks(
   }
 
   // Strict Era Gate: if an era was explicitly requested, NEVER append other-era tracks
-  if (era) {
-    return targetEraTracks.slice(0, resultLimit);
-  }
-
-  const combined = [...targetEraTracks, ...otherEraTracks];
-  if (negativeIntent?.artist && !options?.relatedSongsRequested) {
-    const targetArtists = parseTargetArtists(negativeIntent.artist);
+  const eligible = era ? targetEraTracks : [...targetEraTracks, ...otherEraTracks];
+  if (!options?.relatedSongsRequested && (targetArtists.length > 0 || negativeIntent?.trackTitle)) {
     const isExcl = Boolean(
-      options?.isExclusive ||
-      (/\b(only|just|pure|exclusively|all)\b/i.test(negativeIntent.artist))
+      targetArtists.length > 0 &&
+      (options?.isExclusive || (negativeIntent?.artist && /\b(only|just|pure|exclusively|all)\b/i.test(negativeIntent.artist))),
     );
-    const artistMatches = combined.filter((t) =>
-      targetArtists.some((ta) => t.artists.some((a) => isArtistMatch(a, ta)))
-    );
-    if (isExcl) {
-      return artistMatches.slice(0, 10);
-    }
-    const companionMatches = combined.filter((t) =>
-      !targetArtists.some((ta) => t.artists.some((a) => isArtistMatch(a, ta)))
-    );
-    const targetQuota = targetArtists.length > 1 ? 6 : 5;
-    return [...artistMatches.slice(0, targetQuota), ...companionMatches.slice(0, 10 - targetQuota)].slice(0, 10);
+    return applyCase6CQuotas(eligible, eligible, negativeIntent, {
+      ...options,
+      isExclusive: isExcl,
+      maxResults: resultLimit,
+    });
   }
-  return combined.slice(0, resultLimit);
+  return eligible.slice(0, resultLimit);
 }
 
 function buildRerankerSystemInstruction(discoveryMode: DiscoveryMode = "FAMILIAR"): string {
@@ -1009,7 +1225,6 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
 
       // Filter out pure instrumental tracks, negative constraint violations, and language leaks before sending candidate pool to Gemini
       let eligibleCandidates = sortedCandidates.filter((t) => {
-        if (!relatedSongsRequested && !matchesExplicitRequest(t, intent)) return false;
         if (!allowInstrumental && isInstrumentalTrack(t)) return false;
         if (matchesNegativeConstraints(t, intent)) return false;
         if (!isLanguageMatch(t, intent.language, intent)) return false;
@@ -1017,7 +1232,6 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
       });
       if (eligibleCandidates.length < 5) {
         eligibleCandidates = sortedCandidates.filter((t) => {
-          if (!relatedSongsRequested && !matchesExplicitRequest(t, intent)) return false;
           if (matchesNegativeConstraints(t, intent)) return false;
           if (!isLanguageMatch(t, intent.language, intent)) return false;
           return true;
@@ -1113,12 +1327,14 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
             const norm = normalizeSongTitle(matched.name) || matched.name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15);
             if (seenTitles.has(norm)) continue;
 
+            const explicitTargets = relatedSongsRequested ? [] : parseTargetArtists(intent.artist);
+            const isExplicitTargetTrack = explicitTargets.length > 0 && trackMatchesAnyTarget(matched, explicitTargets);
             const artistKey = getPrimaryArtistKey(matched);
             const currentCount = artistCounts.get(artistKey) || 0;
-            if (currentCount >= maxPerArtist) continue;
+            if (!isExplicitTargetTrack && currentCount >= maxPerArtist) continue;
 
             const cumulativeCount = balanceOptions?.cumulativeArtistCounts ? (balanceOptions.cumulativeArtistCounts[artistKey] || 0) : 0;
-            if (cumulativeCount + currentCount >= maxCumulativeArtist) continue;
+            if (!isExplicitTargetTrack && cumulativeCount + currentCount >= maxCumulativeArtist) continue;
 
             const isMash = isMashupOrMix(matched);
             if (isMash && mashupCount >= MAX_MASHUPS) continue;
@@ -1179,146 +1395,11 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           }
         }
 
-        const isExclusive = !relatedSongsRequested && Boolean(intent.artist && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
-        const targetArtists = relatedSongsRequested ? [] : parseTargetArtists(intent.artist);
-
-        if (targetArtists.length > 0 && isExclusive) {
-          // "ONLY" Case: Return 100% tracks by the requested artist(s)
-          const exclusiveMatches: Track[] = [];
-          const seen = new Set<string>();
-
-          for (const t of rerankedList) {
-            const matches = targetArtists.some((ta) =>
-              t.artists.some((a) => isArtistMatch(a, ta))
-            );
-            if (matches && !seen.has(t.id)) {
-              exclusiveMatches.push(t);
-              seen.add(t.id);
-            }
-          }
-
-          if (exclusiveMatches.length < 10) {
-            const moreArtistTracks = candidates.filter((t) =>
-              !seen.has(t.id) &&
-              isLanguageMatch(t, intent.language, intent) &&
-              !matchesNegativeConstraints(t, intent) &&
-              targetArtists.some((ta) => t.artists.some((a) => isArtistMatch(a, ta)))
-            );
-            for (const t of moreArtistTracks) {
-              seen.add(t.id);
-              exclusiveMatches.push(t);
-              if (exclusiveMatches.length >= 10) break;
-            }
-          }
-
-          // Edge Case C (Option 1): If discography is small (< 10 tracks total), return all available tracks
-          const catalogNotice = exclusiveMatches.length < 10
-            ? `Official release by ${intent.artist} (complete discography on Spotify).`
-            : `Featured track from ${intent.artist}'s catalog.`;
-
-          return exclusiveMatches.slice(0, 10).map((t) => ({
-            ...t,
-            matchReason: exclusiveMatches.length < 10 ? catalogNotice : (t.matchReason || catalogNotice),
-          }));
-        }
-
-        if (targetArtists.length > 0 && !isExclusive) {
-          // Cases 1, 2, 3: Up to 5 (or 6 for multi-artist) tracks from the requested artists + remaining from vibe companions
-          const artistPool: Track[] = [];
-          const companionPool: Track[] = [];
-          const seen = new Set<string>();
-
-          for (const t of rerankedList) {
-            const isMatch = targetArtists.some((ta) =>
-              t.artists.some((a) => isArtistMatch(a, ta))
-            );
-            if (isMatch) {
-              artistPool.push(t);
-            } else {
-              companionPool.push(t);
-            }
-            seen.add(t.id);
-          }
-
-          const targetQuota = targetArtists.length > 1 ? 6 : 5;
-
-          // Backfill targetPool from original candidates if needed
-          if (artistPool.length < targetQuota) {
-            const moreArtistTracks = candidates.filter((t) =>
-              !seen.has(t.id) &&
-              isLanguageMatch(t, intent.language, intent) &&
-              !matchesNegativeConstraints(t, intent) &&
-              targetArtists.some((ta) => t.artists.some((a) => isArtistMatch(a, ta)))
-            );
-            for (const t of moreArtistTracks) {
-              artistPool.push(t);
-              seen.add(t.id);
-              if (artistPool.length >= targetQuota) break;
-            }
-          }
-
-          let finalArtistSection: Track[] = artistPool;
-          if (targetArtists.length > 1) {
-            // Balance across multi-artists
-            const maxPerSubArtist = Math.ceil(targetQuota / targetArtists.length);
-            const subCounts = new Map<string, number>();
-            const balanced: Track[] = [];
-
-            // First add mutual duets/collaborations
-            for (const t of artistPool) {
-              const matchesCount = targetArtists.filter((ta) =>
-                t.artists.some((a) => isArtistMatch(a, ta))
-              ).length;
-              if (matchesCount > 1 && balanced.length < targetQuota) {
-                balanced.push(t);
-              }
-            }
-
-            // Next fill each artist up to their sub-quota
-            for (const t of artistPool) {
-              if (balanced.some((b) => b.id === t.id)) continue;
-              const matchedArtist = targetArtists.find((ta) =>
-                t.artists.some((a) => isArtistMatch(a, ta))
-              );
-              if (!matchedArtist) continue;
-              const cnt = subCounts.get(matchedArtist) || 0;
-              if (cnt < maxPerSubArtist && balanced.length < targetQuota) {
-                balanced.push(t);
-                subCounts.set(matchedArtist, cnt + 1);
-              }
-            }
-            finalArtistSection = balanced;
-          }
-
-          // If user searched for a specific song title, ensure exact title match is at Rank #1
-          if (intent.trackTitle) {
-            const titleLower = intent.trackTitle.toLowerCase();
-            const exactIdx = finalArtistSection.findIndex((t) => t.name.toLowerCase().includes(titleLower));
-            if (exactIdx > 0) {
-              const [exact] = finalArtistSection.splice(exactIdx, 1);
-              finalArtistSection.unshift(exact);
-            }
-          }
-
-          const topArtistSection = finalArtistSection.slice(0, targetQuota);
-          const neededCompanions = Math.max(0, 10 - topArtistSection.length);
-          const topCompanionSection = companionPool.slice(0, neededCompanions);
-
-          const assembled = [...topArtistSection, ...topCompanionSection];
-          if (assembled.length < 10) {
-            const assembledIds = new Set(assembled.map((t) => t.id));
-            for (const t of rerankedList) {
-              if (!assembledIds.has(t.id)) {
-                assembled.push(t);
-                assembledIds.add(t.id);
-              }
-              if (assembled.length >= 10) break;
-            }
-          }
-          return assembled.slice(0, 10);
-        }
-
-        return rerankedList.slice(0, relatedSongsRequested ? 11 : 10);
+        return applyCase6CQuotas(rerankedList, candidates, intent, {
+          ...effectiveOptions,
+          isExclusive: balanceOptions?.isExclusive ?? isExclusive,
+          maxResults: resultLimit,
+        });
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn(`[Reranker] Semantic reranker skipped or timed out (${errorMsg}). Using balanced candidate ranking.`);
