@@ -6,7 +6,7 @@ import type { Track } from "../../types/track.js";
 import { logger } from "../../utils/logger.js";
 import { normalizeSongTitle, getSongSignature } from "../music/fusion.js";
 
-const RERANKER_TIMEOUT_MS = 4500;
+const RERANKER_TIMEOUT_MS = 20000;
 
 export function isMashupOrMix(track: Track): boolean {
   const text = `${track.name} ${track.artists.join(" ")} ${track.album}`.toLowerCase();
@@ -904,16 +904,32 @@ export function balanceTracks(
       targetArtists.length > 0 &&
       (options?.isExclusive || (negativeIntent?.artist && /\b(only|just|pure|exclusively|all)\b/i.test(negativeIntent.artist))),
     );
-    return applyCase6CQuotas(eligible, eligible, negativeIntent, {
-      ...options,
-      isExclusive: isExcl,
-      maxResults: resultLimit,
-    });
+    return withFallbackMatchScores(
+      applyCase6CQuotas(eligible, eligible, negativeIntent, {
+        ...options,
+        isExclusive: isExcl,
+        maxResults: resultLimit,
+      }),
+      negativeIntent,
+    );
   }
-  return eligible.slice(0, resultLimit);
+  return withFallbackMatchScores(eligible.slice(0, resultLimit), negativeIntent);
 }
 
-function buildRerankerSystemInstruction(discoveryMode: DiscoveryMode = "FAMILIAR"): string {
+function withFallbackMatchScores(tracks: Track[], intent?: MusicIntent): Track[] {
+  const targetArtists = parseTargetArtists(intent?.artist);
+  const targetTitle = intent?.trackTitle?.trim() || "";
+  return tracks.map((t, index) => {
+    if (typeof t.matchScore === "number") return t;
+    let score = Math.max(68, 86 - index * 2);
+    if (targetTitle && isExactTitleMatch(t, targetTitle)) score = Math.max(score, 95);
+    else if (targetArtists.length > 0 && trackMatchesAnyTarget(t, targetArtists)) score = Math.max(score, 84 - Math.min(8, index));
+    else if (intent?.era && t.releaseYear && isTargetEra(t, intent.era)) score = Math.min(92, score + 3);
+    return { ...t, matchScore: Math.max(0, Math.min(100, Math.round(score))) };
+  });
+}
+
+function buildRerankerSystemInstruction(discoveryMode: DiscoveryMode = "FAMILIAR", outputCount = 15): string {
   const modeContext =
     discoveryMode === "EXPLORE"
       ? "Discovery Mode is EXPLORE: Prioritize fresh, lesser-known, textured tracks, and hidden gems that nail the emotional nuance over obvious top-40 chart hits. Give saved favorites less influence, while honoring saved dislikes and explicit requests."
@@ -922,7 +938,7 @@ function buildRerankerSystemInstruction(discoveryMode: DiscoveryMode = "FAMILIAR
         : "Discovery Mode is FAMILIAR: Give the user's saved favorite artists and genres the strongest preference influence while keeping the current prompt primary.";
 
   return `You are ECHORA's Semantic Music Reranker.
-Given a user prompt, semantic listening intent (mood, persona, energy, tempo, vocals preference, time context, language, era), sonic texture profile (instruments, production, tempo feel, emotional subtext), active discovery mode, and a candidate pool of tracks, select and rank the TOP 10 tracks that best embody the emotional and acoustic nuance.
+Given a user prompt, semantic listening intent (mood, persona, energy, tempo, vocals preference, time context, language, era), sonic texture profile (instruments, production, tempo feel, emotional subtext), active discovery mode, and a candidate pool of tracks, select and rank the TOP ${outputCount} tracks that best embody the emotional and acoustic nuance. Keep each matchReason concise (under 10 words).
 
 ${modeContext}
 
@@ -1238,7 +1254,21 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
         });
       }
 
+      if (targetArtists.length > 0 && !relatedSongsRequested && eligibleCandidates.length > 0) {
+        const artistSlice = orderBalancedArtistTracks(
+          eligibleCandidates.filter((t) => trackMatchesAnyTarget(t, targetArtists)),
+          targetArtists,
+          balanceOptions?.cumulativeArtistCounts,
+        );
+        const companionSlice = eligibleCandidates.filter((t) => !trackMatchesAnyTarget(t, targetArtists));
+        eligibleCandidates = isExclusive
+          ? artistSlice
+          : [...artistSlice.slice(0, 20), ...companionSlice.slice(0, 15), ...artistSlice.slice(20), ...companionSlice.slice(15)];
+      }
+
       try {
+        const page = balanceOptions?.page ?? 1;
+        const rerankResultLimit = balanceOptions?.maxResults ?? (page > 1 ? 5 : 10);
         const candidatePayload = eligibleCandidates.slice(0, relatedSongsRequested ? 40 : 30).map((t, idx) => ({
           id: t.id,
           title: t.name,
@@ -1247,6 +1277,9 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           releaseYear: t.releaseYear ?? "unknown",
           candidateRank: idx + 1,
         }));
+        const targetOutputCount = relatedSongsRequested
+          ? candidatePayload.length
+          : Math.min(candidatePayload.length, Math.max(page > 1 ? 8 : 15, rerankResultLimit));
 
         const userText = JSON.stringify({
           userPrompt: prompt,
@@ -1279,7 +1312,7 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
         const rawJson = await geminiClient.generateJson({
           userText,
           systemInstruction: [
-            buildRerankerSystemInstruction(discoveryMode),
+            buildRerankerSystemInstruction(discoveryMode, targetOutputCount),
             relatedSongsRequested
               ? "The requested title and artist identify the reference seed. Score every supplied candidate and return every candidate in best-to-worst order with its own match score. Include the exact reference track if present, then the best ten distinct tracks with similar mood and sound. The named artist is not a restriction on related tracks; the reference seed is not one of the ten related songs."
               : "",
@@ -1395,11 +1428,14 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
           }
         }
 
-        return applyCase6CQuotas(rerankedList, candidates, intent, {
-          ...effectiveOptions,
-          isExclusive: balanceOptions?.isExclusive ?? isExclusive,
-          maxResults: resultLimit,
-        });
+        return withFallbackMatchScores(
+          applyCase6CQuotas(rerankedList, candidates, intent, {
+            ...effectiveOptions,
+            isExclusive: balanceOptions?.isExclusive ?? isExclusive,
+            maxResults: resultLimit,
+          }),
+          intent,
+        );
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn(`[Reranker] Semantic reranker skipped or timed out (${errorMsg}). Using balanced candidate ranking.`);

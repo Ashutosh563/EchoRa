@@ -7,7 +7,7 @@ import { createFileTokenStore, type TokenStore } from "./services/spotify/tokenS
 import { createSpotifyAuth, type SpotifyAuth } from "./services/spotify/spotifyAuth.js";
 import { createSpotifySearch, type SpotifySearch } from "./services/spotify/spotifySearch.js";
 import { createYouTubeMusicSearch } from "./services/youtubeMusic/ytmusicSearch.js";
-import { createGeminiClient } from "./services/gemini/geminiClient.js";
+import { createGeminiClient, GEMINI_FALLBACK_MODELS } from "./services/gemini/geminiClient.js";
 import { createGeminiFallbackClient, createOpenRouterClient } from "./services/openrouter/openRouterClient.js";
 import { createIntentExtractor, type IntentExtractor } from "./services/gemini/intentExtractor.js";
 import { createMusicController } from "./controllers/music.controller.js";
@@ -73,16 +73,29 @@ export function createApp(deps: AppDependencies = {}): Express {
   // Initialize Gemini Intent Extractor if key exists
   let intentExtractor: IntentExtractor | null = deps.intentExtractor ?? null;
   let visionService: GeminiVisionService | null = deps.visionService ?? null;
-  const geminiPrimaryClient = config.geminiApiKey ? createGeminiClient(config.geminiApiKey, config.geminiModel) : null;
   const openRouterClient = config.openRouterApiKey
-    ? createOpenRouterClient(config.openRouterApiKey, config.openRouterModel)
+    ? createOpenRouterClient(config.openRouterApiKey, config.openRouterModel, 10000)
     : null;
-  const geminiClient = createGeminiFallbackClient(geminiPrimaryClient, openRouterClient, {
-    onGeminiSuccess: () => { credState.geminiValid = true; credState.lastAiProvider = "gemini"; },
-    onGeminiAuthFailure: () => { credState.geminiValid = false; },
-    onOpenRouterSuccess: () => { credState.openRouterValid = true; credState.lastAiProvider = "openRouter"; },
-    onOpenRouterAuthFailure: () => { credState.openRouterValid = false; },
-  });
+  const geminiBackupModels = GEMINI_FALLBACK_MODELS.filter((m) => m !== config.geminiModel);
+  const geminiPrimaryClient = config.geminiApiKey
+    ? openRouterClient
+      ? createGeminiClient(config.geminiApiKey, config.geminiModel, { models: [config.geminiModel], attemptTimeoutMs: 5000 })
+      : createGeminiClient(config.geminiApiKey, config.geminiModel)
+    : null;
+  const geminiBackupClient = config.geminiApiKey && openRouterClient && geminiBackupModels.length > 0
+    ? createGeminiClient(config.geminiApiKey, config.geminiModel, { models: geminiBackupModels, attemptTimeoutMs: 6000 })
+    : null;
+  const geminiClient = createGeminiFallbackClient(
+    geminiPrimaryClient,
+    openRouterClient,
+    {
+      onGeminiSuccess: () => { credState.geminiValid = true; credState.lastAiProvider = "gemini"; },
+      onGeminiAuthFailure: () => { credState.geminiValid = false; },
+      onOpenRouterSuccess: () => { credState.openRouterValid = true; credState.lastAiProvider = "openRouter"; },
+      onOpenRouterAuthFailure: () => { credState.openRouterValid = false; },
+    },
+    geminiBackupClient,
+  );
 
   if (geminiClient && !intentExtractor) {
     intentExtractor = createIntentExtractor(geminiClient);

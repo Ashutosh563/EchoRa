@@ -6,10 +6,14 @@ const OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/compl
 const REQUEST_TIMEOUT_MS = 20_000;
 
 /** OpenRouter's OpenAI-compatible API, adapted to ECHORA's structured JSON client. */
-export function createOpenRouterClient(apiKey: string, model: string): GeminiClient {
+export function createOpenRouterClient(
+  apiKey: string,
+  model: string,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
+): GeminiClient {
   return {
     async generateJson({ userText, systemInstruction, jsonSchema, signal }: GenerateJsonRequest) {
-      const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+      const timeout = AbortSignal.timeout(timeoutMs);
       const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
       let response: Response;
       try {
@@ -63,17 +67,18 @@ export interface FallbackClientHooks {
   onOpenRouterAuthFailure?: () => void;
 }
 
-/** Uses OpenRouter after Gemini fails; an explicit caller cancellation is never retried. */
+/** Uses OpenRouter after primary Gemini fails, with optional secondary Gemini backup; caller cancellation is never retried. */
 export function createGeminiFallbackClient(
   gemini: GeminiClient | null,
   openRouter: GeminiClient | null,
   hooks: FallbackClientHooks = {},
+  geminiBackup: GeminiClient | null = null,
 ): GeminiClient | null {
-  if (!gemini && !openRouter) return null;
+  if (!gemini && !openRouter && !geminiBackup) return null;
 
   return {
     async generateJson(request) {
-      let geminiError: unknown;
+      let lastError: unknown;
       if (gemini) {
         try {
           const result = await gemini.generateJson(request);
@@ -81,22 +86,31 @@ export function createGeminiFallbackClient(
           return result;
         } catch (error) {
           if (request.signal?.aborted) throw error;
-          geminiError = error;
+          lastError = error;
           if (error instanceof AppError && error.code === "GEMINI_AUTH_FAILED") hooks.onGeminiAuthFailure?.();
-          if (!openRouter) throw error;
-          logger.warn("Gemini request failed; retrying this structured request through OpenRouter.");
+          if (!openRouter && !geminiBackup) throw error;
+          logger.warn(openRouter ? "Primary Gemini request failed; retrying through OpenRouter." : "Primary Gemini request failed; retrying through backup Gemini.");
         }
       }
 
-      if (!openRouter) throw geminiError;
-      try {
-        const result = await openRouter.generateJson(request);
-        hooks.onOpenRouterSuccess?.();
-        return result;
-      } catch (error) {
-        if (error instanceof AppError && error.code === "GEMINI_AUTH_FAILED") hooks.onOpenRouterAuthFailure?.();
-        throw error;
+      if (openRouter) {
+        try {
+          const result = await openRouter.generateJson(request);
+          hooks.onOpenRouterSuccess?.();
+          return result;
+        } catch (error) {
+          if (request.signal?.aborted) throw error;
+          lastError = error;
+          if (error instanceof AppError && error.code === "GEMINI_AUTH_FAILED") hooks.onOpenRouterAuthFailure?.();
+          if (!geminiBackup) throw error;
+          logger.warn("OpenRouter request failed; falling back to secondary Gemini model.");
+        }
       }
+
+      if (!geminiBackup) throw lastError;
+      const backupResult = await geminiBackup.generateJson(request);
+      hooks.onGeminiSuccess?.();
+      return backupResult;
     },
   };
 }

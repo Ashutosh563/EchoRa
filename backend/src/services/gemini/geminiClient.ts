@@ -100,13 +100,23 @@ export function mapGeminiError(err: unknown): AppError {
   });
 }
 
+export interface GeminiClientOptions {
+  models?: readonly string[];
+  attemptTimeoutMs?: number;
+}
+
 /** Real Gemini client using the official Google GenAI SDK with automatic fallback to lower engines. */
-export function createGeminiClient(apiKey: string, model: string): GeminiClient {
+export function createGeminiClient(
+  apiKey: string,
+  model: string,
+  options: GeminiClientOptions = {},
+): GeminiClient {
   const ai = new GoogleGenAI({ apiKey });
+  const attemptTimeoutMs = options.attemptTimeoutMs ?? 8000;
 
   return {
     async generateJson({ userText, systemInstruction, jsonSchema, signal }) {
-      const candidateModels = getCandidateModels(model);
+      const candidateModels = options.models ? [...options.models] : getCandidateModels(model);
       let lastError: unknown;
 
       for (let i = 0; i < candidateModels.length; i++) {
@@ -115,7 +125,7 @@ export function createGeminiClient(apiKey: string, model: string): GeminiClient 
         }
 
         const currentModel = candidateModels[i]!;
-        const attemptTimeout = AbortSignal.timeout(8000);
+        const attemptTimeout = AbortSignal.timeout(attemptTimeoutMs);
         const attemptSignal = signal ? AbortSignal.any([signal, attemptTimeout]) : attemptTimeout;
 
         try {
