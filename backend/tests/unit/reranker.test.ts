@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { applyCase6CQuotas, createSemanticReranker, isLanguageMatch } from "../../src/services/gemini/reranker.js";
+import { applyCase6CQuotas, createSemanticReranker, isLanguageMatch, resolveTargetArtists } from "../../src/services/gemini/reranker.js";
 import type { GeminiClient } from "../../src/services/gemini/geminiClient.js";
 import type { MusicIntent } from "../../src/types/intent.js";
 import type { Track } from "../../src/types/track.js";
@@ -1028,6 +1028,14 @@ describe("Semantic Reranker (reranker.ts)", () => {
       expect(p1[0].id).toBe("d1");
       expect(p1.every((t) => t.artists.includes("Artist A") || t.artists.includes("Artist B"))).toBe(true);
       expect(p1.some((t) => t.id === "ext")).toBe(false);
+    });
+
+    it("resolveTargetArtists: recovers both artists and aliases when LLM drops secondary artist", () => {
+      expect(resolveTargetArtists("nfak and raftaar only", "raftaar")).toEqual(["Nusrat Fateh Ali Khan", "raftaar"]);
+      expect(resolveTargetArtists("krsna and raftaar only", null)).toEqual(["KR$NA", "raftaar"]);
+      expect(resolveTargetArtists("coldplay and radiohead only", "coldplay")).toEqual(["coldplay", "radiohead"]);
+      expect(resolveTargetArtists("sad and chill music", null)).toEqual([]);
+      expect(resolveTargetArtists("arijit singh", "arijit singh")).toEqual(["arijit singh"]);
     });
   });
 });

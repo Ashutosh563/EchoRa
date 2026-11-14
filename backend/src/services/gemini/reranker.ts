@@ -120,6 +120,59 @@ export function parseTargetArtists(artistStr?: string | null): string[] {
   return parts.length > 0 ? parts : [artistStr.trim()];
 }
 
+const NON_ARTIST_TOKENS = new Set([
+  "sad", "melancholic", "calm", "peaceful", "happy", "energetic", "romantic",
+  "focused", "anxious", "nostalgic", "lonely", "chill", "relaxed", "vibe",
+  "vibes", "pop", "rock", "hip hop", "rap", "jazz", "classical", "acoustic",
+  "lofi", "party", "gym", "workout", "sleep", "study", "drive", "car", "night",
+  "morning", "hindi", "punjabi", "english", "bollywood", "music", "song", "songs",
+  "tracks", "hits"
+]);
+
+export const COMMON_ARTIST_ALIASES: Record<string, string> = {
+  nfak: "Nusrat Fateh Ali Khan",
+  krsna: "KR$NA",
+  "kr$na": "KR$NA",
+  sm: "Seedhe Maut",
+  ys: "Young Stunners",
+  pcrc: "Peter Cat Recording Co",
+};
+
+/**
+ * Resolves target artists from explicit intent or recovers multi-artist pairs
+ * from the user prompt when an LLM drops secondary artists.
+ */
+export function resolveTargetArtists(prompt?: string | null, artistStr?: string | null): string[] {
+  const existing = parseTargetArtists(artistStr).map(
+    (a) => COMMON_ARTIST_ALIASES[a.toLowerCase()] || a
+  );
+  if (existing.length > 1) {
+    return existing;
+  }
+
+  if (!prompt) return existing;
+
+  const cleaned = prompt
+    .replace(/\b(only|just|pure|exclusively|all|songs?|tracks?|music|playlist|hits?)\b/gi, "")
+    .trim();
+
+  const parts = cleaned
+    .split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bfeaturing\b|\bx\b|\bvs\.?\b)\s*/i)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  if (parts.length >= 2) {
+    const validParts = parts.filter((p) => !NON_ARTIST_TOKENS.has(p.toLowerCase()));
+    if (validParts.length >= 2) {
+      if (!artistStr || parts.some((p) => isArtistMatch(artistStr, p))) {
+        return validParts.map((a) => COMMON_ARTIST_ALIASES[a.toLowerCase()] || a);
+      }
+    }
+  }
+
+  return existing;
+}
+
 /**
  * Normalizes an artist or track name by lowercasing and stripping non-alphanumeric characters.
  * Allows "dilraaz" to match "Dil Raaz", "krsna" to match "KR$NA", and "cold mess" to match "cold/mess".
@@ -1179,18 +1232,28 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
       const maxCumulativeArtist = balanceOptions?.maxCumulativePerArtist ?? 6;
       const promptWantsMashup = prompt.toLowerCase().includes("mashup") || prompt.toLowerCase().includes("mix");
       const MAX_MASHUPS = promptWantsMashup ? 10 : 2;
+      const resultLimit = balanceOptions?.maxResults ?? (relatedSongsRequested ? 11 : 10);
 
       const effectiveOptions: BalanceOptions = {
         ...balanceOptions,
         isExclusive: balanceOptions?.isExclusive ?? isExclusive,
+        maxResults: resultLimit,
       };
 
       if (!geminiClient || candidates.length <= 1) {
         const balanced = balanceTracks(candidates, MAX_MASHUPS, intent.era, intent.language, allowInstrumental, maxPerArtist, intent, effectiveOptions);
-        return balanced.map((t) => ({
-          ...t,
-          matchReason: t.matchReason || `Matches ${intent.mood || "selected"} mood and acoustic style.`,
-        }));
+        const quotaBalanced = applyCase6CQuotas(balanced, candidates, intent, {
+          ...effectiveOptions,
+          isExclusive: balanceOptions?.isExclusive ?? isExclusive,
+          maxResults: resultLimit,
+        });
+        return withFallbackMatchScores(
+          quotaBalanced.map((t) => ({
+            ...t,
+            matchReason: t.matchReason || `Matches ${intent.mood || "selected"} mood and acoustic style.`,
+          })),
+          intent,
+        );
       }
 
       // Enforce 4500ms safety timeout
@@ -1385,7 +1448,6 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
         }
 
         // Fill up to 10 from original candidates respecting era, language, artist diversity, and negative constraints
-        const resultLimit = balanceOptions?.maxResults ?? (relatedSongsRequested ? 11 : 10);
         if (rerankedList.length < resultLimit) {
           const remainingCandidates = candidates.filter(
             (t) =>
@@ -1440,10 +1502,18 @@ export function createSemanticReranker(geminiClient: GeminiClient | null): Seman
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn(`[Reranker] Semantic reranker skipped or timed out (${errorMsg}). Using balanced candidate ranking.`);
         const balanced = balanceTracks(candidates, MAX_MASHUPS, intent.era, intent.language, allowInstrumental, maxPerArtist, intent, effectiveOptions);
-        return balanced.map((t) => ({
-          ...t,
-          matchReason: t.matchReason || `Matches ${intent.mood || "selected"} mood and acoustic style.`,
-        }));
+        const quotaBalanced = applyCase6CQuotas(balanced, candidates, intent, {
+          ...effectiveOptions,
+          isExclusive: balanceOptions?.isExclusive ?? isExclusive,
+          maxResults: resultLimit,
+        });
+        return withFallbackMatchScores(
+          quotaBalanced.map((t) => ({
+            ...t,
+            matchReason: t.matchReason || `Matches ${intent.mood || "selected"} mood and acoustic style.`,
+          })),
+          intent,
+        );
       }
     },
   };

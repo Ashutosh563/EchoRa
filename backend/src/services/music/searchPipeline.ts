@@ -9,7 +9,7 @@ import { generateQueries } from "./queryGenerator.js";
 import { defaultDiscoveryProcessor } from "./discoveryProcessor.js";
 import { BACKEND_MOCK_TRACKS, getMockIntent } from "./mockMusic.js";
 import { fuseTrackLists, getSongSignature, normalizeSongTitle } from "./fusion.js";
-import { balanceTracks, createSemanticReranker, getPrimaryArtistKey, parseTargetArtists, userWantsInstrumental, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
+import { balanceTracks, createSemanticReranker, getPrimaryArtistKey, parseTargetArtists, resolveTargetArtists, userWantsInstrumental, type PreferenceProfile, type SemanticReranker } from "../gemini/reranker.js";
 import { logger } from "../../utils/logger.js";
 import { enrichTracksWithPreviews } from "../spotify/previewEnricher.js";
 import { contextualSearchQuery, enrichListeningContext } from "./browserContextEnricher.js";
@@ -355,10 +355,17 @@ export function createSearchPipeline({
       }
 
       // If user specifically requested artist(s), ensure dedicated artist queries are prioritized
-      const targetArtists = relatedSongsRequested ? [] : parseTargetArtists(activeIntent.artist);
+      const targetArtists = relatedSongsRequested ? [] : resolveTargetArtists(prompt, activeIntent.artist);
+      if (targetArtists.length > 1 && (!activeIntent.artist || parseTargetArtists(activeIntent.artist).length <= 1)) {
+        activeIntent.artist = targetArtists.join(" and ");
+      }
       const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
       if (targetArtists.length > 1) {
         for (const art of targetArtists) {
+          const songsQuery = `${art} songs`;
+          if (!queryList.includes(songsQuery)) {
+            queryList.unshift(songsQuery);
+          }
           const artQuery = `artist:"${art}"`;
           if (!queryList.includes(artQuery)) {
             queryList.unshift(artQuery);
@@ -846,7 +853,10 @@ export function createSearchPipeline({
 
       // Live mode: 4-Tier Page Candidate Mining
       const queryList: { query: string; offset: number }[] = [];
-      const targetArtists = relatedSongsRequested ? [] : parseTargetArtists(intent.artist);
+      const targetArtists = relatedSongsRequested ? [] : resolveTargetArtists(prompt, intent.artist);
+      if (targetArtists.length > 1 && (!intent.artist || parseTargetArtists(intent.artist).length <= 1)) {
+        intent.artist = targetArtists.join(" and ");
+      }
       const isExclusiveArtist = Boolean(targetArtists.length > 0 && /\b(only|just|pure|exclusively|all)\b/i.test(prompt));
       const safeOffset = Math.min(10, Math.max(0, (page - 1) * 5));
 

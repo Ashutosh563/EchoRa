@@ -33,6 +33,10 @@ Categorization Rules:
    - era: If user specifies a decade or time period (e.g. "90s", "80s", "70s", "2000s", "retro", "vintage"), extract it into explicit.era.
    - track_title: If user names a specific song title (e.g. "Tum Hi Ho", "Kesariya", "Starboy", "still in love"), extract it into explicit.track_title.
    - artist: If user names an artist, band, or indie creator (e.g. "Arijit Singh", "Coldplay", "Dil Raaz", "Lifafa", "The Local Train", "KR$NA"), extract it into explicit.artist.
+   - MULTI-ARTIST EXTRACTION:
+     * When user names two or more artists (e.g. "nfak and raftaar", "krsna and raftaar", "coldplay & radiohead", "arijit singh and pritam", "karan aujla x diljit dosanjh"), extract ALL artists into explicit.artist joined by " and " (e.g. "Nusrat Fateh Ali Khan and Raftaar", "KR$NA and Raftaar", "Coldplay and Radiohead").
+     * Convert known abbreviations and colloquial nicknames to full stage names (e.g. "nfak" -> "Nusrat Fateh Ali Khan", "krsna" -> "KR$NA").
+     * NEVER drop or omit one artist when two or more are mentioned together!
    - LOWERCASE & INDIE ARTIST RECOGNITION:
      * Users frequently type indie, regional, or niche artists and songs in all-lowercase (e.g. "songs by dil raaz", "only lifafa", "taba chake", "chaar diwaari", "krsna", "tum hi ho").
      * Recognize words following prepositions like "by", "from", "artist", or words like "only", "just" in music contexts as artist names, even if lowercase. Convert them to Title Case (e.g. "dil raaz" -> "Dil Raaz").
